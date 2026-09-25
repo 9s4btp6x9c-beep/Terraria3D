@@ -111,6 +111,9 @@ export class Game {
   private shake = 0;
   private potionCooldown = 0;
   private flapTimer = 0;
+  /** Stars currently falling (become pickups where they land). */
+  private stars: { x: number; y: number; z: number; vx: number; vy: number; vz: number; t: number }[] = [];
+  private starTimer = 30;
   private deathShown = false;
   fps = 0;
   private frameMs = 0;
@@ -149,7 +152,9 @@ export class Game {
       if (ex.furniture) this.furniture.load(ex.furniture as Placed[]);
       if (ex.equipment) this.equipment.load(ex.equipment as never);
       if (ex.spawn) this.spawnPoint = ex.spawn as typeof this.spawnPoint;
-      if (typeof ex.hp === 'number') this.vitals.hp = Math.max(1, ex.hp);
+      if (typeof ex.maxHp === 'number') this.vitals.maxHp = ex.maxHp;
+      if (typeof ex.maxMana === 'number') this.vitals.maxMana = this.vitals.mana = ex.maxMana;
+      if (typeof ex.hp === 'number') this.vitals.hp = Math.max(1, Math.min(this.vitals.maxHp, ex.hp));
     } else {
       // Generated cabins and sky shrines, built from regular pieces/furniture.
       const plan = planStructures(this.gen);
@@ -478,6 +483,29 @@ export class Game {
       this.audio.play('explode');
       return true;
     }
+    if (def.grow) {
+      const v = this.vitals;
+      if (def.grow.life) {
+        if (v.maxHp >= 400) { this.hud.message('Your life is already at its peak', '#ffb070'); return false; }
+        v.maxHp += def.grow.life; v.hp = Math.min(v.maxHp, v.hp + def.grow.life);
+        this.hud.message(`Max life increased to ${v.maxHp}`, '#ff8a9a');
+      }
+      if (def.grow.mana) {
+        if (v.maxMana >= 200) { this.hud.message('Your mana is already at its peak', '#ffb070'); return false; }
+        v.maxMana += def.grow.mana; v.mana = Math.min(v.maxMana, v.mana + def.grow.mana);
+        this.hud.message(`Max mana increased to ${v.maxMana}`, '#8ab8ff');
+      }
+      this.particles.burst(this.player.x, this.player.y + 1.2, this.player.z, 0, 1, 0, def.grow.life ? 0xff4a5a : 0x5a8aff, 24, { speed: 3, gravity: -1 });
+      this.audio.play('magic');
+      return true;
+    }
+    if (def.mana) {
+      if (this.vitals.mana >= this.vitals.maxMana) { this.hud.message('Mana is already full', '#ffb070'); return false; }
+      this.vitals.mana = Math.min(this.vitals.maxMana, this.vitals.mana + def.mana);
+      this.labels.add(this.player.x, this.player.y + 2, this.player.z, `+${def.mana}`, '#7aa8ff');
+      this.audio.play('drink');
+      return true;
+    }
     if (def.heal) {
       if (this.potionCooldown > 0) { this.hud.message(`Potion sickness (${Math.ceil(this.potionCooldown)}s)`, '#ffb070'); return false; }
       if (this.vitals.hp >= this.vitals.maxHp) { this.hud.message('Already at full health', '#ffb070'); return false; }
@@ -501,6 +529,46 @@ export class Game {
     const anchor = occupied.reduce((a, h) => (Math.hypot(h.x - px, h.z - pz) < Math.hypot(a.x - px, a.z - pz) ? h : a));
     const cluster = occupied.filter(h => Math.hypot(h.x - anchor.x, h.z - anchor.z) < 60);
     return { x: cluster.reduce((a, h) => a + h.x, 0) / cluster.length, z: cluster.reduce((a, h) => a + h.z, 0) / cluster.length, npcs: cluster.length };
+  }
+
+  /** On clear nights stars streak down and land near the player as pickups. */
+  private updateFallingStars(dt: number) {
+    const night = this.atmosphere.daylight < 0.25 && this.events.kind !== 'blood_moon';
+    const outdoors = this.sky.visibility(this.player.x, this.player.y + 1.5, this.player.z) > 0.5;
+    this.starTimer -= dt;
+    if (night && outdoors && this.starTimer <= 0) {
+      this.starTimer = 35 + Math.random() * 45;
+      this.dropStar();
+    }
+    for (let i = this.stars.length - 1; i >= 0; i--) {
+      const st = this.stars[i];
+      st.t += dt;
+      st.x += st.vx * dt; st.y += st.vy * dt; st.z += st.vz * dt;
+      this.particles.burst(st.x, st.y, st.z, -st.vx * 0.02, -st.vy * 0.02, -st.vz * 0.02, Math.random() < 0.5 ? 0xfff4a0 : 0xffffff, 2, { speed: 0.5, size: 0.12, gravity: 0, life: 0.6 });
+      if (Math.floor(st.t * 10) % 2 === 0) this.atmosphere.lights.flash(st.x, st.y, st.z, 0xfff0a0, 14, 0.12);
+      const inX = st.x > 2 && st.z > 2 && st.x < this.field.sx - 2 && st.z < this.field.sz - 2;
+      const ground = inX ? this.sky.raw[Math.floor(st.x) + Math.floor(st.z) * this.sky.w] : -Infinity;
+      if (st.y <= ground + 0.3 || st.t > 12) {
+        this.stars.splice(i, 1);
+        if (!inX) continue;
+        this.pickups.spawn('fallen_star', 1, st.x, Math.max(st.y, ground) + 0.6, st.z, 0.5);
+        this.particles.burst(st.x, ground + 0.5, st.z, 0, 1, 0, 0xfff4a0, 26, { speed: 5 });
+        this.atmosphere.lights.flash(st.x, ground + 1, st.z, 0xfff0a0, 18, 0.6);
+        this.audio.play('magic', Math.hypot(st.x - this.player.x, st.z - this.player.z));
+      }
+    }
+  }
+
+  /** Launch a falling star that lands 15–45 m from the player. */
+  dropStar() {
+    const a = Math.random() * Math.PI * 2, d = 15 + Math.random() * 30;
+    const tx = this.player.x + Math.cos(a) * d, tz = this.player.z + Math.sin(a) * d;
+    const b = a + (Math.random() - 0.5) * 1.5;
+    const sx = tx + Math.cos(b) * 60, sz = tz + Math.sin(b) * 60;
+    const sy = Math.min(this.field.sy + 30, this.player.y + 90);
+    const ty = this.gen.height(tx, tz);
+    const time = 3.2;
+    this.stars.push({ x: sx, y: sy, z: sz, vx: (tx - sx) / time, vy: (ty - sy) / time, vz: (tz - sz) / time, t: 0 });
   }
 
   /** Start a world event right away (war horn, tests). */
@@ -676,6 +744,8 @@ export class Game {
         equipment: this.equipment.serialize(),
         spawn: this.spawnPoint,
         hp: this.vitals.hp,
+        maxHp: this.vitals.maxHp,
+        maxMana: this.vitals.maxMana,
         town: this.town.serialize(),
         progress: this.progress,
         events: this.events.serialize(),
@@ -879,6 +949,7 @@ export class Game {
       const hx = this.camera.position.x + side.x * 0.3 + this.dir.x * 0.4, hy = this.camera.position.y - 0.35, hz = this.camera.position.z + side.z * 0.3 + this.dir.z * 0.4;
       this.rope.update(this.grapple.state !== 'idle', hx, hy, hz, this.grapple.x, this.grapple.y, this.grapple.z);
     }
+    this.updateFallingStars(dt);
     this.pickups.update(dt, this.player.x, this.player.y, this.player.z);
     this.onEventSignals(this.events.update(dt, {
       daylight: this.atmosphere.daylight, px: this.player.x, pz: this.player.z, town: this.townInfo(), bossDefeated: this.progress.bossDefeated,

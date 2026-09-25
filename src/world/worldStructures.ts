@@ -113,5 +113,41 @@ export function planStructures(gen: WorldGenerator): StructurePlan {
     furniture.push({ type: 'torch', x: x0 + 3.6, y: y + 0.25, z: z0 + 0.4, rot: 0 });
   });
 
+  // Life Crystals on cave floors, well away from each other and the cabins.
+  const rand = mulberry32(gen.cfg.seed ^ 0x11fe);
+  const crystals: { x: number; y: number; z: number }[] = [];
+  const want = Math.round((gen.size.x * gen.size.z) / (512 * 512) * 36);
+  for (let tries = 0; crystals.length < want && tries < 4000; tries++) {
+    const x = 24 + rand() * (gen.size.x - 48), z = 24 + rand() * (gen.size.z - 48);
+    const top = gen.height(x, z) - 12;
+    const y0 = 10 + Math.floor(rand() * Math.max(1, top - 10));
+    const floor = caveFloor(gen, x, y0, z, Math.min(top, y0 + 24));
+    if (floor === null) continue;
+    if (crystals.some(c => Math.hypot(c.x - x, c.z - z) < 28)) continue;
+    if (gen.cabins.some(c => x > c.x - 6 && x < c.x + c.cx * 2 + 6 && z > c.z - 6 && z < c.z + c.cz * 2 + 6)) continue;
+    crystals.push({ x, y: floor, z });
+    furniture.push({ type: 'life_crystal', x, y: floor - 0.08, z, rot: Math.floor(rand() * 4) });
+  }
+
   return { pieces, furniture };
+}
+
+/**
+ * Scan up a column for a cave floor: solid below, at least 2.5 m of air
+ * above and level ground around. Returns the floor height or null.
+ */
+function caveFloor(gen: WorldGenerator, x: number, y0: number, z: number, y1: number): number | null {
+  for (let y = y0; y < y1; y++) {
+    const d0 = gen.densityAt(x, y, z), d1 = gen.densityAt(x, y + 1, z);
+    if (!(d0 > 0 && d1 < 0)) continue;
+    const fy = y + d0 / (d0 - d1);
+    if (gen.densityAt(x, fy + 1.2, z) > -0.5 || gen.densityAt(x, fy + 2.5, z) > -0.3) continue;
+    // Level: solid just under the rim and open air above it all round.
+    let level = true;
+    for (const [ox, oz] of [[0.7, 0], [-0.7, 0], [0, 0.7], [0, -0.7]]) {
+      if (gen.densityAt(x + ox, fy - 0.35, z + oz) < 0 || gen.densityAt(x + ox, fy + 0.5, z + oz) > 0) { level = false; break; }
+    }
+    if (level) return fy;
+  }
+  return null;
 }

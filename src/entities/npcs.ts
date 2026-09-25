@@ -43,6 +43,8 @@ export const NPCS: NpcDef[] = [
       else if (!ctx.hasStation('anvil')) t.push('Iron ore glints pale in the rock. Five iron bars make an Anvil for real tools and armor.');
       if (ctx.inv.count('gel') === 0) t.push('Globs drop gel. Gel and wood make torches — you will want lots of those underground.');
       t.push('Copper and iron can be mined with your starter pickaxe. Deepstone and glowing lumite need an Iron Pickaxe.');
+      t.push('Deep in the caves grow Life Crystals — glowing red hearts. Break one and use it to grow stronger.');
+      t.push('Stars fall on clear nights. Five make a Mana Crystal; one, with gel and bottles, makes mana potions.');
       t.push('Old cabins are buried under the hills. Their chests hold boots, charms and other trinkets.');
       t.push('Those floating islands up high? Someone built shrines up there. Maybe a grappling hook would help.');
       t.push('The islands are laced with aerite — pale blue ore, light as air. Smelt it and forge armor that lets you leap like the wind.');

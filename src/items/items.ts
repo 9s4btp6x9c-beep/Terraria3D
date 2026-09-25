@@ -6,7 +6,7 @@ import { Mat } from '../world/materials';
 
 export type PieceShape = 'floor' | 'wall' | 'pillar' | 'stairs' | 'roof';
 export type StationId = 'workbench' | 'furnace' | 'anvil' | 'forge';
-export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed';
+export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed' | 'life_crystal';
 export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal' | 'emberMetal' | 'bone' | 'bloodMetal' | 'aeriteMetal';
 
 export interface ToolDef {
@@ -62,7 +62,7 @@ export type ModelSpec =
   | { type: 'pickaxe' | 'axe' | 'sword' | 'bow' | 'staff' | 'hook'; head: MetalLayer }
   | { type: 'ore' | 'bar' | 'crystal' | 'nugget'; layer: string; tint?: number }
   | { type: 'block'; layer: string }
-  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' }
+  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' | 'star' | 'mana_crystal' | 'mana_potion' }
   | { type: 'armor'; slot: ArmorDef['slot']; layer: MetalLayer }
   | { type: 'boots' | 'jar' | 'charm' | 'band'; layer: string }
   | { type: 'furniture'; id: FurnitureId };
@@ -85,6 +85,10 @@ export interface ItemDef {
   build?: 'planks' | 'bricks';
   furniture?: FurnitureId;
   heal?: number;
+  /** Mana restored when used. */
+  mana?: number;
+  /** Permanent max life / mana increase (crystals). */
+  grow?: { life?: number; mana?: number };
   rarity?: 0 | 1 | 2 | 3;
   description?: string;
 }
@@ -184,6 +188,10 @@ const list: ItemDef[] = [
   { id: 'coin', name: 'Coin', kind: 'material', maxStack: 9999, color: '#e0b030', model: { type: 'coin' }, description: 'Merchants love these.' },
 
   // ---- consumables
+  { id: 'life_crystal', name: 'Life Crystal', kind: 'consumable', maxStack: 99, color: '#ff4a5a', rarity: 2, model: { type: 'furniture', id: 'life_crystal' }, grow: { life: 20 }, description: 'Permanently raises max life by 20 (up to 400).' },
+  { id: 'fallen_star', name: 'Fallen Star', kind: 'material', maxStack: 999, color: '#ffe060', rarity: 1, model: { type: 'star' }, description: 'Falls from the sky on clear nights.' },
+  { id: 'mana_crystal', name: 'Mana Crystal', kind: 'consumable', maxStack: 99, color: '#5a8aff', rarity: 2, model: { type: 'mana_crystal' }, grow: { mana: 20 }, description: 'Permanently raises max mana by 20 (up to 200).' },
+  { id: 'mana_potion', name: 'Mana Potion', kind: 'consumable', maxStack: 30, color: '#4a7aff', model: { type: 'mana_potion' }, mana: 100, description: 'Restores 100 mana.' },
   { id: 'healing_potion', name: 'Healing Potion', kind: 'consumable', maxStack: 30, color: '#d83a3a', model: { type: 'potion' }, heal: 50, description: 'Restores 50 health. [RMB] / use to drink.' },
 
   // ---- placeables

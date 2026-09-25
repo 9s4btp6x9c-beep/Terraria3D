@@ -332,6 +332,41 @@ function plume() {
   ]);
 }
 
+/** A faceted heart: two lobes and a point, cut from glowing red crystal. */
+function heartGem(s: number, y: number) {
+  return [
+    ico(0.2 * s, 'heart', { x: -0.13 * s, y: y + 0.08 * s, sz: 0.7 }),
+    ico(0.2 * s, 'heart', { x: 0.13 * s, y: y + 0.08 * s, sz: 0.7 }),
+    cone(0.26 * s, 0.34 * s, 4, 'heart', { y: y - 0.16 * s, rx: Math.PI, ry: Math.PI / 4, }),
+    octa(0.06 * s, 'plain', { x: -0.14 * s, y: y + 0.16 * s, z: 0.1 * s }, 0xffffff),
+  ];
+}
+
+/** Rock cluster with small red shards (the renderer spins the heart above it). */
+export function lifeCrystalBase() {
+  return merge([
+    ico(0.3, 'stone', { y: 0.1, sy: 0.55, jitter: 0.35, seed: 41 }),
+    ico(0.16, 'stone', { x: 0.25, y: 0.08, jitter: 0.4, seed: 42 }),
+    ico(0.14, 'stone', { x: -0.22, y: 0.07, z: 0.1, jitter: 0.4, seed: 43 }),
+    octa(0.06, 'heart', { x: 0.24, y: 0.22, sy: 2, rz: -0.4 }),
+    octa(0.05, 'heart', { x: -0.22, y: 0.2, z: 0.12, sy: 2, rz: 0.5 }),
+  ]);
+}
+
+export function lifeCrystalHeart() {
+  return merge(heartGem(1.25, 0.62));
+}
+
+/** A five-pointed star with a glowing core. */
+function star() {
+  const parts: THREE.BufferGeometry[] = [octa(0.07, 'flame', { y: 0.16, sz: 0.6 }, 0xfff4a0)];
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    parts.push(cone(0.05, 0.13, 4, 'gold', { x: Math.sin(a) * 0.09, y: 0.16 + Math.cos(a) * 0.09, rz: -a }, 0xfff0a0));
+  }
+  return merge(parts);
+}
+
 /** Folded wings for the item icon: two layered feather fans on a harness. */
 function wings() {
   const parts: THREE.BufferGeometry[] = [box(0.14, 0.1, 0.06, 'cloth', { y: 0.2 }, 0x6a4a3a), box(0.05, 0.05, 0.05, 'gold', { y: 0.2, z: 0.04 })];
@@ -512,6 +547,9 @@ function furniture(id: FurnitureId): THREE.BufferGeometry {
         box(0.14, 0.16, 0.06, 'gold', { y: 0.5, z: 0.37 }),
         box(0.05, 0.06, 0.03, 'metal', { y: 0.46, z: 0.4 }, 0x202020),
       ]);
+    case 'life_crystal':
+      // Heart crystal floating over a cluster of rock.
+      return merge([lifeCrystalBase(), lifeCrystalHeart()]);
     case 'bed':
       return merge([
         box(1.2, 0.25, 2.2, 'planks', { y: 0.2 }),
@@ -574,6 +612,9 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'plume': g = plume(); break;
     case 'wings': g = wings(); break;
     case 'idol': g = idol(); break;
+    case 'star': g = star(); break;
+    case 'mana_crystal': g = merge([octa(0.12, 'manaGem', { y: 0.16, sy: 1.6 }), octa(0.06, 'manaGem', { x: 0.1, y: 0.1, sy: 1.5, rz: -0.5 }), octa(0.05, 'manaGem', { x: -0.09, y: 0.09, sy: 1.5, rz: 0.5 }), octa(0.035, 'flame', { x: -0.04, y: 0.24, z: 0.05 }, 0xe0ecff)]); break;
+    case 'mana_potion': g = bottle('manaGem'); break;
     case 'armor': g = armor(spec.slot, spec.layer); break;
     case 'boots': g = boots(spec.layer); break;
     case 'jar': g = jar(spec.layer); break;

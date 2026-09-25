@@ -65,6 +65,7 @@ a minimap, particles, and a held-item viewmodel.
 | M5 Mobile | Touch controls, quality presets, free-look fallback without pointer lock, compact phone UI | `scripts/e2e-mobile.mjs` |
 | M6 Events | Blood Moon (red sky, event creatures, shard gear), Hollow Raid (raiders march on the town, progress bar, Tinkerer NPC), visible sun and moon | `tests/events.test.ts`, event e2e checks |
 | M7 Sky tier | Aerite ore in the sky islands, Skyforged armor, Gale Bow, Gale Swifts and Cloud Globs, the Tempest Roc boss, Roc Wings flight and gliding, Tempest Staff | sky tier e2e checks |
+| M8 Growth | Life Crystals in caves (+max life), fallen stars at night, Mana Crystals and mana potions, max stats saved | growth e2e checks |
 
 ## Next phases
 

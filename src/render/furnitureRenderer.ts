@@ -6,9 +6,9 @@ import * as THREE from 'three';
 import { FURNITURE, type FurnitureSet, type Placed } from '../building/furniture';
 import type { FurnitureId } from '../items/items';
 import type { LightPool } from './atmosphere';
-import { doorFrame, furnitureModel } from './models';
+import { doorFrame, furnitureModel, lifeCrystalBase, lifeCrystalHeart } from './models';
 
-interface Entry { f: Placed; group: THREE.Group; leaf?: THREE.Mesh; light?: number; angle: number }
+interface Entry { f: Placed; group: THREE.Group; leaf?: THREE.Mesh; light?: number; angle: number; spin?: THREE.Mesh }
 
 export class FurnitureRenderer {
   readonly group = new THREE.Group();
@@ -17,6 +17,9 @@ export class FurnitureRenderer {
   private ghost: THREE.Group;
   private ghostMat: THREE.MeshBasicMaterial;
   private frame = doorFrame();
+  private crystalBase = lifeCrystalBase();
+  private crystalHeart = lifeCrystalHeart();
+  private time = 0;
 
   constructor(private set: FurnitureSet, private material: THREE.Material, private lights: LightPool) {
     this.ghostMat = new THREE.MeshBasicMaterial({ color: 0x66ff88, transparent: true, opacity: 0.4, depthWrite: false });
@@ -25,12 +28,16 @@ export class FurnitureRenderer {
     this.group.add(this.ghost);
   }
 
-  private build(f: Placed, mat: THREE.Material): { group: THREE.Group; leaf?: THREE.Mesh } {
+  private build(f: Placed, mat: THREE.Material): { group: THREE.Group; leaf?: THREE.Mesh; spin?: THREE.Mesh } {
     const group = new THREE.Group();
     group.position.set(f.x, f.y, f.z);
     group.rotation.y = f.rot * Math.PI / 2;
-    let leaf: THREE.Mesh | undefined;
-    if (f.type === 'door') {
+    let leaf: THREE.Mesh | undefined, spin: THREE.Mesh | undefined;
+    if (f.type === 'life_crystal') {
+      group.add(new THREE.Mesh(this.crystalBase, mat));
+      spin = new THREE.Mesh(this.crystalHeart, mat);
+      group.add(spin);
+    } else if (f.type === 'door') {
       group.add(new THREE.Mesh(this.frame, mat));
       leaf = new THREE.Mesh(furnitureModel('door'), mat);
       leaf.position.x = -0.6;
@@ -47,7 +54,7 @@ export class FurnitureRenderer {
     group.traverse(o => {
       if ((o as THREE.Mesh).isMesh) { o.castShadow = f.type !== 'torch'; o.receiveShadow = true; }
     });
-    return { group, leaf };
+    return { group, leaf, spin };
   }
 
   private sync() {
@@ -55,7 +62,7 @@ export class FurnitureRenderer {
     for (const f of this.set.items.values()) {
       seen.add(f.uid);
       if (this.entries.has(f.uid)) continue;
-      const { group, leaf } = this.build(f, this.material);
+      const { group, leaf, spin } = this.build(f, this.material);
       this.group.add(group);
       const def = FURNITURE[f.type];
       let light: number | undefined;
@@ -69,7 +76,7 @@ export class FurnitureRenderer {
           color: new THREE.Color(def.light.color), range: def.light.range, flicker: def.light.flicker,
         });
       }
-      this.entries.set(f.uid, { f, group, leaf, light, angle: f.open ? 1 : 0 });
+      this.entries.set(f.uid, { f, group, leaf, light, angle: f.open ? 1 : 0, spin });
     }
     for (const [uid, e] of this.entries) {
       if (seen.has(uid)) continue;
@@ -84,8 +91,13 @@ export class FurnitureRenderer {
       this.version = this.set.version;
       this.sync();
     }
-    // Door swing animation.
+    this.time += dt;
+    // Door swing animation; life crystals turn slowly and bob.
     for (const e of this.entries.values()) {
+      if (e.spin) {
+        e.spin.rotation.y = this.time * 0.9 + e.f.uid;
+        e.spin.position.y = Math.sin(this.time * 1.7 + e.f.uid) * 0.05;
+      }
       if (!e.leaf) continue;
       const target = e.f.open ? 1 : 0;
       if (e.angle === target) continue;

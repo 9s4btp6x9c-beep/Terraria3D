@@ -55,6 +55,9 @@ Touch devices start on the low quality preset.
 - **Combat:** swords, bows, bombs and potions against globs, bats, wisps,
   crawlers, shamblers and miners. Enemies vary by biome and depth. You have
   hearts and mana stars, and you respawn at your bed.
+- **Growing stronger:** Life Crystals glow on cave floors. Break one and use
+  it for +20 max life (up to 400). Stars fall on clear nights; five make a
+  Mana Crystal (+20 max mana, up to 200), and they also brew mana potions.
 - **Biomes:** forest, desert, snow and the purple Blight on the surface.
   Underground are caves, cabins with loot chests, glowing lumite crystals
   and the molten Ember Depths.

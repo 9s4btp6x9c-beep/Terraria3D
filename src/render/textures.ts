@@ -41,13 +41,15 @@ export const EXTRA_LAYERS = {
   bloodMetal: { style: 'metal', palette: [0xb0222e, 0x4a0812, 0xe8444c, 0xffb0a0] },
   aeriteMetal: { style: 'metal', palette: [0x8ac8ec, 0x2e5a8a, 0xd0f0ff, 0xfff2b8] },
   feather: { style: 'fur', palette: [0xdce4ee, 0x7a8aa4, 0xf6f8fc, 0xa8b8d0] },
+  heart: { style: 'gel', palette: [0xf0304a, 0x8a0a22, 0xff7a8a, 0xffe0e6] },
+  manaGem: { style: 'gel', palette: [0x3a6aff, 0x142a8a, 0x7aa8ff, 0xe0ecff] },
   bloodgel: { style: 'gel', palette: [0xd02a3a, 0x6a0a18, 0xff6a78, 0xffd0d4] },
   hide: { style: 'fur', palette: [0x6a2a2a, 0x2e1014, 0x8a3a36, 0xc0605a] },
 } as const satisfies Record<string, { style: Style; palette: readonly number[] }>;
 
 /** Self-illumination per extra layer (flames glow, crystals shimmer). */
 export const EXTRA_EMISSIVE: Partial<Record<keyof typeof EXTRA_LAYERS, number>> = {
-  flame: 1.2, lumiteMetal: 0.35, gel: 0.08, emberMetal: 0.4, bloodMetal: 0.18, bloodgel: 0.1, aeriteMetal: 0.22,
+  flame: 1.2, lumiteMetal: 0.35, gel: 0.08, emberMetal: 0.4, bloodMetal: 0.18, bloodgel: 0.1, aeriteMetal: 0.22, heart: 0.45, manaGem: 0.4,
 };
 
 export type ExtraLayer = keyof typeof EXTRA_LAYERS;

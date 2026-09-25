@@ -736,6 +736,64 @@ try {
   check('the gale pierces a line of foes; the Gale Bow looses two arrows', weapons.pierced === 2 && weapons.arrows === 2 && weapons.used === 1, JSON.stringify(weapons));
   await page.evaluate(() => { const g = __game; g.combat.clear(); g.vitals.hp = g.vitals.maxHp = 100; g.simulate(0.2); });
 
+  // -------------------------------------------------------- character growth
+  const crystal = await page.evaluate(() => {
+    const g = __game;
+    const all = [...g.furniture.items.values()].filter(f => f.type === 'life_crystal');
+    const s = g.gen.spawn;
+    const c = all.sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))[0];
+    if (!c) return { count: 0 };
+    // Stand beside it, facing it.
+    const a = Math.random() * 6.28;
+    let px = c.x + 1.8, pz = c.z;
+    for (let k = 0; k < 8; k++) {
+      const ang = a + k * 0.785, x = c.x + Math.cos(ang) * 1.8, z = c.z + Math.sin(ang) * 1.8;
+      if (g.gen.densityAt(x, c.y + 0.8, z) < -0.3 && g.gen.densityAt(x, c.y + 1.6, z) < -0.3) { px = x; pz = z; break; }
+    }
+    g.player.teleport(px, c.y + 0.3, pz);
+    g.player.yaw = Math.atan2(-(c.x - px), -(c.z - pz));
+    g.player.pitch = -0.35;
+    return { count: all.length, x: c.x, y: c.y, z: c.z, uid: c.uid };
+  });
+  await settle();
+  await shot('27-life-crystal');
+  const grown = await page.evaluate(c => {
+    const g = __game;
+    const pick = g.inventory.slots.findIndex(x => x && x.id === 'copper_pickaxe');
+    g.inventory.select(pick);
+    g.player.yaw = Math.atan2(-(c.x - g.player.x), -(c.z - g.player.z));
+    g.player.pitch = Math.atan2(c.y + 0.55 - g.player.y - 1.62, Math.hypot(c.x - g.player.x, c.z - g.player.z));
+    g.simulate(0.1);
+    g.input.lmb = true;
+    for (let i = 0; i < 40 && g.furniture.items.has(c.uid); i++) g.simulate(0.1);
+    g.input.lmb = false;
+    g.simulate(1.5);
+    const got = g.inventory.count('life_crystal');
+    const before = g.vitals.maxHp;
+    if (got) g['consume']({ id: 'life_crystal', grow: { life: 20 } }) && g.inventory.remove('life_crystal', 1);
+    return { broken: !g.furniture.items.has(c.uid), got, before, after: g.vitals.maxHp, saved: g.snapshot().extra.maxHp };
+  }, crystal);
+  check('Life Crystals grow in caves and raise max life', crystal.count >= 10 && grown.broken && grown.got === 1 && grown.after === grown.before + 20 && grown.saved === grown.after, JSON.stringify({ count: crystal.count, ...grown }));
+  const star = await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    g.player.teleport(s.x, s.y + 0.5, s.z);
+    g.atmosphere.timeOfDay = 0.95;
+    g.simulate(0.5);
+    g.dropStar();
+    let landed = false;
+    for (let i = 0; i < 50 && !landed; i++) { g.simulate(0.1); landed = g.pickups.serialize().some(p => p.id === 'fallen_star'); }
+    g.inventory.add('fallen_star', 5);
+    const st = g.furniture.stationsNear(g.player.x, g.player.y + 1, g.player.z);
+    g.furniture.add({ type: 'workbench', x: g.player.x + 1.5, y: g.player.y, z: g.player.z, rot: 0 });
+    const crafted = g.craftItem('mana_crystal');
+    const before = g.vitals.maxMana;
+    g['consume']({ id: 'mana_crystal', grow: { mana: 20 } });
+    g.atmosphere.timeOfDay = 0.4;
+    g.simulate(0.2);
+    return { landed, crafted, before, after: g.vitals.maxMana };
+  });
+  check('fallen stars land at night and craft into Mana Crystals', star.landed && star.crafted && star.after === star.before + 20, JSON.stringify(star));
+
   // Far view over the world with the debug readout (LOD + draw stats).
   await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;

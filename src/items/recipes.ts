@@ -29,6 +29,8 @@ export const RECIPES: Recipe[] = [
   R('furnace', 1, 'workbench', ['stone', 20], ['wood', 4], ['torch', 3]),
   R('anvil', 1, 'workbench', ['iron_bar', 5]),
   R('healing_potion', 1, 'workbench', ['gel', 2], ['red_cap', 1], ['glass_bottle', 1]),
+  R('mana_potion', 2, 'workbench', ['fallen_star', 1], ['gel', 2], ['glass_bottle', 2]),
+  R('mana_crystal', 1, 'workbench', ['fallen_star', 5]),
   // furnace
   R('copper_bar', 1, 'furnace', ['copper_ore', 3]),
   R('iron_bar', 1, 'furnace', ['iron_ore', 3]),
