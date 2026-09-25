@@ -173,12 +173,12 @@ export class Atmosphere {
       this.sun.color.setRGB(1, 0.95 - dusk * 0.25, 0.86 - dusk * 0.45);
       this.sun.intensity = 2.8 * THREE.MathUtils.smoothstep(sunUp, -0.05, 0.2);
     } else {
-      this.sun.color.setRGB(0.55, 0.65, 1.0);
-      this.sun.intensity = 0.55 * THREE.MathUtils.smoothstep(-sunUp, 0.0, 0.25);
+      this.sun.color.setRGB(0.5, 0.6, 1.0);
+      this.sun.intensity = 0.32 * THREE.MathUtils.smoothstep(-sunUp, 0.0, 0.25);
     }
     const d = this.daylight;
-    this.u.uHemiSky.value.setRGB(0.6 * d + 0.1, 0.72 * d + 0.12, 0.9 * d + 0.22);
-    this.u.uHemiGround.value.setRGB(0.42 * d + 0.06, 0.35 * d + 0.06, 0.28 * d + 0.1);
+    this.u.uHemiSky.value.setRGB(0.64 * d + 0.05, 0.76 * d + 0.07, 0.96 * d + 0.15);
+    this.u.uHemiGround.value.setRGB(0.44 * d + 0.03, 0.37 * d + 0.03, 0.3 * d + 0.06);
 
     // Sky + fog.
     sampleKeys(SKY_TOP, t, this.sky.uniforms.uTop.value);

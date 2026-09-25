@@ -9,6 +9,7 @@ export class Input {
   lmb = false;
   rmb = false;
   private lmbPressed = false;
+  private rmbPressed = false;
   locked = false;
   sensitivity = 0.0022;
 
@@ -23,7 +24,7 @@ export class Input {
     canvas.addEventListener('mousedown', e => {
       if (!this.locked) return;
       if (e.button === 0) { this.lmb = true; this.lmbPressed = true; }
-      if (e.button === 2) this.rmb = true;
+      if (e.button === 2) { this.rmb = true; this.rmbPressed = true; }
     });
     window.addEventListener('mouseup', e => {
       if (e.button === 0) this.lmb = false;
@@ -49,11 +50,13 @@ export class Input {
   wasPressed(code: string) { return this.pressed.has(code); }
   down(code: string) { return this.keys.has(code); }
   consumeClick() { const c = this.lmbPressed; this.lmbPressed = false; return c; }
+  consumeAlt() { const c = this.rmbPressed; this.rmbPressed = false; return c; }
 
   endFrame() {
     this.pressed.clear();
     this.mouseDX = this.mouseDY = 0;
     this.wheel = 0;
     this.lmbPressed = false;
+    this.rmbPressed = false;
   }
 }

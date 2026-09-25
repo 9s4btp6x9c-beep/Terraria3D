@@ -65,6 +65,16 @@ export class Inventory {
     this.emit();
   }
 
+  /** Notify listeners after slots were mutated directly (UI drag/drop). */
+  touch() { this.emit(); }
+
+  hasRoomFor(id: string, count: number): boolean {
+    const max = item(id).maxStack;
+    let room = 0;
+    for (const s of this.slots) room += !s ? max : s.id === id ? max - s.count : 0;
+    return room >= count;
+  }
+
   select(i: number) {
     this.selected = ((i % HOTBAR) + HOTBAR) % HOTBAR;
     this.emit();

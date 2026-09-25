@@ -1,8 +1,9 @@
-// DOM HUD: hotbar, held-item label, message feed, debug readout and the
-// inventory panel.
+// DOM HUD: hotbar, held-item label, vitals (health/mana), message feed,
+// interaction prompt, damage flash and debug readout.
 
 import { HOTBAR, type Inventory } from '../items/inventory';
-import { item } from '../items/items';
+import { RARITY_COLORS, item } from '../items/items';
+import type { IconAtlas } from '../render/icons';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -11,57 +12,74 @@ export class Hud {
   private itemName = $('#itemname');
   private messages = $('#messages');
   private debug = $('#debug');
-  private invPanel = $('#inventory');
-  private invGrid = $('#inventory .grid');
-  private pendingSwap: number | null = null;
+  private prompt = $('#prompt');
+  private vitals = $('#vitals');
+  private flash = $('#flash');
   debugVisible = false;
-  inventoryOpen = false;
   modeLabel = '';
+  private lastVitals = '';
+  private flashT = 0;
 
-  constructor(private inv: Inventory) {
+  constructor(private inv: Inventory, private icons: IconAtlas) {
     inv.onChange(() => this.render());
+    this.hotbar.addEventListener('mousedown', e => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('.slot');
+      if (el?.dataset.hot) this.inv.select(Number(el.dataset.hot));
+    });
     this.render();
-  }
-
-  private slotHtml(i: number, withKey: boolean) {
-    const s = this.inv.slots[i];
-    const sel = i === this.inv.selected && withKey ? ' sel' : '';
-    const swap = this.pendingSwap === i ? ' sel' : '';
-    let inner = withKey ? `<span class="key">${i + 1}</span>` : '';
-    if (s) {
-      const def = item(s.id);
-      inner += `<div class="icon${def.kind === 'tool' ? ' tool' : ''}" style="background:${def.color}"></div>`;
-      if (s.count > 1) inner += `<span class="count">${s.count}</span>`;
-    }
-    return `<div class="slot${sel}${swap}" data-slot="${i}" title="${s ? item(s.id).name : ''}">${inner}</div>`;
   }
 
   render() {
     let html = '';
-    for (let i = 0; i < HOTBAR; i++) html += this.slotHtml(i, true);
+    for (let i = 0; i < HOTBAR; i++) {
+      const s = this.inv.slots[i];
+      const sel = i === this.inv.selected ? ' sel' : '';
+      let inner = `<span class="key">${i + 1}</span>`;
+      if (s) {
+        inner += this.icons.img(item(s.id));
+        if (s.count > 1) inner += `<span class="count">${s.count}</span>`;
+      }
+      html += `<div class="slot${sel}" data-hot="${i}">${inner}</div>`;
+    }
     this.hotbar.innerHTML = html;
     const held = this.inv.held;
-    this.itemName.innerHTML = held ? `${item(held.id).name}${this.modeLabel ? `<small>${this.modeLabel}</small>` : ''}` : '';
-    if (this.inventoryOpen) {
-      let g = '';
-      for (let i = 0; i < this.inv.slots.length; i++) g += this.slotHtml(i, false);
-      this.invGrid.innerHTML = g;
-      this.invGrid.querySelectorAll<HTMLElement>('.slot').forEach(el => {
-        el.onclick = () => {
-          const i = Number(el.dataset.slot);
-          if (this.pendingSwap === null) this.pendingSwap = i;
-          else { this.inv.swap(this.pendingSwap, i); this.pendingSwap = null; }
-          this.render();
-        };
-      });
-    }
+    if (held) {
+      const def = item(held.id);
+      this.itemName.innerHTML = `<span style="color:${RARITY_COLORS[def.rarity ?? 0]}">${def.name}</span>${this.modeLabel ? `<small>${this.modeLabel}</small>` : ''}`;
+    } else this.itemName.innerHTML = '';
   }
 
-  setInventoryOpen(open: boolean) {
-    this.inventoryOpen = open;
-    this.pendingSwap = null;
-    this.invPanel.style.display = open ? 'block' : 'none';
-    this.render();
+  /** Health as hearts (20 hp each) and mana as stars, Terraria-style. */
+  setVitals(hp: number, maxHp: number, mana: number, maxMana: number, defense: number) {
+    const key = `${Math.ceil(hp)}/${maxHp}/${Math.floor(mana)}/${maxMana}/${defense}`;
+    if (key === this.lastVitals) return;
+    this.lastVitals = key;
+    const hearts: string[] = [];
+    for (let i = 0; i < maxHp / 20; i++) {
+      const f = Math.max(0, Math.min(1, (hp - i * 20) / 20));
+      hearts.push(`<span class="heart" style="--f:${f}"></span>`);
+    }
+    const stars: string[] = [];
+    for (let i = 0; i < maxMana / 20; i++) {
+      const f = Math.max(0, Math.min(1, (mana - i * 20) / 20));
+      stars.push(`<span class="star" style="--f:${f}"></span>`);
+    }
+    this.vitals.innerHTML = `<div class="hp-label">Life ${Math.ceil(hp)}/${maxHp}${defense ? ` · <span class="def">🛡 ${defense}</span>` : ''}</div>` +
+      `<div class="hearts">${hearts.join('')}</div>` + (maxMana > 0 ? `<div class="stars">${stars.join('')}</div>` : '');
+  }
+
+  damageFlash(strength = 1) {
+    this.flashT = Math.min(1, this.flashT + 0.5 * strength);
+  }
+
+  setPrompt(text: string) {
+    if (this.prompt.textContent !== text) this.prompt.textContent = text;
+    this.prompt.style.display = text ? 'block' : 'none';
+  }
+
+  update(dt: number) {
+    this.flashT = Math.max(0, this.flashT - dt * 2.5);
+    this.flash.style.opacity = String(this.flashT * 0.45);
   }
 
   message(text: string, color = '#f4ecd8') {

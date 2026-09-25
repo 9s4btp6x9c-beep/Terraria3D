@@ -2,72 +2,147 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Terraria3D Prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#101020" />
+<title>Terraria 3D</title>
 <style>
   :root {
     --gold: #d9a441;
     --gold-dark: #7a5a1c;
-    --panel: rgba(18, 16, 30, 0.72);
+    --panel: rgba(22, 20, 40, 0.84);
+    --panel-2: rgba(40, 36, 70, 0.9);
     --text: #f4ecd8;
+    --dim: #b8b0a0;
   }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; color: var(--text); user-select: none; }
-  canvas#game { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; color: var(--text); user-select: none; -webkit-user-select: none; touch-action: none; }
+  canvas#game { display: block; width: 100vw; height: 100vh; }
   #hud { position: fixed; inset: 0; pointer-events: none; }
+  #hud .interactive { pointer-events: auto; }
   #crosshair { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%); }
   #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #e8453c; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); }
   #crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
   #crosshair::after { left: 0; top: 6px; width: 14px; height: 2px; }
   #minimap { position: absolute; right: 16px; top: 16px; width: 176px; height: 176px; border: 3px solid var(--gold); box-shadow: 0 0 0 2px var(--gold-dark), 0 4px 12px rgba(0,0,0,0.5); image-rendering: pixelated; background: #234; }
-  #hotbar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 4px; }
-  .slot { position: relative; width: 48px; height: 48px; background: var(--panel); border: 2px solid rgba(255,255,255,0.15); border-radius: 4px; }
-  .slot.sel { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-dark); }
-  .slot .icon { position: absolute; inset: 9px; border-radius: 3px; box-shadow: inset -4px -4px 0 rgba(0,0,0,0.3), inset 3px 3px 0 rgba(255,255,255,0.25); }
-  .slot .icon.tool { inset: 8px 18px; transform: rotate(35deg); }
-  .slot .count { position: absolute; right: 3px; bottom: 1px; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; }
+  #clock { position: absolute; right: 16px; top: 202px; width: 182px; text-align: center; font-size: 13px; text-shadow: 1px 1px 0 #000; }
+
+  .slot { position: relative; width: 48px; height: 48px; box-sizing: border-box; background: var(--panel); border: 2px solid rgba(255,255,255,0.14); border-radius: 5px; }
+  .slot.sel { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-dark), inset 0 0 12px rgba(217,164,65,0.35); }
+  .slot img.icon { position: absolute; left: 2px; top: 2px; width: 40px; height: 40px; image-rendering: pixelated; pointer-events: none; }
+  .slot .count { position: absolute; right: 3px; bottom: 1px; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; pointer-events: none; }
   .slot .key { position: absolute; left: 3px; top: 1px; font-size: 10px; opacity: 0.6; }
-  #itemname { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 15px; text-shadow: 1px 1px 0 #000, 0 0 6px #000; text-align: center; }
+  .slot .label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--dim); opacity: 0.7; }
+  img.mini { width: 22px; height: 22px; image-rendering: pixelated; vertical-align: middle; }
+
+  #hotbar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 4px; pointer-events: auto; }
+  #itemname { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 15px; text-shadow: 1px 1px 0 #000, 0 0 6px #000; text-align: center; white-space: nowrap; }
   #itemname small { display: block; opacity: 0.8; font-size: 12px; }
+  #prompt { position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); font-size: 13px; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px; display: none; }
   #messages { position: absolute; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; text-shadow: 1px 1px 0 #000; }
   #messages div { transition: opacity 0.5s; }
-  #debug { position: absolute; left: 16px; top: 16px; font: 12px monospace; background: rgba(0,0,0,0.45); padding: 6px 8px; white-space: pre; display: none; }
-  #inventory { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 3px solid var(--gold); padding: 14px; display: none; pointer-events: auto; }
-  #inventory h2 { margin: 0 0 10px; font-size: 16px; color: var(--gold); }
-  #inventory .grid { display: grid; grid-template-columns: repeat(9, 48px); gap: 4px; }
+  #debug { position: absolute; left: 16px; top: 96px; font: 12px monospace; background: rgba(0,0,0,0.5); padding: 6px 8px; white-space: pre; display: none; }
+  #flash { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(255,0,0,0) 40%, rgba(200,10,10,0.9)); opacity: 0; }
+
+  #vitals { position: absolute; left: 16px; top: 14px; }
+  #vitals .hp-label { font-size: 13px; text-shadow: 1px 1px 0 #000; margin-bottom: 3px; }
+  #vitals .def { color: #cfe0ff; }
+  .hearts, .stars { display: flex; flex-wrap: wrap; width: 250px; gap: 2px; }
+  .heart, .star { width: 22px; height: 20px; display: inline-block; filter: drop-shadow(1px 1px 0 #000) drop-shadow(-1px -1px 0 rgba(0,0,0,0.6)); }
+  .heart { background: linear-gradient(to top, #e8323a 0, #ff6a5a calc(var(--f) * 100%), #3a1a24 calc(var(--f) * 100%)); clip-path: polygon(50% 100%, 8% 56%, 0 32%, 8% 10%, 28% 0, 50% 16%, 72% 0, 92% 10%, 100% 32%, 92% 56%); }
+  .star { background: linear-gradient(to top, #2a6aff 0, #7ab8ff calc(var(--f) * 100%), #1a2240 calc(var(--f) * 100%)); clip-path: polygon(50% 0, 62% 36%, 100% 38%, 70% 60%, 80% 100%, 50% 76%, 20% 100%, 30% 60%, 0 38%, 38% 36%); }
+
+  #inventory { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 3px solid var(--gold); box-shadow: 0 0 0 2px var(--gold-dark), 0 10px 40px rgba(0,0,0,0.6); padding: 14px; display: none; gap: 16px; pointer-events: auto; max-width: calc(100vw - 40px); max-height: calc(100vh - 40px); overflow: auto; }
+  #inventory h2 { margin: 0 0 8px; font-size: 15px; color: var(--gold); letter-spacing: 1px; }
+  #inventory .grid, #inventory .chest { display: grid; grid-template-columns: repeat(9, 48px); gap: 4px; }
+  #inventory .chest { grid-template-columns: repeat(10, 48px); margin-bottom: 12px; padding: 8px; background: var(--panel-2); border-radius: 6px; }
+  #inventory .grid .slot.hot { border-color: rgba(217,164,65,0.35); }
+  #inventory .equip { display: grid; grid-template-columns: 48px; gap: 4px; }
   #inventory .slot { cursor: pointer; }
-  #inventory .hint { margin-top: 10px; font-size: 12px; opacity: 0.75; }
-  #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(40,60,110,0.85), rgba(10,10,20,0.95)); z-index: 10; }
+  #inventory .slot:hover { border-color: #fff8; }
+  #inventory .hint { margin-top: 10px; font-size: 12px; color: var(--dim); }
+  #inventory .crafting { width: 290px; display: flex; flex-direction: column; }
+  #inventory .craft-list { flex: 1; max-height: 300px; overflow-y: auto; background: var(--panel-2); border-radius: 6px; padding: 4px; }
+  #inventory .craft-list .stations { font-size: 11px; color: var(--dim); padding: 2px 4px 6px; }
+  .recipe { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  .recipe img.icon { width: 30px; height: 30px; image-rendering: pixelated; }
+  .recipe.no { opacity: 0.45; }
+  .recipe.sel { background: rgba(217,164,65,0.28); }
+  .recipe:hover { background: rgba(255,255,255,0.08); }
+  .craft-info { margin-top: 8px; font-size: 13px; line-height: 1.6; min-height: 120px; }
+  .craft-info .title { display: flex; align-items: center; gap: 6px; font-size: 15px; }
+  .craft-info .title img.icon { width: 36px; height: 36px; image-rendering: pixelated; }
+  .craft-info .have { color: #cfe8a0; } .craft-info .need { color: #ff8a7a; } .dim { color: var(--dim); }
+  .craft-info button { font: inherit; margin-top: 6px; padding: 4px 16px; background: #3f2a18; color: var(--text); border: 2px solid var(--gold); cursor: pointer; }
+  .craft-info button:disabled { opacity: 0.4; cursor: default; }
+  #tooltip { position: fixed; z-index: 30; pointer-events: none; background: rgba(12,10,24,0.92); border: 1px solid #fff3; padding: 6px 10px; font-size: 13px; line-height: 1.5; border-radius: 4px; max-width: 240px; display: none; }
+  #tooltip i { color: #d8d0ff; }
+  #cursor-stack { position: fixed; z-index: 31; pointer-events: none; width: 44px; height: 44px; display: none; }
+  #cursor-stack img.icon { width: 40px; height: 40px; image-rendering: pixelated; }
+  #cursor-stack .count { position: absolute; right: 0; bottom: 0; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; }
+
+  #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(40,60,110,0.85), rgba(10,10,20,0.95)); z-index: 10; text-align: center; padding: 16px; box-sizing: border-box; }
   #overlay h1 { font-size: 46px; margin: 0 0 6px; letter-spacing: 2px; color: var(--gold); text-shadow: 3px 3px 0 #3a2410; }
   #overlay p { margin: 4px 0; opacity: 0.85; }
-  #overlay .bar { width: 320px; height: 14px; border: 2px solid var(--gold); margin: 18px 0 6px; background: #111; }
+  #overlay .bar { width: min(320px, 80vw); height: 14px; border: 2px solid var(--gold); margin: 18px 0 6px; background: #111; }
   #overlay .bar div { height: 100%; width: 0; background: linear-gradient(#7fd67a, #3f9a55); }
   #overlay button { font: inherit; font-size: 18px; margin: 6px; padding: 8px 22px; background: #3f2a18; color: var(--text); border: 2px solid var(--gold); cursor: pointer; }
   #overlay button:hover { background: #5a3c22; }
-  #overlay .controls { margin-top: 16px; font-size: 13px; line-height: 1.6; opacity: 0.8; text-align: center; }
-  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+  #overlay .controls { margin-top: 16px; font-size: 13px; line-height: 1.6; opacity: 0.8; }
+  @media (max-width: 700px) {
+    #minimap { width: 110px; height: 110px; right: 10px; top: 10px; }
+    #clock { right: 10px; top: 124px; width: 116px; }
+    .slot { width: 40px; height: 40px; }
+    .slot img.icon { width: 34px; height: 34px; left: 1px; top: 1px; }
+    #inventory .grid { grid-template-columns: repeat(9, 40px); }
+    #inventory .chest { grid-template-columns: repeat(10, 40px); }
+    #inventory { flex-direction: column; }
+    .hearts, .stars { width: 170px; }
+    .heart, .star { width: 16px; height: 15px; }
+  }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <div id="hud">
+  <div id="flash"></div>
   <div id="crosshair"></div>
+  <div id="vitals"></div>
   <canvas id="minimap" width="176" height="176"></canvas>
+  <div id="clock"></div>
+  <div id="prompt"></div>
   <div id="itemname"></div>
   <div id="hotbar"></div>
   <div id="messages"></div>
   <div id="debug"></div>
-  <div id="inventory"><h2>Inventory</h2><div class="grid"></div><div class="hint">Click two slots to swap. Tab / E to close.</div></div>
+  <div id="inventory">
+    <div>
+      <div class="chest"></div>
+      <h2>Inventory</h2>
+      <div style="display:flex; gap:10px">
+        <div class="equip"></div>
+        <div class="grid"></div>
+      </div>
+      <div class="hint">Click to pick up / place · Right-click to split · Shift-click to quick-move · Tab/E to close</div>
+    </div>
+    <div class="crafting">
+      <h2>Crafting</h2>
+      <div class="craft-list"></div>
+      <div class="craft-info"></div>
+    </div>
+  </div>
 </div>
+<div id="tooltip"></div>
+<div id="cursor-stack"></div>
 <div id="overlay">
   <h1>TERRARIA 3D</h1>
-  <p>Non-voxel sandbox prototype</p>
+  <p>A non-voxel sandbox prototype</p>
   <div class="bar"><div></div></div>
   <p id="status">Loading…</p>
   <div id="buttons"></div>
   <div class="controls">
-    WASD move · Shift sprint · Space jump · Ctrl/C crouch · Mouse look<br/>
-    LMB use tool / place · 1–9 / wheel select · Q cycle build shape<br/>
-    Tab/E inventory · F5 save · F9 load · F3 debug · Esc pause
+    WASD move · Shift sprint · Space jump · C crouch · Mouse look<br/>
+    LMB use / attack / place · RMB interact (doors, chests, beds) · F grapple<br/>
+    1–9 / wheel select · Q cycle build shape · Tab/E inventory & crafting<br/>
+    F5 save · F9 reload save · F3 debug · Esc pause
   </div>
 </div>
 <script type="module" src="/src/main.ts"></script>

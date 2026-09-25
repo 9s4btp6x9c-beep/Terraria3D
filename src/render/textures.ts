@@ -19,14 +19,32 @@ export const EXTRA_LAYERS = {
   bricks: { style: 'bricks', palette: [0x9a98a4, 0x3a3842, 0xb8b6c0, 0x7e7c88] },
   plain: { style: 'plain', palette: [0xffffff, 0xffffff, 0xffffff, 0xffffff] },
   cloud: { style: 'plain', palette: [0xffffff, 0xffffff, 0xffffff, 0xffffff] },
-} as const satisfies Record<string, { style: TextureStyle | 'bark' | 'planks' | 'bricks' | 'plain'; palette: readonly number[] }>;
+  metal: { style: 'metal', palette: [0x6e6c78, 0x2e2c36, 0x9a98a6, 0xc4c2d0] },
+  copper: { style: 'metal', palette: [0xc0703a, 0x6a3418, 0xe0945a, 0xffc890] },
+  iron: { style: 'metal', palette: [0xb4aca6, 0x5a5460, 0xd6d0ca, 0xf4f0ea] },
+  lumiteMetal: { style: 'metal', palette: [0x2aa8d8, 0x0e4a74, 0x6ae6ff, 0xd8ffff] },
+  flame: { style: 'flame', palette: [0xffb030, 0xe0501a, 0xffe070, 0xfff8d0] },
+  cloth: { style: 'cloth', palette: [0xb03a36, 0x6e1e22, 0xd0584a, 0xe8c070] },
+  gel: { style: 'gel', palette: [0x4ec87a, 0x2a8a50, 0x8af0a8, 0xe0fff0] },
+  bone: { style: 'bone', palette: [0xe6dcc0, 0x9a8e74, 0xfff6de, 0x6a604e] },
+  chitin: { style: 'chitin', palette: [0x4a4658, 0x1e1c26, 0x6e6a82, 0x9a96b0] },
+  fur: { style: 'fur', palette: [0x5a4a5e, 0x2e2434, 0x7a6a80, 0xb09ab8] },
+  gold: { style: 'metal', palette: [0xe0b030, 0x8a5e10, 0xffd860, 0xfff4b0] },
+  glass: { style: 'gel', palette: [0x9ad8f0, 0x5a9ab8, 0xd8f4ff, 0xffffff] },
+  red: { style: 'gel', palette: [0xd83a3a, 0x8a1e22, 0xff7a6a, 0xffd0c8] },
+} as const satisfies Record<string, { style: Style; palette: readonly number[] }>;
+
+/** Self-illumination per extra layer (flames glow, crystals shimmer). */
+export const EXTRA_EMISSIVE: Partial<Record<keyof typeof EXTRA_LAYERS, number>> = {
+  flame: 1.2, lumiteMetal: 0.35, gel: 0.08,
+};
 
 export type ExtraLayer = keyof typeof EXTRA_LAYERS;
 export function layerOf(name: ExtraLayer): number {
   return MATERIALS.length + Object.keys(EXTRA_LAYERS).indexOf(name);
 }
 
-type Style = TextureStyle | 'bark' | 'planks' | 'bricks' | 'plain';
+type Style = TextureStyle | 'bark' | 'planks' | 'bricks' | 'plain' | 'metal' | 'flame' | 'cloth' | 'gel' | 'bone' | 'chitin' | 'fur';
 
 function rgb(hex: number): [number, number, number] {
   return [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
@@ -164,6 +182,61 @@ function paint(style: Style, palette: readonly number[], seed: number): Uint8Arr
       const seam = (y % rowH === 0) || ((x + off) % len === 0);
       const grain = style === 'planks' ? Math.sin(x * 0.35 + row * 3 + n2[i] * 4) : n2[i] - 0.5;
       put(i, seam ? dark : grain > 0.7 ? light : grain < -0.75 ? accent : base, 0.92 + (row % 3) * 0.05);
+    }
+  }
+  if (style === 'metal') {
+    // Riveted plates with a bevelled highlight on each plate.
+    for (let i = 0; i < TEX * TEX; i++) {
+      const x = i % TEX, y = (i / TEX) | 0;
+      const px2 = x % 16, py2 = y % 16;
+      const seam = px2 === 0 || py2 === 0;
+      const rivet = (px2 === 3 || px2 === 12) && (py2 === 3 || py2 === 12);
+      const bevel = px2 === 1 || py2 === 1 ? 1.12 : px2 === 15 || py2 === 15 ? 0.8 : 1;
+      const scratch = n3[i] > 0.8 ? light : n2[i] < 0.28 ? dark : base;
+      put(i, seam ? dark : rivet ? accent : scratch, bevel * (0.94 + n1[i] * 0.12));
+    }
+  }
+  if (style === 'flame') {
+    for (let i = 0; i < TEX * TEX; i++) {
+      const y = (i / TEX) | 0;
+      const h = (y / TEX + n2[i] * 0.35) % 1;
+      put(i, h < 0.25 ? accent : h < 0.5 ? light : h < 0.8 ? base : dark);
+    }
+  }
+  if (style === 'cloth') {
+    for (let i = 0; i < TEX * TEX; i++) {
+      const x = i % TEX, y = (i / TEX) | 0;
+      const weave = (x + y) % 4 < 2 ? 1.06 : 0.94;
+      const stripe = y % 32 < 3;
+      put(i, stripe ? accent : n2[i] < 0.3 ? dark : n2[i] > 0.7 ? light : base, weave);
+    }
+  }
+  if (style === 'gel') {
+    for (let i = 0; i < TEX * TEX; i++) {
+      const v = n1[i] * 0.6 + n2[i] * 0.4;
+      const r = rand();
+      put(i, r < 0.02 ? accent : v > 0.64 ? light : v < 0.36 ? dark : base);
+    }
+  }
+  if (style === 'bone') {
+    for (let i = 0; i < TEX * TEX; i++) {
+      const x = i % TEX;
+      const crack = Math.abs(n2[i] - 0.5) < 0.03;
+      put(i, crack ? accent : Math.sin(x * 0.4 + n1[i] * 5) > 0.85 ? dark : n3[i] > 0.7 ? light : base);
+    }
+  }
+  if (style === 'chitin') {
+    for (let i = 0; i < TEX * TEX; i++) {
+      const y = (i / TEX) | 0;
+      const seg = y % 12;
+      put(i, seg === 0 ? dark : seg < 3 ? accent : seg > 9 ? dark : n2[i] > 0.62 ? light : base, 1 - seg * 0.02);
+    }
+  }
+  if (style === 'fur') {
+    for (let i = 0; i < TEX * TEX; i++) {
+      const x = i % TEX, y = (i / TEX) | 0;
+      const strand = Math.sin(x * 1.3 + Math.sin(y * 0.3) * 2 + n2[i] * 6);
+      put(i, strand > 0.75 ? light : strand < -0.8 ? dark : n3[i] > 0.85 ? accent : base);
     }
   }
   return px;

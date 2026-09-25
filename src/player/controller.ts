@@ -25,6 +25,15 @@ export class PlayerController {
   grounded = false;
   crouching = false;
   inWater = false;
+  /** Movement speed multiplier (accessories). */
+  speedMul = 1;
+  /** Extra mid-air jumps (double-jump accessories) and how many remain. */
+  extraJumps = 0;
+  private airJumps = 0;
+  /** Downward speed at the moment of the last landing (for fall damage). */
+  landingImpact = 0;
+  /** Set when an air jump fires this frame (for effects). */
+  airJumped = false;
   /** World extents; the player is kept inside [margin, size - margin]. */
   bounds: { x: number; z: number } | null = null;
   /** Seconds since last grounded (coyote time). */
@@ -44,6 +53,12 @@ export class PlayerController {
 
   get position() { return { x: this.x, y: this.y, z: this.z }; }
 
+  /** Knockback / explosion push. */
+  impulse(x: number, y: number, z: number) {
+    this.vx += x; this.vy += y; this.vz += z;
+    if (y > 0) this.grounded = false;
+  }
+
   teleport(x: number, y: number, z: number) {
     this.x = x; this.y = y; this.z = z;
     this.vx = this.vy = this.vz = 0;
@@ -61,7 +76,7 @@ export class PlayerController {
     let wz = -cos * input.forward - sin * input.strafe;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
-    const speed = this.crouching ? this.crouchSpeed : input.sprint ? this.sprintSpeed : this.walkSpeed;
+    const speed = (this.crouching ? this.crouchSpeed : input.sprint ? this.sprintSpeed : this.walkSpeed) * this.speedMul;
     const accel = this.grounded ? 60 : this.inWater ? 10 : 14;
     const tx = wx * speed * (this.inWater ? 0.6 : 1), tz = wz * speed * (this.inWater ? 0.6 : 1);
     this.vx += clampStep(tx - this.vx, accel * dt);
@@ -74,10 +89,16 @@ export class PlayerController {
       this.vy *= Math.pow(0.2, dt);
     } else {
       this.airTime = this.grounded ? 0 : this.airTime + dt;
+      this.airJumped = false;
+      if (this.grounded) this.airJumps = this.extraJumps;
       if (input.jump && !this.jumpHeld && this.airTime < 0.12) {
         this.vy = this.jumpSpeed;
         this.grounded = false;
         this.airTime = 1;
+      } else if (input.jump && !this.jumpHeld && this.airJumps > 0 && !this.grounded) {
+        this.vy = this.jumpSpeed * 0.95;
+        this.airJumps--;
+        this.airJumped = true;
       }
       this.vy -= this.gravity * dt;
       this.vy = Math.max(this.vy, -50);
@@ -86,6 +107,8 @@ export class PlayerController {
 
     // Integrate in substeps so we never tunnel through thin geometry.
     const wasGrounded = this.grounded;
+    const fallSpeed = -this.vy;
+    this.landingImpact = 0;
     this.grounded = false;
     const dist = Math.hypot(this.vx, this.vy, this.vz) * dt;
     const steps = Math.max(1, Math.ceil(dist / 0.2));
@@ -94,6 +117,8 @@ export class PlayerController {
       this.x += this.vx * h; this.y += this.vy * h; this.z += this.vz * h;
       this.resolve();
     }
+
+    if (this.grounded && !wasGrounded && !this.inWater) this.landingImpact = Math.max(0, fallSpeed);
 
     // Invisible walls at the world edge (the ocean ring hides them).
     if (this.bounds) {

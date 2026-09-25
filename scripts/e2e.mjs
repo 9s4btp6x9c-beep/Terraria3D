@@ -213,6 +213,111 @@ try {
   });
   await shot('09-overview');
 
+  // ---------------------------------------------------------------- gameplay
+  await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    g.player.teleport(s.x, s.y, s.z); g.player.pitch = -0.95;
+    for (const [id, n] of [['wood', 80], ['stone', 60], ['gel', 20], ['iron_bar', 12], ['copper_bar', 6], ['sand', 6]]) g.inventory.add(id, n);
+  });
+  await settle();
+  const crafted = await page.evaluate(() => {
+    const g = __game;
+    const ok = g.craftItem('workbench');
+    g.inventory.swap(g.inventory.slots.findIndex(s => s && s.id === 'workbench'), 3);
+    g.inventory.select(3);
+    return ok;
+  });
+  check('craft a workbench by hand', crafted);
+  await act(() => { __game.input.lmb = true; }, 0.3);
+  const benchPlaced = await page.evaluate(() => {
+    const g = __game;
+    return { n: g.furniture.items.size, st: [...g.furniture.stationsNear(g.player.x, g.player.y + 1, g.player.z)] };
+  });
+  check('place the workbench (station nearby)', benchPlaced.n === 1 && benchPlaced.st.includes('workbench'), JSON.stringify(benchPlaced));
+  const more = await page.evaluate(() => {
+    const g = __game;
+    const r = ['furnace', 'chair', 'table', 'chest', 'anvil', 'wooden_bow', 'wooden_arrow', 'bomb', 'door', 'bed'].map(id => [id, g.craftItem(id)]);
+    return Object.fromEntries(r);
+  });
+  check('craft station-gated items at the workbench', more.furnace && more.chair && more.table && more.chest && more.anvil, JSON.stringify(more));
+  // Place a few more pieces of furniture around.
+  const placeAt = async (id, yawOffset, pitch = -0.9) => {
+    await page.evaluate(({ id, yawOffset, pitch }) => {
+      const g = __game;
+      const i = g.inventory.slots.findIndex(s => s && s.id === id);
+      if (i < 0) return;
+      g.inventory.swap(i, 4);
+      g.inventory.select(4);
+      g.player.yaw += yawOffset; g.player.pitch = pitch;
+    }, { id, yawOffset, pitch });
+    await act(() => { __game.input.lmb = true; }, 0.35);
+  };
+  await placeAt('furnace', 1.2);
+  await placeAt('anvil', 1.0);
+  await placeAt('chest', 1.0);
+  await placeAt('torch', 1.2, -0.7);
+  await placeAt('chair', 1.0);
+  const furnCount = await page.evaluate(() => __game.furniture.items.size);
+  check('furniture placed (workbench, furnace, anvil, chest, torch, chair)', furnCount >= 5, `${furnCount} pieces`);
+  await page.evaluate(() => {
+    const g = __game;
+    const f = [...g.furniture.items.values()];
+    const cx = f.reduce((s, a) => s + a.x, 0) / f.length, cz = f.reduce((s, a) => s + a.z, 0) / f.length;
+    g.player.teleport(cx + 4, g.player.y + 0.5, cz + 4);
+    g.player.yaw = Math.atan2(-(cx - g.player.x), -(cz - g.player.z)); g.player.pitch = -0.35;
+  });
+  await shot('11-furniture');
+  await page.evaluate(() => { __game.toggleInventory(true); });
+  await shot('12-inventory');
+  await page.evaluate(() => { __game.toggleInventory(false); __game.input.locked = true; });
+
+  // Melee combat: a Glob in front of the player, killed with the sword.
+  const fight = await page.evaluate(() => {
+    const g = __game;
+    g.combat.spawning = false;
+    g.combat.clear();
+    const sw = g.inventory.slots.findIndex(s => s && s.id === 'wooden_sword');
+    g.inventory.swap(sw, 5); g.inventory.select(5);
+    const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw);
+    const c = g.spawnCreature('glob', g.player.x + fx * 2.2, g.player.y + 0.3, g.player.z + fz * 2.2);
+    g.player.pitch = -0.3;
+    return { gel: g.inventory.count('gel'), hp: c.hp, kills: g.combat.kills };
+  });
+  await act(() => { __game.input.lmb = true; }, 4);
+  await page.evaluate(() => __game.simulate(1.5));
+  const after2 = await page.evaluate(() => ({ kills: __game.combat.kills, gel: __game.inventory.count('gel'), drops: __game.pickups.count, hp: __game.vitals.hp }));
+  check('sword kills a Glob and it drops gel', after2.kills > fight.kills && (after2.gel > fight.gel || after2.drops > 0), `kills ${after2.kills}, gel ${fight.gel} -> ${after2.gel}, pickups ${after2.drops}, player hp ${after2.hp.toFixed(0)}`);
+
+  // Creature lineup for visual review.
+  await page.evaluate(() => {
+    const g = __game;
+    g.combat.clear();
+    const ids = ['glob', 'deep_glob', 'shambler', 'gloomwisp', 'duskwing', 'rockmite', 'hollow_miner'];
+    const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw), sx = -fz, sz = fx;
+    ids.forEach((id, i) => {
+      const o = (i - 3) * 1.6;
+      const x = g.player.x + fx * 6 + sx * o, z = g.player.z + fz * 6 + sz * o;
+      const top = g.sky.raw[Math.floor(x) + Math.floor(z) * g.sky.w];
+      const c = g.spawnCreature(id, x, top + (id === 'gloomwisp' || id === 'duskwing' ? 1.2 : 0.2), z);
+      c.yaw = Math.atan2(-fx, -fz);
+    });
+    g.player.pitch = -0.12;
+  });
+  await page.evaluate(() => { for (const c of __game.combat.creatures) { c.cooldown = 5; } __game.simulate(0.1); });
+  await shot('13-creatures');
+
+  // Night with torches.
+  await page.evaluate(() => { const g = __game; g.combat.clear(); g.atmosphere.timeOfDay = 0.93; });
+  await page.evaluate(() => __game.simulate(0.5));
+  await page.evaluate(() => {
+    const g = __game;
+    const f = [...g.furniture.items.values()];
+    const cx = f.reduce((s, a) => s + a.x, 0) / f.length, cz = f.reduce((s, a) => s + a.z, 0) / f.length;
+    g.player.yaw = Math.atan2(-(cx - g.player.x), -(cz - g.player.z)); g.player.pitch = -0.3;
+  });
+  await shot('14-night');
+  await page.evaluate(() => { __game.atmosphere.timeOfDay = 0.4; __game.simulate(0.2); });
+
   // Far view over the world with the debug readout (LOD + draw stats).
   await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;

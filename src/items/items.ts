@@ -1,9 +1,13 @@
 // Item database. Items are pure data; behaviour is selected by `kind` and the
-// optional tool/place blocks, so new content is added here, not in code.
+// optional blocks (tool, weapon, place, armor, accessory...), so new content
+// is added here, not in code. Visuals come from the `model` recipe.
 
 import { Mat } from '../world/materials';
 
 export type PieceShape = 'floor' | 'wall' | 'pillar' | 'stairs' | 'roof';
+export type StationId = 'workbench' | 'furnace' | 'anvil' | 'forge';
+export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed';
+export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal';
 
 export interface ToolDef {
   type: 'pickaxe' | 'axe';
@@ -16,36 +20,144 @@ export interface ToolDef {
   /** Brush radius for terrain. */
   radius: number;
   reach: number;
+  /** Melee damage when swung at creatures. */
+  damage: number;
 }
+
+export interface WeaponDef {
+  type: 'melee' | 'bow' | 'thrown' | 'magic';
+  damage: number;
+  /** Seconds between uses. */
+  speed: number;
+  knockback: number;
+  /** Melee reach / projectile speed. */
+  reach?: number;
+  projectileSpeed?: number;
+  ammo?: string;
+  manaCost?: number;
+  /** Thrown explosives: blast radius carved into terrain. */
+  blast?: number;
+}
+
+export interface ArmorDef { slot: 'head' | 'body' | 'legs'; defense: number; set?: string }
+
+export interface AccessoryDef {
+  moveSpeed?: number;
+  jumps?: number;
+  noFallDamage?: boolean;
+  miningSpeed?: number;
+  lightRadius?: number;
+  hook?: { range: number; speed: number };
+  regen?: number;
+}
+
+/** Procedural model recipe (see render/models.ts). */
+export type ModelSpec =
+  | { type: 'pickaxe' | 'axe' | 'sword' | 'bow' | 'staff' | 'hook'; head: MetalLayer }
+  | { type: 'ore' | 'bar' | 'crystal' | 'nugget'; layer: string; tint?: number }
+  | { type: 'block'; layer: string }
+  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' }
+  | { type: 'armor'; slot: ArmorDef['slot']; layer: MetalLayer }
+  | { type: 'boots' | 'jar' | 'charm' | 'band'; layer: string }
+  | { type: 'furniture'; id: FurnitureId };
 
 export interface ItemDef {
   id: string;
   name: string;
-  kind: 'tool' | 'material' | 'placeable';
+  kind: 'tool' | 'weapon' | 'material' | 'placeable' | 'armor' | 'accessory' | 'consumable' | 'ammo';
   maxStack: number;
-  /** Icon colour for the UI swatch. */
+  /** Fallback UI colour. */
   color: string;
+  model: ModelSpec;
   tool?: ToolDef;
+  weapon?: WeaponDef;
+  armor?: ArmorDef;
+  accessory?: AccessoryDef;
   /** Terrain material deposited when placed as a terrain blob. */
   terrain?: Mat;
-  /** Building piece texture ('planks' | 'bricks') when used for building. */
+  /** Building piece texture when used for building. */
   build?: 'planks' | 'bricks';
+  furniture?: FurnitureId;
+  heal?: number;
+  rarity?: 0 | 1 | 2 | 3;
   description?: string;
 }
 
+const T = (id: string, name: string, head: MetalLayer, type: 'pickaxe' | 'axe', tier: number, power: number, speed: number, damage: number, color: string, description: string): ItemDef => ({
+  id, name, kind: 'tool', maxStack: 1, color, model: { type, head },
+  tool: { type, tier, power, speed, radius: type === 'pickaxe' ? 1.25 + tier * 0.12 : 0, reach: 5 + tier * 0.4, damage },
+  description,
+});
+
 const list: ItemDef[] = [
-  { id: 'copper_pickaxe', name: 'Copper Pickaxe', kind: 'tool', maxStack: 1, color: '#b8703e', tool: { type: 'pickaxe', tier: 0, power: 1.0, speed: 0.32, radius: 1.35, reach: 5 }, description: 'Digs through dirt, stone and copper.' },
-  { id: 'copper_axe', name: 'Copper Axe', kind: 'tool', maxStack: 1, color: '#a8a4ae', tool: { type: 'axe', tier: 0, power: 1.0, speed: 0.4, radius: 0, reach: 4 }, description: 'Fells trees for wood.' },
-  { id: 'iron_pickaxe', name: 'Iron Pickaxe', kind: 'tool', maxStack: 1, color: '#d8c0b0', tool: { type: 'pickaxe', tier: 1, power: 1.5, speed: 0.28, radius: 1.5, reach: 5.5 }, description: 'Strong enough for iron, deepstone and lumite.' },
-  { id: 'dirt', name: 'Dirt', kind: 'material', maxStack: 999, color: '#8a5a3c', terrain: Mat.Dirt },
-  { id: 'stone', name: 'Stone', kind: 'material', maxStack: 999, color: '#a4a2ac', terrain: Mat.Stone, build: 'bricks' },
-  { id: 'sand', name: 'Sand', kind: 'material', maxStack: 999, color: '#dcc88c', terrain: Mat.Sand },
-  { id: 'clay', name: 'Clay', kind: 'material', maxStack: 999, color: '#a0604a', terrain: Mat.Clay },
-  { id: 'snow', name: 'Snow', kind: 'material', maxStack: 999, color: '#eaf2f8', terrain: Mat.Snow },
-  { id: 'wood', name: 'Wood', kind: 'material', maxStack: 999, color: '#a8744a', build: 'planks' },
-  { id: 'copper_ore', name: 'Copper Ore', kind: 'material', maxStack: 999, color: '#e0874a' },
-  { id: 'iron_ore', name: 'Iron Ore', kind: 'material', maxStack: 999, color: '#c8b4a6' },
-  { id: 'lumite', name: 'Lumite Shard', kind: 'material', maxStack: 999, color: '#46e0ff' },
+  // ---- tools
+  T('copper_pickaxe', 'Copper Pickaxe', 'copper', 'pickaxe', 0, 1.0, 0.32, 4, '#c0703a', 'Digs dirt, stone, clay and copper.'),
+  T('copper_axe', 'Copper Axe', 'copper', 'axe', 0, 1.0, 0.4, 5, '#c0703a', 'Fells trees for wood.'),
+  T('iron_pickaxe', 'Iron Pickaxe', 'iron', 'pickaxe', 1, 1.5, 0.27, 6, '#d6d0ca', 'Strong enough for iron, deepstone and lumite.'),
+  T('iron_axe', 'Iron Axe', 'iron', 'axe', 1, 1.6, 0.34, 8, '#d6d0ca', 'Chops faster.'),
+  T('lumite_pickaxe', 'Lumite Pickaxe', 'lumiteMetal', 'pickaxe', 2, 2.2, 0.22, 10, '#6ae6ff', 'Hums with light. Digs anything.'),
+
+  // ---- weapons
+  { id: 'wooden_sword', name: 'Wooden Sword', kind: 'weapon', maxStack: 1, color: '#a8744a', model: { type: 'sword', head: 'planks' }, weapon: { type: 'melee', damage: 8, speed: 0.45, knockback: 5, reach: 2.6 } },
+  { id: 'copper_sword', name: 'Copper Broadsword', kind: 'weapon', maxStack: 1, color: '#c0703a', model: { type: 'sword', head: 'copper' }, weapon: { type: 'melee', damage: 13, speed: 0.42, knockback: 6, reach: 2.9 } },
+  { id: 'iron_sword', name: 'Iron Broadsword', kind: 'weapon', maxStack: 1, color: '#d6d0ca', model: { type: 'sword', head: 'iron' }, weapon: { type: 'melee', damage: 19, speed: 0.4, knockback: 7, reach: 3.1 } },
+  { id: 'lumite_blade', name: 'Lumite Blade', kind: 'weapon', maxStack: 1, color: '#6ae6ff', rarity: 2, model: { type: 'sword', head: 'lumiteMetal' }, weapon: { type: 'melee', damage: 30, speed: 0.34, knockback: 7, reach: 3.4 }, description: 'Leaves a trail of light.' },
+  { id: 'wooden_bow', name: 'Wooden Bow', kind: 'weapon', maxStack: 1, color: '#a8744a', model: { type: 'bow', head: 'planks' }, weapon: { type: 'bow', damage: 9, speed: 0.6, knockback: 2, projectileSpeed: 38, ammo: 'wooden_arrow' } },
+  { id: 'iron_bow', name: 'Iron Bow', kind: 'weapon', maxStack: 1, color: '#d6d0ca', model: { type: 'bow', head: 'iron' }, weapon: { type: 'bow', damage: 14, speed: 0.5, knockback: 2.5, projectileSpeed: 48, ammo: 'wooden_arrow' } },
+  { id: 'lumite_staff', name: 'Lumite Staff', kind: 'weapon', maxStack: 1, color: '#6ae6ff', rarity: 2, model: { type: 'staff', head: 'lumiteMetal' }, weapon: { type: 'magic', damage: 22, speed: 0.35, knockback: 3, projectileSpeed: 34, manaCost: 6 }, description: 'Fires seeking bolts of light.' },
+  { id: 'wooden_arrow', name: 'Wooden Arrow', kind: 'ammo', maxStack: 999, color: '#c0a070', model: { type: 'arrow' } },
+  { id: 'bomb', name: 'Bomb', kind: 'weapon', maxStack: 99, color: '#3a3842', model: { type: 'bomb' }, weapon: { type: 'thrown', damage: 60, speed: 0.6, knockback: 12, projectileSpeed: 16, blast: 3.2 }, description: 'Blasts a crater out of the terrain.' },
+
+  // ---- armor
+  { id: 'copper_helmet', name: 'Copper Helmet', kind: 'armor', maxStack: 1, color: '#c0703a', model: { type: 'armor', slot: 'head', layer: 'copper' }, armor: { slot: 'head', defense: 2, set: 'copper' } },
+  { id: 'copper_chainmail', name: 'Copper Chainmail', kind: 'armor', maxStack: 1, color: '#c0703a', model: { type: 'armor', slot: 'body', layer: 'copper' }, armor: { slot: 'body', defense: 3, set: 'copper' } },
+  { id: 'copper_greaves', name: 'Copper Greaves', kind: 'armor', maxStack: 1, color: '#c0703a', model: { type: 'armor', slot: 'legs', layer: 'copper' }, armor: { slot: 'legs', defense: 2, set: 'copper' } },
+  { id: 'iron_helmet', name: 'Iron Helmet', kind: 'armor', maxStack: 1, color: '#d6d0ca', model: { type: 'armor', slot: 'head', layer: 'iron' }, armor: { slot: 'head', defense: 3, set: 'iron' } },
+  { id: 'iron_chainmail', name: 'Iron Chainmail', kind: 'armor', maxStack: 1, color: '#d6d0ca', model: { type: 'armor', slot: 'body', layer: 'iron' }, armor: { slot: 'body', defense: 5, set: 'iron' } },
+  { id: 'iron_greaves', name: 'Iron Greaves', kind: 'armor', maxStack: 1, color: '#d6d0ca', model: { type: 'armor', slot: 'legs', layer: 'iron' }, armor: { slot: 'legs', defense: 3, set: 'iron' } },
+
+  // ---- accessories
+  { id: 'swift_boots', name: 'Swiftstep Boots', kind: 'accessory', maxStack: 1, color: '#d0584a', rarity: 1, model: { type: 'boots', layer: 'cloth' }, accessory: { moveSpeed: 0.3 }, description: '+30% movement speed.' },
+  { id: 'updraft_jar', name: 'Updraft Jar', kind: 'accessory', maxStack: 1, color: '#9ad8f0', rarity: 1, model: { type: 'jar', layer: 'glass' }, accessory: { jumps: 1 }, description: 'A captured gust. Grants a double jump.' },
+  { id: 'feather_charm', name: 'Feather Charm', kind: 'accessory', maxStack: 1, color: '#fff6de', rarity: 1, model: { type: 'charm', layer: 'bone' }, accessory: { noFallDamage: true }, description: 'Negates fall damage.' },
+  { id: 'miners_band', name: "Delver's Band", kind: 'accessory', maxStack: 1, color: '#e0b030', rarity: 1, model: { type: 'band', layer: 'gold' }, accessory: { miningSpeed: 0.35 }, description: '+35% mining speed.' },
+  { id: 'glow_charm', name: 'Glowmoth Charm', kind: 'accessory', maxStack: 1, color: '#7af0ff', rarity: 1, model: { type: 'charm', layer: 'lumiteMetal' }, accessory: { lightRadius: 1 }, description: 'Your lantern shines much further.' },
+  { id: 'grappling_hook', name: 'Grappling Hook', kind: 'accessory', maxStack: 1, color: '#9a98a6', rarity: 1, model: { type: 'hook', head: 'iron' }, accessory: { hook: { range: 26, speed: 22 } }, description: 'Press F to fire. Latches onto any surface.' },
+  { id: 'barbed_hook', name: 'Barbed Hook', kind: 'material', maxStack: 99, color: '#9a98a6', model: { type: 'hook', head: 'metal' }, description: 'Dropped by Hollow Miners. Craft into a grappling hook.' },
+
+  // ---- materials
+  { id: 'dirt', name: 'Dirt', kind: 'material', maxStack: 999, color: '#8a5a3c', model: { type: 'block', layer: 'dirt' }, terrain: Mat.Dirt },
+  { id: 'stone', name: 'Stone', kind: 'material', maxStack: 999, color: '#a4a2ac', model: { type: 'block', layer: 'stone' }, terrain: Mat.Stone, build: 'bricks' },
+  { id: 'sand', name: 'Sand', kind: 'material', maxStack: 999, color: '#dcc88c', model: { type: 'block', layer: 'sand' }, terrain: Mat.Sand },
+  { id: 'clay', name: 'Clay', kind: 'material', maxStack: 999, color: '#a0604a', model: { type: 'block', layer: 'clay' }, terrain: Mat.Clay },
+  { id: 'snow', name: 'Snow', kind: 'material', maxStack: 999, color: '#eaf2f8', model: { type: 'block', layer: 'snow' }, terrain: Mat.Snow },
+  { id: 'wood', name: 'Wood', kind: 'material', maxStack: 999, color: '#a8744a', model: { type: 'log' }, build: 'planks' },
+  { id: 'copper_ore', name: 'Copper Ore', kind: 'material', maxStack: 999, color: '#e0874a', model: { type: 'ore', layer: 'copper' } },
+  { id: 'iron_ore', name: 'Iron Ore', kind: 'material', maxStack: 999, color: '#c8b4a6', model: { type: 'ore', layer: 'iron' } },
+  { id: 'lumite', name: 'Lumite Shard', kind: 'material', maxStack: 999, color: '#46e0ff', model: { type: 'crystal', layer: 'lumiteMetal' } },
+  { id: 'copper_bar', name: 'Copper Bar', kind: 'material', maxStack: 999, color: '#c0703a', model: { type: 'bar', layer: 'copper' } },
+  { id: 'iron_bar', name: 'Iron Bar', kind: 'material', maxStack: 999, color: '#d6d0ca', model: { type: 'bar', layer: 'iron' } },
+  { id: 'lumite_bar', name: 'Lumite Bar', kind: 'material', maxStack: 999, color: '#6ae6ff', model: { type: 'bar', layer: 'lumiteMetal' } },
+  { id: 'gel', name: 'Gel', kind: 'material', maxStack: 999, color: '#4ec87a', model: { type: 'gel' }, description: 'Sticky and flammable.' },
+  { id: 'red_cap', name: 'Red Cap', kind: 'material', maxStack: 99, color: '#d83a3a', model: { type: 'mushroom' }, description: 'A forest mushroom. Used in potions.' },
+  { id: 'glass_bottle', name: 'Glass Bottle', kind: 'material', maxStack: 99, color: '#9ad8f0', model: { type: 'bottle' } },
+  { id: 'bat_wing', name: 'Bat Wing', kind: 'material', maxStack: 99, color: '#5a4a5e', model: { type: 'wing' }, description: 'Leathery. Dropped by cave bats.' },
+  { id: 'coin', name: 'Coin', kind: 'material', maxStack: 9999, color: '#e0b030', model: { type: 'coin' }, description: 'Merchants love these.' },
+
+  // ---- consumables
+  { id: 'healing_potion', name: 'Healing Potion', kind: 'consumable', maxStack: 30, color: '#d83a3a', model: { type: 'potion' }, heal: 50, description: 'Restores 50 health. [RMB] / use to drink.' },
+
+  // ---- placeables
+  { id: 'workbench', name: 'Workbench', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'workbench' }, furniture: 'workbench', description: 'The first crafting station.' },
+  { id: 'furnace', name: 'Furnace', kind: 'placeable', maxStack: 99, color: '#9a98a4', model: { type: 'furniture', id: 'furnace' }, furniture: 'furnace', description: 'Smelts ore into bars.' },
+  { id: 'anvil', name: 'Iron Anvil', kind: 'placeable', maxStack: 99, color: '#6e6c78', model: { type: 'furniture', id: 'anvil' }, furniture: 'anvil', description: 'Forge metal tools, weapons and armor.' },
+  { id: 'forge', name: 'Lumite Forge', kind: 'placeable', maxStack: 99, color: '#6ae6ff', rarity: 2, model: { type: 'furniture', id: 'forge' }, furniture: 'forge', description: 'Advanced station for lumite gear.' },
+  { id: 'chair', name: 'Wooden Chair', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'chair' }, furniture: 'chair' },
+  { id: 'table', name: 'Wooden Table', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'table' }, furniture: 'table' },
+  { id: 'door', name: 'Wooden Door', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'door' }, furniture: 'door', description: 'Snaps into wall slots. [RMB] to open.' },
+  { id: 'torch', name: 'Torch', kind: 'placeable', maxStack: 99, color: '#ffb030', model: { type: 'furniture', id: 'torch' }, furniture: 'torch', description: 'Place on floors or walls.' },
+  { id: 'chest', name: 'Chest', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'chest' }, furniture: 'chest', description: 'Stores 20 stacks. [RMB] to open.' },
+  { id: 'bed', name: 'Bed', kind: 'placeable', maxStack: 99, color: '#b03a36', model: { type: 'furniture', id: 'bed' }, furniture: 'bed', description: '[RMB] to set your spawn point.' },
 ];
 
 export const ITEMS: ReadonlyMap<string, ItemDef> = new Map(list.map(i => [i.id, i]));
@@ -55,3 +167,5 @@ export function item(id: string): ItemDef {
   if (!def) throw new Error(`Unknown item ${id}`);
   return def;
 }
+
+export const RARITY_COLORS = ['#f4ecd8', '#8ad0ff', '#c89aff', '#ffb040'];
