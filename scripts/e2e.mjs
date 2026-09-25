@@ -794,6 +794,58 @@ try {
   });
   check('fallen stars land at night and craft into Mana Crystals', star.landed && star.crafted && star.after === star.before + 20, JSON.stringify(star));
 
+  // ------------------------------------------------------- mushroom caverns
+  const cavern = await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    const shrooms = g.veg.trees.filter(t => t.kind === 'mushroom' && t.alive);
+    if (!shrooms.length) return { count: 0 };
+    const t = shrooms.sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))[0];
+    // Stand a few metres from the stem on open floor.
+    for (let k = 0; k < 48; k++) {
+      const r = [7, 5.5, 4, 3.2][Math.floor(k / 12)];
+      const a = (k % 12) * 0.52, x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r;
+      if (g.gen.densityAt(x, t.y + 1, z) < -0.4 && g.gen.densityAt(x, t.y + 1.8, z) < -0.4 && g.gen.densityAt(x, t.y - 0.8, z) > 0) {
+        g.player.teleport(x, t.y + 0.6, z);
+        break;
+      }
+    }
+    return { count: shrooms.length, x: t.x, y: t.y, z: t.z, h: t.height, id: t.id };
+  });
+  await settle();
+  const floorMat = await page.evaluate(t => {
+    const g = __game;
+    g.player.yaw = Math.atan2(-(t.x - g.player.x), -(t.z - g.player.z));
+    g.player.pitch = Math.atan2(t.y + t.h * 0.6 - g.player.y - 1.6, Math.hypot(t.x - g.player.x, t.z - g.player.z));
+    g.simulate(0.3);
+    const hit = g.field.raycast(g.player.x, g.player.y + 1, g.player.z, 0, -1, 0, 4, 0.1);
+    return { mat: hit?.material, inZone: g.gen.mushroomAt(g.player.x, g.player.y, g.player.z) };
+  }, cavern);
+  check('mushroom caverns have giant mushrooms on glowing floors', cavern.count >= 8 && floorMat.inZone && (floorMat.mat === 19 || floorMat.mat === 20), JSON.stringify({ ...cavern, ...floorMat }));
+  await shot('28-mushroom-cavern');
+  const shroomLife = await page.evaluate(t => {
+    const g = __game;
+    g.vitals.hp = g.vitals.maxHp;
+    g.combat.spawning = true;
+    const seen = new Set();
+    for (let k = 0; k < 24; k++) { g.vitals.hp = g.vitals.maxHp; g.simulate(1); for (const c of g.combat.creatures) seen.add(c.def.id); }
+    g.combat.spawning = false;
+    g.combat.clear();
+    // Fell the mushroom with the axe for glowcaps.
+    const axe = g.inventory.slots.findIndex(x => x && x.id === 'copper_axe');
+    g.inventory.select(axe);
+    const tree = g.veg.trees.find(x => x.id === t.id);
+    g.player.teleport(tree.x + 1.6, tree.y + 0.5, tree.z);
+    g.player.yaw = Math.PI / 2; g.player.pitch = -0.1;
+    g.simulate(0.2);
+    const before = g.inventory.count('glowcap');
+    g.input.lmb = true;
+    for (let i = 0; i < 60 && tree.alive; i++) g.simulate(0.1);
+    g.input.lmb = false;
+    g.simulate(1.5);
+    return { seen: [...seen], felled: !tree.alive, glowcaps: g.inventory.count('glowcap') - before };
+  }, cavern);
+  check('Sporelings and Glowmoths haunt the caverns; mushrooms fell into glowcaps', shroomLife.seen.some(id => id === 'sporeling' || id === 'glowmoth') && shroomLife.felled && shroomLife.glowcaps > 0, JSON.stringify(shroomLife));
+
   // Far view over the world with the debug readout (LOD + draw stats).
   await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;

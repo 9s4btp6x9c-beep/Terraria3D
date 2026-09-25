@@ -91,6 +91,8 @@ function buildTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
     }
     // A bloom on top.
     parts.push(tagLayer(new THREE.OctahedronGeometry(0.05, 0).scale(1, 0.6, 1).translate(0.03, 0.99, 0), layerOf('red')));
+  } else if (kind === 'mushroom') {
+    return buildMushroom(rand, 7);
   } else if (kind === 'dead') {
     const bark = (g: THREE.BufferGeometry) => tagLayer(g, layerOf('deadbark'));
     const t = new THREE.CylinderGeometry(0.02, 0.045, H, 5, 1, true);
@@ -130,6 +132,36 @@ function buildTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
   return merged;
 }
 
+/** Giant mushroom of unit height: a curved pale stem under a glowing cap. */
+function buildMushroom(rand: () => number, sides: number): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const stem = (g: THREE.BufferGeometry) => tagLayer(g, layerOf('mushstem'));
+  const lean = (rand() - 0.5) * 0.12;
+  // Stem: three stacked segments drifting sideways into a gentle curve, on a flared foot.
+  parts.push(stem(new THREE.CylinderGeometry(0.05, 0.075, 0.1, sides).translate(0, 0.05, 0)));
+  const segs: [number, number, number, number, number][] = [[0.05, 0.045, 0.1, 0.38, 0], [0.045, 0.04, 0.37, 0.65, 0.35], [0.04, 0.036, 0.64, 0.9, 0.75]];
+  for (const [r0, r1, y0, y1, k] of segs) parts.push(stem(new THREE.CylinderGeometry(r1, r0, y1 - y0, sides, 1, true).translate(lean * k, (y0 + y1) / 2, 0)));
+  const topX = lean;
+  // Cap: a flattened, faceted dome with a darker gill ring underneath.
+  const capR = 0.3 + rand() * 0.06;
+  const cap = new THREE.SphereGeometry(capR, sides + 3, 3, 0, Math.PI * 2, 0, Math.PI / 2).toNonIndexed();
+  jitter(cap, rand, 0.03);
+  cap.scale(1, 0.55, 1).translate(topX, 0.9, 0);
+  cap.computeVertexNormals();
+  parts.push(tagLayer(cap, layerOf('glowcap')));
+  const gills = new THREE.CylinderGeometry(capR * 0.98, capR * 0.3, 0.05, sides + 3, 1).translate(topX, 0.88, 0);
+  parts.push(tagLayer(gills, layerOf('glowcap')));
+  // Bright spots on the cap.
+  for (let i = 0; i < 6; i++) {
+    const a = rand() * Math.PI * 2, r = capR * (0.25 + rand() * 0.6);
+    const h = Math.sqrt(Math.max(0, 1 - (r / capR) ** 2)) * capR * 0.55;
+    parts.push(tagLayer(new THREE.OctahedronGeometry(0.018 + rand() * 0.015, 0).scale(1, 0.5, 1).translate(topX + Math.cos(a) * r, 0.9 + h, Math.sin(a) * r), layerOf('plain')));
+  }
+  const merged = mergeNonIndexed(parts);
+  merged.computeBoundingSphere();
+  return merged;
+}
+
 /** Cheap silhouette-preserving version for distant trees (~60 triangles). */
 function buildFarTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
   const rand = mulberry32(variant * 7919 + kind.length * 31);
@@ -143,6 +175,8 @@ function buildFarTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
     parts.push(blob(rand, 0.38, 0.28, 0.38, 0, 0.85, 0, 0));
   } else if (kind === 'cactus' || kind === 'dead') {
     return buildTree(kind, variant);
+  } else if (kind === 'mushroom') {
+    return buildMushroom(rand, 5);
   } else {
     parts.push(trunk(0.05, 0.02, 1, 0, 0, 0, 0, 0, 4));
     const g = new THREE.ConeGeometry(0.36, 0.75, 6, 1);
@@ -268,6 +302,8 @@ export class VegetationRenderer {
       for (const t of set.trees) {
         if (!t.alive) continue;
         const d = Math.hypot(t.x - focus.x, t.z - focus.z);
+        // Cavern mushrooms are buried: only draw the ones close by.
+        if (t.kind === 'mushroom' && d > 70) continue;
         if (d < NEAR_TREES) {
           set.near.setMatrixAt(n, this.treeMatrix(t));
           this.nearSlot.set(t.id, { set, index: n });
@@ -277,6 +313,7 @@ export class VegetationRenderer {
         }
       }
       set.near.count = n; set.far.count = f;
+      set.near.visible = n > 0; set.far.visible = f > 0;
       set.near.instanceMatrix.needsUpdate = true;
       set.far.instanceMatrix.needsUpdate = true;
     }

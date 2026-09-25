@@ -46,6 +46,8 @@ export interface CombatHooks {
   isLoaded(x: number, z: number): boolean;
   /** Suppress spawns near safe zones (houses / NPC homes). */
   safeZone(x: number, y: number, z: number): boolean;
+  /** Inside a glowing mushroom cavern? */
+  mushroomAt(x: number, y: number, z: number): boolean;
   /** The running world event, if any (raids march on `target`). */
   activeEvent(): { kind: EventKind; target: { x: number; z: number } | null } | null;
   /** A creature spawned by a world event died. */
@@ -205,9 +207,13 @@ export class Combat {
         return;
       }
       const biome = h.biomeAt(x, z);
-      const options = Object.values(CREATURES).filter(c => c.spawn && (c.spawn.env === env || (env === 'deep' && c.spawn.env === 'cave')) &&
+      const shroom = env !== 'surface' && h.mushroomAt(x, y, z);
+      let options = Object.values(CREATURES).filter(c => c.spawn && (c.spawn.env === env || (env === 'deep' && c.spawn.env === 'cave')) &&
         (c.spawn.time === 'any' || (c.spawn.time === 'night') === night) &&
-        (!c.spawn.biomes || env !== 'surface' || c.spawn.biomes.includes(biome)));
+        (!c.spawn.biomes || env !== 'surface' || c.spawn.biomes.includes(biome)) &&
+        (!c.spawn.zone || shroom));
+      // Mushroom caverns are mostly home to their own creatures.
+      if (shroom && Math.random() < 0.75) options = options.filter(c => c.spawn!.zone === 'mushroom');
       if (!options.length) return;
       const def = pick(options, c => c.spawn!.weight);
       const flyer = def.ai === 'flyer';

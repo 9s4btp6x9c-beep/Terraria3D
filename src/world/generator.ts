@@ -20,6 +20,8 @@ export const CABIN_WALL = 2.5;
 export const enum Biome { Forest = 0, Desert = 1, Snow = 2, Blight = 3 }
 /** Below this height the world becomes the Ember Depths. */
 export const EMBER_Y = 21;
+/** Mushroom caverns stay above the Ember Depths. */
+const SHROOM_MIN_Y = EMBER_Y + 9;
 
 const smoothstep = (a: number, b: number, x: number) => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
@@ -41,6 +43,7 @@ export class WorldGenerator {
   private mountainMask: Float32Array;
   private biomeNoise: SimplexNoise;
   private blightNoise: SimplexNoise;
+  private shroomNoise: SimplexNoise;
   /** Per-column biome id (see Biome). */
   private biomes: Uint8Array;
   readonly entrance: Capsule[] = [];
@@ -65,6 +68,7 @@ export class WorldGenerator {
     this.detail = new SimplexNoise(s + 9);
     this.biomeNoise = new SimplexNoise(s + 10);
     this.blightNoise = new SimplexNoise(s + 11);
+    this.shroomNoise = new SimplexNoise(s + 12);
 
     const w = this.size.x + 1, d = this.size.z + 1;
     this.heights = new Float32Array(w * d);
@@ -223,6 +227,7 @@ export class WorldGenerator {
       const y = Math.floor((h - 14 - rand() * 30) / 0.25) * 0.25;
       if (y < 12) continue;
       if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < 30) continue;
+      if (this.mushroomStrength(x + 3, z + 2) > 0.05) continue;
       if (this.cabins.some(c => Math.abs(c.x - x) < 24 && Math.abs(c.z - z) < 24 && Math.abs(c.y - y) < 12)) continue;
       const big = rand() < 0.4;
       this.cabins.push({ x, y, z, cx: big ? 4 : 3, cz: big ? 3 : 2, seed: Math.floor(rand() * 1e9) });
@@ -271,6 +276,16 @@ export class WorldGenerator {
     return Math.max(-DENSITY_CLAMP, Math.min(DENSITY_CLAMP, d));
   }
 
+  /** 0..1: how strongly the glowing mushroom caverns claim this column. */
+  mushroomStrength(x: number, z: number): number {
+    return smoothstep(0.34, 0.52, this.shroomNoise.noise2(x / 95, z / 95));
+  }
+
+  /** Inside a mushroom cavern region (underground, in a strong zone). */
+  mushroomAt(x: number, y: number, z: number): boolean {
+    return y > SHROOM_MIN_Y - 3 && this.height(x, z) - y > 14 && this.mushroomStrength(x, z) > 0.5;
+  }
+
   private caves(x: number, y: number, z: number, h: number): number {
     if (y < 6) return DENSITY_CLAMP;
     const depth = h - y;
@@ -287,6 +302,15 @@ export class WorldGenerator {
       const c = this.cavern.noise3(x / 60, y / 38, z / 60) + this.cavern.noise3(x / 19, y / 19, z / 19) * 0.15;
       const k = smoothstep(18, 32, depth);
       cave = Math.min(cave, (0.5 - c * k) * 28);
+    }
+    // Mushroom zones: wide, flattened halls for the giant mushrooms.
+    if (depth > 16 && y > SHROOM_MIN_Y - 4) {
+      const mz = this.mushroomStrength(x, z);
+      if (mz > 0) {
+        const c2 = this.cavern.noise3(x / 34 + 50, y / 13, z / 34) + this.detail.noise3(x / 9, y / 9, z / 9) * 0.08;
+        const k = smoothstep(16, 26, depth) * smoothstep(SHROOM_MIN_Y - 4, SHROOM_MIN_Y + 4, y);
+        cave = Math.min(cave, (0.2 - c2 * mz * k) * 24);
+      }
     }
     return cave;
   }
@@ -344,6 +368,11 @@ export class WorldGenerator {
     if (depth > 4 && this.ore.noise3(x / 6, y / 6, z / 6) > 0.62) return y < 75 ? Mat.Copper : Mat.Stone;
     if (y < 48 && this.ore.noise3(x / 7 + 40, y / 7, z / 7) > 0.64) return Mat.Iron;
     if (y < 36 && this.ore.noise3(x / 5 - 40, y / 5, z / 5) > 0.7) return Mat.Lumite;
+    // Glowing mushroom caverns: luminous floors over mud.
+    if (depth > 14 && y > SHROOM_MIN_Y - 4 && this.mushroomStrength(x, z) > 0.5) {
+      if (exposure < 1.2 && normalY > 0.35) return Mat.Mushgrass;
+      return Mat.Mud;
+    }
     if (depth > 5 && depth < 25 && this.detail.noise3(x / 25, y / 12, z / 25) > 0.55) return biome === Biome.Desert ? Mat.Sandstone : Mat.Clay;
     if (biome === Biome.Desert && depth < 30) return Mat.Sandstone;
     if (biome === Biome.Blight && y > 30) return Mat.Blightstone;

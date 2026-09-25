@@ -12,7 +12,7 @@ import { Mat } from './materials';
 import type { SkyMap } from './skymap';
 import type { TerrainField } from './terrain';
 
-export type TreeKind = 'tall' | 'round' | 'pine' | 'cactus' | 'dead';
+export type TreeKind = 'tall' | 'round' | 'pine' | 'cactus' | 'dead' | 'mushroom';
 
 export interface Tree {
   id: number;
@@ -28,7 +28,7 @@ export interface Tree {
 export interface Tuft { x: number; y: number; z: number; rot: number; scale: number; flower: boolean }
 
 export const TREE_VARIANTS = 4;
-export const TREE_KINDS: TreeKind[] = ['tall', 'round', 'pine', 'cactus', 'dead'];
+export const TREE_KINDS: TreeKind[] = ['tall', 'round', 'pine', 'cactus', 'dead', 'mushroom'];
 export const TUFT_CELL = 8;
 
 export class Vegetation {
@@ -75,6 +75,28 @@ export class Vegetation {
         const key = this.key(x, z, 8);
         (this.treeGrid.get(key) ?? this.treeGrid.set(key, []).get(key)!).push(tree);
       }
+
+    // Giant glowing mushrooms on the floors of the mushroom caverns.
+    const mcell = 7;
+    for (let gz = 0; gz < field.sz / mcell; gz++)
+      for (let gx = 0; gx < field.sx / mcell; gx++) {
+        const s = this.seed;
+        const x = (gx + 0.2 + hash3(gx, gz, 21, s) * 0.6) * mcell, z = (gz + 0.2 + hash3(gx, gz, 22, s) * 0.6) * mcell;
+        if (gen.mushroomStrength(x, z) < 0.6 || hash3(gx, gz, 23, s) > 0.6) continue;
+        const r4 = hash3(gx, gz, 24, s);
+        const height = 3.5 + r4 * 5;
+        const y = mushroomFloor(gen, x, z, height);
+        if (y === null) continue;
+        const tree: Tree = { id: id++, x, y: y - 0.25, z, kind: 'mushroom', variant: Math.floor(hash3(gx, gz, 25, s) * TREE_VARIANTS), height, radius: 0.28 + r4 * 0.12, hp: 4, alive: true };
+        this.trees.push(tree);
+        const key = this.key(x, z, 8);
+        (this.treeGrid.get(key) ?? this.treeGrid.set(key, []).get(key)!).push(tree);
+      }
+  }
+
+  /** Glowing mushrooms in view of a point (for their light). */
+  mushroomsNear(x: number, z: number, radius: number): Tree[] {
+    return this.treesNear(x, z, radius).filter(t => t.kind === 'mushroom');
   }
 
   private key(x: number, z: number, cell: number) {
@@ -158,4 +180,27 @@ export class Vegetation {
       if (Math.hypot((cx + 0.5) * TUFT_CELL - x, (cz + 0.5) * TUFT_CELL - z) > keepRadius) this.tuftCells.delete(k);
     }
   }
+}
+
+/**
+ * The lowest level cave floor in a column with room above for a mushroom of
+ * the given height (stem and cap clear of the rock). Null if none.
+ */
+function mushroomFloor(gen: WorldGenerator, x: number, z: number, height: number): number | null {
+  const top = gen.height(x, z) - 14;
+  for (let y = 30; y < top; y++) {
+    const d0 = gen.densityAt(x, y, z), d1 = gen.densityAt(x, y + 1, z);
+    if (!(d0 > 0 && d1 < 0)) continue;
+    const fy = y + d0 / (d0 - d1);
+    if (!gen.mushroomAt(x, fy, z)) continue;
+    let ok = gen.densityAt(x, fy + height * 0.5, z) < -0.5 && gen.densityAt(x, fy + height + 0.8, z) < -0.3;
+    const cap = height * 0.34;
+    for (let k = 0; ok && k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      if (gen.densityAt(x + Math.cos(a) * cap, fy + height * 0.9, z + Math.sin(a) * cap) > -0.2) ok = false;
+      if (gen.densityAt(x + Math.cos(a) * 0.6, fy - 0.4, z + Math.sin(a) * 0.6) < 0) ok = false;
+    }
+    if (ok) return fy;
+  }
+  return null;
 }

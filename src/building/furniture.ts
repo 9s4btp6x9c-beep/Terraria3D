@@ -32,6 +32,7 @@ export const FURNITURE: Record<FurnitureId, FurnitureDef> = {
   torch: { id: 'torch', name: 'Torch', size: [0.2, 0.62, 0.2], placement: 'surface', collide: false, hp: 1, housing: 'light', light: { color: 0xffa048, range: 12, offset: [0, 0.62, 0], flicker: 1 } },
   chest: { id: 'chest', name: 'Chest', size: [1.0, 0.8, 0.7], placement: 'floor', collide: true, hp: 3 },
   bed: { id: 'bed', name: 'Bed', size: [1.2, 0.65, 2.2], placement: 'floor', collide: true, hp: 3, housing: 'bed' },
+  glowcap_lamp: { id: 'glowcap_lamp', name: 'Glowcap Lamp', size: [0.5, 1.3, 0.5], placement: 'floor', collide: false, hp: 1, housing: 'light', light: { color: 0x5ad0ff, range: 13, offset: [0, 1.1, 0], flicker: 0.15 } },
   // Found in caves (not placeable): break it to take the crystal.
   life_crystal: { id: 'life_crystal', name: 'Life Crystal', size: [0.8, 1.0, 0.8], placement: 'floor', collide: false, hp: 3, light: { color: 0xff3a4a, range: 8, offset: [0, 0.6, 0], flicker: 0.3 } },
 };

@@ -66,6 +66,7 @@ a minimap, particles, and a held-item viewmodel.
 | M6 Events | Blood Moon (red sky, event creatures, shard gear), Hollow Raid (raiders march on the town, progress bar, Tinkerer NPC), visible sun and moon | `tests/events.test.ts`, event e2e checks |
 | M7 Sky tier | Aerite ore in the sky islands, Skyforged armor, Gale Bow, Gale Swifts and Cloud Globs, the Tempest Roc boss, Roc Wings flight and gliding, Tempest Staff | sky tier e2e checks |
 | M8 Growth | Life Crystals in caves (+max life), fallen stars at night, Mana Crystals and mana potions, max stats saved | growth e2e checks |
+| M9 Mushroom caverns | Underground zone with wide halls, luminous mushroom grass over mud, giant glowing mushrooms with real point lights, teal cave tint, Sporelings and Glowmoths, glowcaps, Glowcap Lamp, glowcap mana potions; far-away furniture and buried mushrooms culled | cavern e2e checks |
 
 ## Next phases
 
@@ -76,8 +77,7 @@ a minimap, particles, and a held-item viewmodel.
 3. **More NPCs** unlocked by progress (a smith who reforges gear, a guide
    who explains recipes).
 4. **Mounts and pets** from rare drops.
-5. **Better underground variety:** mushroom caverns, crystal geodes and
-   buried temples.
+5. **More underground variety:** crystal geodes and buried temples.
 
 ## Performance notes
 

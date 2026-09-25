@@ -6,7 +6,7 @@ import { Mat } from '../world/materials';
 
 export type PieceShape = 'floor' | 'wall' | 'pillar' | 'stairs' | 'roof';
 export type StationId = 'workbench' | 'furnace' | 'anvil' | 'forge';
-export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed' | 'life_crystal';
+export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed' | 'life_crystal' | 'glowcap_lamp';
 export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal' | 'emberMetal' | 'bone' | 'bloodMetal' | 'aeriteMetal';
 
 export interface ToolDef {
@@ -62,7 +62,7 @@ export type ModelSpec =
   | { type: 'pickaxe' | 'axe' | 'sword' | 'bow' | 'staff' | 'hook'; head: MetalLayer }
   | { type: 'ore' | 'bar' | 'crystal' | 'nugget'; layer: string; tint?: number }
   | { type: 'block'; layer: string }
-  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' | 'star' | 'mana_crystal' | 'mana_potion' }
+  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' | 'star' | 'mana_crystal' | 'mana_potion' | 'glowcap' }
   | { type: 'armor'; slot: ArmorDef['slot']; layer: MetalLayer }
   | { type: 'boots' | 'jar' | 'charm' | 'band'; layer: string }
   | { type: 'furniture'; id: FurnitureId };
@@ -161,6 +161,8 @@ const list: ItemDef[] = [
   { id: 'snow', name: 'Snow', kind: 'material', maxStack: 999, color: '#eaf2f8', model: { type: 'block', layer: 'snow' }, terrain: Mat.Snow },
   { id: 'sandstone', name: 'Sandstone', kind: 'material', maxStack: 999, color: '#d4b070', model: { type: 'block', layer: 'sandstone' }, terrain: Mat.Sandstone },
   { id: 'ice', name: 'Ice', kind: 'material', maxStack: 999, color: '#a8d8f0', model: { type: 'block', layer: 'ice' }, terrain: Mat.Ice },
+  { id: 'mud', name: 'Mud', kind: 'material', maxStack: 999, color: '#4e4038', model: { type: 'block', layer: 'mud' }, terrain: Mat.Mud },
+  { id: 'glowcap', name: 'Glowcap', kind: 'material', maxStack: 999, color: '#3aa0d0', rarity: 1, model: { type: 'glowcap' }, description: 'A luminous mushroom from the deep caverns.' },
   { id: 'blightstone', name: 'Blightstone', kind: 'material', maxStack: 999, color: '#5a4a6e', model: { type: 'block', layer: 'blightstone' }, terrain: Mat.Blightstone },
   { id: 'emberstone', name: 'Emberstone', kind: 'material', maxStack: 999, color: '#9a3a22', model: { type: 'block', layer: 'emberstone' }, terrain: Mat.Emberstone, description: 'Warm to the touch.' },
   { id: 'emberite', name: 'Emberite Ore', kind: 'material', maxStack: 999, color: '#ff8a30', rarity: 2, model: { type: 'ore', layer: 'emberite' }, description: 'Found only in the Ember Depths.' },
@@ -204,6 +206,7 @@ const list: ItemDef[] = [
   { id: 'door', name: 'Wooden Door', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'door' }, furniture: 'door', description: 'Snaps into wall slots. [RMB] to open.' },
   { id: 'torch', name: 'Torch', kind: 'placeable', maxStack: 99, color: '#ffb030', model: { type: 'furniture', id: 'torch' }, furniture: 'torch', description: 'Place on floors or walls.' },
   { id: 'chest', name: 'Chest', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'chest' }, furniture: 'chest', description: 'Stores 20 stacks. [RMB] to open.' },
+  { id: 'glowcap_lamp', name: 'Glowcap Lamp', kind: 'placeable', maxStack: 99, color: '#3aa0d0', model: { type: 'furniture', id: 'glowcap_lamp' }, furniture: 'glowcap_lamp', description: 'A cool, steady light. Counts as a light for housing.' },
   { id: 'bed', name: 'Bed', kind: 'placeable', maxStack: 99, color: '#b03a36', model: { type: 'furniture', id: 'bed' }, furniture: 'bed', description: '[RMB] to set your spawn point.' },
 ];
 

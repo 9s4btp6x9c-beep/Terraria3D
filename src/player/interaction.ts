@@ -229,12 +229,16 @@ export class Interaction {
   private chop(tree: Tree, x: number, y: number, z: number, power: number) {
     tree.hp -= power;
     this.hooks.treeHit(tree);
-    this.hooks.particles(x, y, z, 0, 0.5, 0, 0x8a5a36, 8);
+    this.hooks.particles(x, y, z, 0, 0.5, 0, tree.kind === 'mushroom' ? 0xd8d0c0 : 0x8a5a36, 8);
     if (tree.hp > 0) return;
     tree.alive = false;
-    const wood = Math.round(tree.height / 2) + 2;
-    this.hooks.give('wood', wood, tree.x, tree.y + 1.2, tree.z);
-    this.hooks.particles(tree.x, tree.y + tree.height * 0.8, tree.z, 0, 1, 0, 0x3f9a55, 30);
+    if (tree.kind === 'mushroom') {
+      this.hooks.give('glowcap', Math.round(tree.height / 2) + 1, tree.x, tree.y + 1.2, tree.z);
+      this.hooks.particles(tree.x, tree.y + tree.height * 0.85, tree.z, 0, 1, 0, 0x5ad0ff, 30);
+    } else {
+      this.hooks.give('wood', Math.round(tree.height / 2) + 2, tree.x, tree.y + 1.2, tree.z);
+      this.hooks.particles(tree.x, tree.y + tree.height * 0.8, tree.z, 0, 1, 0, 0x3f9a55, 30);
+    }
     this.hooks.treeFelled(tree);
   }
 

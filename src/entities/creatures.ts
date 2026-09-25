@@ -23,7 +23,7 @@ export interface CreatureDef {
   /** 0 = full knockback, 1 = immune. */
   kbResist: number;
   drops: Drop[];
-  spawn: { env: SpawnEnv; time: 'day' | 'night' | 'any'; weight: number; biomes?: number[] } | null;
+  spawn: { env: SpawnEnv; time: 'day' | 'night' | 'any'; weight: number; biomes?: number[]; zone?: 'mushroom' } | null;
   /** Visual tint for variants (multiplies the base model colours). */
   tint?: number;
   /** Model to use when this is a variant of another creature. */
@@ -126,6 +126,20 @@ Object.assign(CREATURES, {
     id: 'cloud_glob', name: 'Cloud Glob', hp: 38, damage: 14, defense: 4, speed: 5, ai: 'hopper', radius: 0.58, height: 0.85, kbResist: 0.1, model: 'glob', skin: 'glass', tint: 0xf4faff,
     drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'aerite_ore', min: 1, max: 2, chance: 0.35 }, { item: 'coin', min: 1, max: 3, chance: 0.8 }],
     spawn: { env: 'sky', time: 'any', weight: 4 }, color: 0xe8f4ff,
+  },
+} satisfies Record<string, CreatureDef>);
+
+// ---- glowing mushroom caverns
+Object.assign(CREATURES, {
+  sporeling: {
+    id: 'sporeling', name: 'Sporeling', hp: 48, damage: 15, defense: 5, speed: 3.4, ai: 'walker', radius: 0.38, height: 1.0, kbResist: 0.2,
+    drops: [{ item: 'glowcap', min: 1, max: 3, chance: 0.9 }, { item: 'coin', min: 2, max: 4, chance: 1 }],
+    spawn: { env: 'cave', time: 'any', weight: 5, zone: 'mushroom' }, color: 0x5ad0ff,
+  },
+  glowmoth: {
+    id: 'glowmoth', name: 'Glowmoth', hp: 30, damage: 13, defense: 2, speed: 5.5, ai: 'flyer', radius: 0.45, height: 0.8, kbResist: 0.1,
+    drops: [{ item: 'coin', min: 1, max: 3, chance: 1 }, { item: 'glowcap', min: 1, max: 1, chance: 0.4 }, { item: 'glow_charm', min: 1, max: 1, chance: 0.03 }],
+    spawn: { env: 'cave', time: 'any', weight: 3, zone: 'mushroom' }, color: 0x8ae0ff,
   },
 } satisfies Record<string, CreatureDef>);
 

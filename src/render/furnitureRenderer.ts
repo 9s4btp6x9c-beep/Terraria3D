@@ -86,11 +86,13 @@ export class FurnitureRenderer {
     }
   }
 
-  update(dt: number) {
+  update(dt: number, cam?: THREE.Vector3) {
     if (this.set.version !== this.version) {
       this.version = this.set.version;
       this.sync();
     }
+    // Furniture is small: skip drawing it far away (cave crystals, cabins).
+    if (cam) for (const e of this.entries.values()) e.group.visible = Math.hypot(e.f.x - cam.x, e.f.y - cam.y, e.f.z - cam.z) < 110;
     this.time += dt;
     // Door swing animation; life crystals turn slowly and bob.
     for (const e of this.entries.values()) {

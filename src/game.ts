@@ -114,6 +114,9 @@ export class Game {
   /** Stars currently falling (become pickups where they land). */
   private stars: { x: number; y: number; z: number; vx: number; vy: number; vz: number; t: number }[] = [];
   private starTimer = 30;
+  /** Point lights for the nearest glowing mushrooms (tree id -> light id). */
+  private mushLights = new Map<number, number>();
+  private mushTimer = 0;
   private deathShown = false;
   fps = 0;
   private frameMs = 0;
@@ -353,6 +356,7 @@ export class Game {
       seaLevel: this.field.cfg.seaLevel,
       isLoaded: (x, z) => this.terrain.isLoaded(x, z),
       safeZone: (x, y, z) => this.furniture.near(x, y, z, 18).some(f => f.type === 'bed' || f.type === 'door'),
+      mushroomAt: (x, y, z) => this.gen.mushroomAt(x, y, z),
       activeEvent: () => (this.events.kind ? { kind: this.events.kind, target: this.events.target } : null),
       eventKill: () => this.onEventSignals(this.events.kill()),
     });
@@ -559,6 +563,23 @@ export class Game {
     }
   }
 
+  /** Keep real point lights on the few glowing mushrooms nearest the player. */
+  private updateMushroomLights(dt: number) {
+    this.mushTimer -= dt;
+    if (this.mushTimer > 0) return;
+    this.mushTimer = 0.5;
+    const p = this.player;
+    const near = this.veg.mushroomsNear(p.x, p.z, 40)
+      .map(t => ({ t, d: Math.hypot(t.x - p.x, t.y - p.y, t.z - p.z) }))
+      .filter(e => e.d < 40).sort((a, b) => a.d - b.d).slice(0, 4).map(e => e.t);
+    const keep = new Set(near.map(t => t.id));
+    for (const [id, light] of this.mushLights) if (!keep.has(id)) { this.atmosphere.lights.remove(light); this.mushLights.delete(id); }
+    for (const t of near) {
+      if (this.mushLights.has(t.id)) continue;
+      this.mushLights.set(t.id, this.atmosphere.lights.add({ x: t.x, y: t.y + t.height * 0.8, z: t.z, color: new THREE.Color(0x3a9cff), range: 10 + t.height, flicker: 0.1 }));
+    }
+  }
+
   /** Launch a falling star that lands 15–45 m from the player. */
   dropStar() {
     const a = Math.random() * Math.PI * 2, d = 15 + Math.random() * 30;
@@ -677,7 +698,7 @@ export class Game {
       // Undermined trees topple and drop their wood (like Terraria).
       t.alive = false;
       this.onTreeFelled(t);
-      this.pickups.spawn('wood', Math.round(t.height / 2) + 2, t.x, t.y + 1, t.z);
+      this.pickups.spawn(t.kind === 'mushroom' ? 'glowcap' : 'wood', Math.round(t.height / 2) + 2, t.x, t.y + 1, t.z);
       this.particles.burst(t.x, t.y + t.height * 0.8, t.z, 0, 1, 0, 0x3f9a55, 24);
     }
     // Mesh edited chunks immediately for responsive feedback.
@@ -688,7 +709,7 @@ export class Game {
     this.vegRenderer.removeTree();
     this.wobble.delete(t.id);
     // Occasionally a mushroom grows at the stump.
-    if (Math.random() < 0.25) this.pickups.spawn('red_cap', 1, t.x, t.y + 0.5, t.z);
+    if (t.kind !== 'mushroom' && Math.random() < 0.25) this.pickups.spawn('red_cap', 1, t.x, t.y + 0.5, t.z);
   }
 
   resize() {
@@ -942,7 +963,7 @@ export class Game {
     this.terrain.update(this.camera.position, 3);
     this.vegRenderer.update(this.camera.position, dt);
     this.structureRenderer.update();
-    this.furnitureRenderer.update(dt);
+    this.furnitureRenderer.update(dt, this.camera.position);
     {
       // Rope from the right hand to the hook head.
       const side = new THREE.Vector3(-this.dir.z, 0, this.dir.x).normalize();
@@ -950,6 +971,7 @@ export class Game {
       this.rope.update(this.grapple.state !== 'idle', hx, hy, hz, this.grapple.x, this.grapple.y, this.grapple.z);
     }
     this.updateFallingStars(dt);
+    this.updateMushroomLights(dt);
     this.pickups.update(dt, this.player.x, this.player.y, this.player.z);
     this.onEventSignals(this.events.update(dt, {
       daylight: this.atmosphere.daylight, px: this.player.x, pz: this.player.z, town: this.townInfo(), bossDefeated: this.progress.bossDefeated,
@@ -970,7 +992,8 @@ export class Game {
     const cam = this.camera.position;
     const vis = this.sky.visibility(cam.x, cam.y, cam.z);
     const ember = THREE.MathUtils.smoothstep(EMBER_Y + 14 - cam.y, 0, 12);
-    this.atmosphere.update(dt, cam, vis, this.time, this.player.position, dir, st.lightBoost, ember);
+    const shroom = this.gen.mushroomAt(cam.x, cam.y, cam.z) ? 1 : 0;
+    this.atmosphere.update(dt, cam, vis, this.time, this.player.position, dir, st.lightBoost, ember, shroom);
     // Drifting embers in the depths.
     if (ember > 0.3 && Math.random() < ember * 0.6) {
       const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 10;

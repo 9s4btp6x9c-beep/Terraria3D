@@ -20,6 +20,8 @@ const BLOOD_HORIZON = C(0x6a1212);
 const CAVE_FOG = C(0x0b0a12);
 const EMBER_FOG = C(0x2a0c08);
 const CAVE_AMBIENT = C(0x1a1726);
+const SHROOM_FOG = C(0x061420);
+const SHROOM_AMBIENT = C(0x12304a);
 const EMBER_AMBIENT = C(0x3a140c);
 
 function sampleKeys(keys: readonly (readonly [number, THREE.Color])[], t: number, out: THREE.Color) {
@@ -164,7 +166,9 @@ export class Atmosphere {
    * @param cam        camera position
    * @param visibility sky visibility at the camera (0 = enclosed)
    */
-  update(dt: number, cam: THREE.Vector3, visibility: number, time: number, focus: { x: number; y: number; z: number }, lanternDir: THREE.Vector3, lanternBoost = 0, ember = 0) {
+  private shroom = 0;
+
+  update(dt: number, cam: THREE.Vector3, visibility: number, time: number, focus: { x: number; y: number; z: number }, lanternDir: THREE.Vector3, lanternBoost = 0, ember = 0, shroom = 0) {
     if (this.cycle) this.timeOfDay = (this.timeOfDay + dt / DAY_LENGTH) % 1;
     const t = this.timeOfDay;
     // Sun path: rises in the east (+x), sets in the west, tilted south.
@@ -200,9 +204,10 @@ export class Atmosphere {
     sampleKeys(SKY_HORIZON, t, this.horizon).lerp(BLOOD_HORIZON, bl * 0.85);
     this.sky.uniforms.uHorizon.value.copy(this.horizon);
     this.sky.uniforms.uBottom.value.copy(this.horizon).multiplyScalar(0.8);
-    this.tmp.copy(CAVE_FOG).lerp(EMBER_FOG, ember);
+    this.shroom += (shroom - this.shroom) * Math.min(1, dt * 1.5);
+    this.tmp.copy(CAVE_FOG).lerp(SHROOM_FOG, this.shroom).lerp(EMBER_FOG, ember);
     this.fog.color.copy(this.horizon).lerp(this.tmp, ug);
-    this.u.uCaveAmbient.value.copy(CAVE_AMBIENT).lerp(EMBER_AMBIENT, ember);
+    this.u.uCaveAmbient.value.copy(CAVE_AMBIENT).lerp(SHROOM_AMBIENT, this.shroom).lerp(EMBER_AMBIENT, ember);
     this.fog.near = 90 - ug * 82;
     this.fog.far = 560 - ug * 480;
     this.renderer.setClearColor(this.fog.color);

@@ -18,7 +18,7 @@ type Layer = ExtraLayer | number;
 /** Terrain-material layers usable by name in models (e.g. dirt blocks). */
 const TERRAIN_LAYERS: Record<string, Mat> = {
   dirt: Mat.Dirt, stone: Mat.Stone, sand: Mat.Sand, clay: Mat.Clay, snow: Mat.Snow, grass: Mat.Grass, deepstone: Mat.Deepstone,
-  sandstone: Mat.Sandstone, ice: Mat.Ice, blightstone: Mat.Blightstone, emberstone: Mat.Emberstone, emberite: Mat.Emberite, aerite: Mat.Aerite,
+  sandstone: Mat.Sandstone, ice: Mat.Ice, blightstone: Mat.Blightstone, emberstone: Mat.Emberstone, emberite: Mat.Emberite, aerite: Mat.Aerite, mud: Mat.Mud, mushgrass: Mat.Mushgrass,
 };
 
 function layerIndex(l: Layer | string): number {
@@ -357,6 +357,17 @@ export function lifeCrystalHeart() {
   return merge(heartGem(1.25, 0.62));
 }
 
+/** A glowing blue mushroom (item icon). */
+function glowcapItem() {
+  return merge([
+    cyl(0.03, 0.045, 0.16, 6, 'mushstem', { y: 0.08 }),
+    part(place(new THREE.SphereGeometry(0.12, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2), { y: 0.14 }), 'glowcap'),
+    cyl(0.115, 0.1, 0.02, 7, 'mushstem', { y: 0.14 }, 0x9ab8d0),
+    ico(0.022, 'plain', { x: 0.05, y: 0.23, z: 0.04 }, 0xe0fcff),
+    ico(0.018, 'plain', { x: -0.05, y: 0.22, z: -0.03 }, 0xe0fcff),
+  ]);
+}
+
 /** A five-pointed star with a glowing core. */
 function star() {
   const parts: THREE.BufferGeometry[] = [octa(0.07, 'flame', { y: 0.16, sz: 0.6 }, 0xfff4a0)];
@@ -547,6 +558,17 @@ function furniture(id: FurnitureId): THREE.BufferGeometry {
         box(0.14, 0.16, 0.06, 'gold', { y: 0.5, z: 0.37 }),
         box(0.05, 0.06, 0.03, 'metal', { y: 0.46, z: 0.4 }, 0x202020),
       ]);
+    case 'glowcap_lamp':
+      // A glowcap under a glass shade on a wooden post.
+      return merge([
+        cyl(0.2, 0.24, 0.08, 7, 'planks', { y: 0.04 }, 0xc8a070),
+        cyl(0.045, 0.05, 0.9, 6, 'planks', { y: 0.5 }, 0xb08860),
+        cyl(0.03, 0.04, 0.16, 6, 'mushstem', { y: 1.0 }),
+        part(place(new THREE.SphereGeometry(0.16, 8, 3, 0, Math.PI * 2, 0, Math.PI / 2), { y: 1.07 }), 'glowcap'),
+        cyl(0.22, 0.22, 0.04, 7, 'iron', { y: 0.95 }),
+        ...[0, 1, 2, 3].map(i => box(0.025, 0.34, 0.025, 'iron', { x: Math.cos(i * Math.PI / 2 + 0.4) * 0.2, y: 1.12, z: Math.sin(i * Math.PI / 2 + 0.4) * 0.2 })),
+        cone(0.26, 0.14, 7, 'iron', { y: 1.35 }),
+      ]);
     case 'life_crystal':
       // Heart crystal floating over a cluster of rock.
       return merge([lifeCrystalBase(), lifeCrystalHeart()]);
@@ -615,6 +637,7 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'star': g = star(); break;
     case 'mana_crystal': g = merge([octa(0.12, 'manaGem', { y: 0.16, sy: 1.6 }), octa(0.06, 'manaGem', { x: 0.1, y: 0.1, sy: 1.5, rz: -0.5 }), octa(0.05, 'manaGem', { x: -0.09, y: 0.09, sy: 1.5, rz: 0.5 }), octa(0.035, 'flame', { x: -0.04, y: 0.24, z: 0.05 }, 0xe0ecff)]); break;
     case 'mana_potion': g = bottle('manaGem'); break;
+    case 'glowcap': g = glowcapItem(); break;
     case 'armor': g = armor(spec.slot, spec.layer); break;
     case 'boots': g = boots(spec.layer); break;
     case 'jar': g = jar(spec.layer); break;

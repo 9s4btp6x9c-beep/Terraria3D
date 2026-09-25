@@ -22,6 +22,8 @@ export const enum Mat {
   Emberstone = 16,
   Emberite = 17,
   Aerite = 18,
+  Mushgrass = 19,
+  Mud = 20,
 }
 
 /** Procedural pixel-art texture recipe (see render/textures.ts). */
@@ -67,6 +69,8 @@ const defs: MaterialDef[] = [
   { id: Mat.Emberstone, name: 'Emberstone', texture: 'cobble', palette: [0x5a2a22, 0x1a0a08, 0x7a3426, 0xe05a24], hardness: 2, tier: 2, drop: 'emberstone', volumePerItem: 2, emissive: 0.14, particle: 0xff6a2a },
   { id: Mat.Emberite, name: 'Emberite Ore', texture: 'ore', palette: [0x4a1e16, 0x1a0806, 0xff8a30, 0xffe070], hardness: 2.4, tier: 2, drop: 'emberite', volumePerItem: 1.5, emissive: 0.7, particle: 0xffa040 },
   { id: Mat.Aerite, name: 'Aerite Ore', texture: 'ore', palette: [0x8e98ae, 0x3e4458, 0xa8e4ff, 0xfff4c0], hardness: 1.6, tier: 1, drop: 'aerite_ore', volumePerItem: 1.5, emissive: 0.3, particle: 0xbfeaff },
+  { id: Mat.Mushgrass, name: 'Mushroom Grass', texture: 'blotch', palette: [0x2a6a9a, 0x163e66, 0x3aa0d0, 0x7ae8ff], hardness: 0.4, tier: 0, drop: 'mud', volumePerItem: 2, emissive: 0.32, particle: 0x3aa0d0 },
+  { id: Mat.Mud, name: 'Mud', texture: 'speckle', palette: [0x4e4038, 0x2e2420, 0x64544a, 0x3a3a52], hardness: 0.4, tier: 0, drop: 'mud', volumePerItem: 2, emissive: 0, particle: 0x4e4038 },
 ];
 
 export const MATERIALS: readonly MaterialDef[] = defs;

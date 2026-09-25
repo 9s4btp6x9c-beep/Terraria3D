@@ -59,8 +59,11 @@ Touch devices start on the low quality preset.
   it for +20 max life (up to 400). Stars fall on clear nights; five make a
   Mana Crystal (+20 max mana, up to 200), and they also brew mana potions.
 - **Biomes:** forest, desert, snow and the purple Blight on the surface.
-  Underground are caves, cabins with loot chests, glowing lumite crystals
-  and the molten Ember Depths.
+  Underground are caves, cabins with loot chests, glowing lumite crystals,
+  the molten Ember Depths and the **glowing mushroom caverns**. These are
+  wide mud halls with luminous floors and giant blue mushrooms, home to
+  Sporelings and Glowmoths. Fell the mushrooms for glowcaps, which make
+  mana potions and Glowcap Lamps.
 - **Bosses:**
   - **The Deepwyrm:** craft Wyrm Bait at an anvil and use it at night or
     underground. It is a segmented worm that tunnels through the real
@@ -146,5 +149,7 @@ scripts/      e2e browser tests (desktop and mobile)
 | ![](docs/screenshots/blood-moon.jpg) | ![](docs/screenshots/hollow-raid.jpg) |
 | **The Tempest Roc** | **Gale Swifts over a sky island** |
 | ![](docs/screenshots/tempest-roc.jpg) | ![](docs/screenshots/gale-swifts.jpg) |
+| **Mushroom cavern** | **Life Crystal** |
+| ![](docs/screenshots/mushroom-cavern.jpg) | ![](docs/screenshots/life-crystal.jpg) |
 | **Event creatures** | **Touch controls on a phone** |
 | ![](docs/screenshots/event-creatures.jpg) | ![](docs/screenshots/mobile-touch.jpg) |

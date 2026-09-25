@@ -259,6 +259,82 @@ function hollowMiner(mat: THREE.Material, sapper = false): CreatureVisual {
   };
 }
 
+/** Sporeling: a waddling mushroom with a glowing cap and stubby legs. */
+function sporeling(mat: THREE.Material): CreatureVisual {
+  const root = new THREE.Group();
+  const body = pivot(root, 0, 0.28, 0);
+  mesh(merge([
+    taper(0.34, 0.42, 0.3, 0.8, 0.8, 'mushstem', { y: 0.2 }),
+    box(0.06, 0.07, 0.02, 'plain', { x: 0.08, y: 0.3, z: 0.14 }, 0x101820),
+    box(0.06, 0.07, 0.02, 'plain', { x: -0.08, y: 0.3, z: 0.14 }, 0x101820),
+    box(0.1, 0.03, 0.02, 'plain', { y: 0.2, z: 0.14 }, 0x5a4a44),
+  ]), mat, body);
+  const cap = pivot(body, 0, 0.45, 0);
+  mesh(merge([
+    parts.merge([ico(0.36, 'glowcap', { y: 0.06, sy: 0.5, detail: 1, jitter: 0.08, seed: 51 })]),
+    cyl(0.33, 0.14, 0.06, 8, 'mushstem', { y: 0.02 }, 0x9ab8d0),
+    ico(0.04, 'plain', { x: 0.14, y: 0.2, z: 0.1 }, 0xe0fcff),
+    ico(0.035, 'plain', { x: -0.16, y: 0.17, z: -0.06 }, 0xe0fcff),
+    ico(0.03, 'plain', { x: 0.02, y: 0.23, z: -0.14 }, 0xe0fcff),
+  ]), mat, cap);
+  const legs = [0.1, -0.1].map(x => {
+    const p = pivot(body, x, 0.02, 0);
+    mesh(merge([box(0.1, 0.24, 0.12, 'mushstem', { y: -0.12 }), box(0.12, 0.05, 0.16, 'mushstem', { y: -0.25, z: 0.02 }, 0xb8ae9a)]), mat, p);
+    return p;
+  });
+  const arms = [0.19, -0.19].map(x => {
+    const p = pivot(body, x, 0.3, 0);
+    mesh(merge([box(0.07, 0.2, 0.07, 'mushstem', { y: -0.1 })]), mat, p);
+    return p;
+  });
+  return {
+    root,
+    animate(c) {
+      const sp = Math.min(1, Math.hypot(c.vx, c.vz) / 2);
+      const ph = c.t * 9;
+      legs[0].rotation.x = Math.sin(ph) * 0.6 * sp;
+      legs[1].rotation.x = -Math.sin(ph) * 0.6 * sp;
+      arms[0].rotation.x = -Math.sin(ph) * 0.5 * sp;
+      arms[1].rotation.x = Math.sin(ph) * 0.5 * sp;
+      body.rotation.z = Math.sin(ph) * 0.12 * sp;
+      cap.rotation.z = Math.sin(ph + 0.6) * 0.1 * sp;
+      cap.position.y = 0.45 + Math.abs(Math.sin(ph)) * 0.03 * sp;
+    },
+  };
+}
+
+/** Glowmoth: a fuzzy moth with broad luminous wings. */
+function glowmoth(mat: THREE.Material): CreatureVisual {
+  const root = new THREE.Group();
+  const body = pivot(root, 0, 0.5, 0);
+  mesh(merge([
+    ico(0.13, 'fur', { sz: 1.9, detail: 1 }, 0xd8d0e8),
+    ico(0.1, 'fur', { z: 0.22 }, 0xe8e4f4),
+    octa(0.03, 'flame', { x: 0.05, y: 0.04, z: 0.3 }, 0x9af0ff),
+    octa(0.03, 'flame', { x: -0.05, y: 0.04, z: 0.3 }, 0x9af0ff),
+    box(0.012, 0.2, 0.012, 'fur', { x: 0.05, y: 0.13, z: 0.34, rx: 0.6, rz: -0.3 }, 0x8a82a0),
+    box(0.012, 0.2, 0.012, 'fur', { x: -0.05, y: 0.13, z: 0.34, rx: 0.6, rz: 0.3 }, 0x8a82a0),
+  ]), mat, body);
+  const wing = (side: number) => {
+    const p = pivot(body, side * 0.08, 0.04, 0.05);
+    mesh(merge([
+      taper(0.5, 0.02, 0.42, 0.6, 1.2, 'glowcap', { x: side * 0.26, z: 0.06, rz: side * Math.PI / 2 }),
+      taper(0.36, 0.02, 0.3, 0.5, 1.1, 'glowcap', { x: side * 0.2, z: -0.26, rz: side * Math.PI / 2, ry: side * 0.3 }, 0x9ad8ff),
+      ico(0.05, 'plain', { x: side * 0.3, y: 0.02, z: 0.08 }, 0xffffff),
+    ]), mat, p);
+    return p;
+  };
+  const wl = wing(1), wr = wing(-1);
+  return {
+    root,
+    animate(c) {
+      const f = Math.sin(c.t * 16) * 0.8;
+      wl.rotation.z = f; wr.rotation.z = -f;
+      body.position.y = 0.5 + Math.sin(c.t * 4) * 0.1;
+    },
+  };
+}
+
 /** Gale Swift: a sleek storm-blue bird with swept wings and a forked tail. */
 function galeSwift(mat: THREE.Material): CreatureVisual {
   const root = new THREE.Group();
@@ -445,6 +521,8 @@ export function buildCreatureVisual(id: string, mat: THREE.Material, tint = 0xff
     case 'hollow_brute': return hollowBrute(mat);
     case 'gorehound': return gorehound(mat);
     case 'gale_swift': return galeSwift(mat);
+    case 'sporeling': return sporeling(mat);
+    case 'glowmoth': return glowmoth(mat);
     default: return glob(mat, 0xff80ff);
   }
 }
