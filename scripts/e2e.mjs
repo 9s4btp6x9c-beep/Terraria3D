@@ -858,6 +858,34 @@ try {
   console.log('render stats', JSON.stringify(stats));
   check('far terrain uses LOD regions', stats.nodes > 10, `${stats.nodes} LOD nodes, ${stats.meshes} visible terrain meshes`);
 
+  // --------------------------------------------- full save / reload round trip
+  const saved2 = await page.evaluate(() => {
+    const g = __game;
+    g.equipment.set(4, { id: 'roc_wings', count: 1 });
+    g.startEvent('raid');
+    g.saveGame();
+    return {
+      maxHp: g.vitals.maxHp, maxMana: g.vitals.maxMana, progress: { ...g.progress }, event: g.events.kind,
+      crystals: [...g.furniture.items.values()].filter(f => f.type === 'life_crystal').length,
+      deadShrooms: g.veg.trees.filter(t => t.kind === 'mushroom' && !t.alive).map(t => t.id),
+      wings: g.equipment.items[4]?.id, houses: g.town.houses.length, npcs: g.town.npcs.map(n => n.def.id),
+    };
+  });
+  await boot('?continue=1');
+  const loaded2 = await page.evaluate(() => {
+    const g = __game;
+    return {
+      maxHp: g.vitals.maxHp, maxMana: g.vitals.maxMana, progress: { ...g.progress }, event: g.events.kind,
+      crystals: [...g.furniture.items.values()].filter(f => f.type === 'life_crystal').length,
+      deadShrooms: g.veg.trees.filter(t => t.kind === 'mushroom' && !t.alive).map(t => t.id),
+      wings: g.equipment.items[4]?.id, flight: g.stats.flight, houses: g.town.houses.length, npcs: g.town.npcs.map(n => n.def.id),
+    };
+  });
+  const same = saved2.maxHp === loaded2.maxHp && saved2.maxMana === loaded2.maxMana && JSON.stringify(saved2.progress) === JSON.stringify(loaded2.progress) &&
+    saved2.event === loaded2.event && saved2.crystals === loaded2.crystals && JSON.stringify(saved2.deadShrooms) === JSON.stringify(loaded2.deadShrooms) &&
+    loaded2.wings === 'roc_wings' && loaded2.flight > 0 && saved2.houses === loaded2.houses && JSON.stringify(saved2.npcs) === JSON.stringify(loaded2.npcs);
+  check('everything new survives a save and reload', same && saved2.deadShrooms.length > 0, JSON.stringify({ saved: saved2, loaded: loaded2 }));
+
   check('no runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 } catch (e) {
   console.error(e);
