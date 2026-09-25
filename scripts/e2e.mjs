@@ -276,6 +276,26 @@ try {
   await shot('12-inventory');
   await page.evaluate(() => { __game.toggleInventory(false); __game.input.locked = true; });
 
+  // By day a Burrling grazes beside the player without attacking; struck, it fights back.
+  const temper = await page.evaluate(() => {
+    const g = __game;
+    g.combat.spawning = false;
+    g.combat.clear();
+    g.atmosphere.timeOfDay = 0.4;
+    g.vitals.hp = g.vitals.maxHp;
+    const c = g.spawnCreature('burrling', g.player.x + 0.8, g.player.y + 0.3, g.player.z);
+    for (let i = 0; i < 40; i++) g.simulate(0.1);
+    const calmHp = g.vitals.hp;
+    c.provoked = true;
+    c.x = g.player.x + 0.6; c.z = g.player.z;
+    for (let i = 0; i < 30; i++) g.simulate(0.1);
+    const out = { calmHp, max: g.vitals.maxHp, provokedHp: g.vitals.hp };
+    g.combat.clear();
+    g.vitals.hp = g.vitals.maxHp;
+    return out;
+  });
+  check('Burrlings are docile by day until provoked', temper.calmHp === temper.max && temper.provokedHp < temper.max, JSON.stringify(temper));
+
   // Melee combat: a Burrling in front of the player, killed with the sword.
   const fight = await page.evaluate(() => {
     const g = __game;

@@ -39,23 +39,28 @@ export interface CreatureDef {
   event?: { kind: EventKind; weight: number };
   /** Distance at which it notices the player (default 38 m). */
   aggro?: number;
+  /**
+   * Peaceful by day: it wanders and grazes, and only turns on the player once
+   * struck (its neighbours join in). At night it hunts like anything else.
+   */
+  docile?: boolean;
 }
 
 export const CREATURES: Record<string, CreatureDef> = {
   burrling: {
     id: 'burrling', name: 'Burrling', hp: 18, damage: 8, defense: 0, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'coin', min: 1, max: 2, chance: 0.6 }],
-    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [0] }, color: 0x8aaa4e,
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [0] }, docile: true, color: 0x8aaa4e,
   },
   dune_burrling: {
     id: 'dune_burrling', name: 'Dune Burrling', hp: 26, damage: 11, defense: 2, speed: 5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'burrling', tint: 0xf0d070,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'sand', min: 2, max: 4, chance: 0.5 }, { item: 'coin', min: 1, max: 3, chance: 0.7 }],
-    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [1] }, color: 0xe0c060,
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [1] }, docile: true, color: 0xe0c060,
   },
   frost_burrling: {
     id: 'frost_burrling', name: 'Frost Burrling', hp: 28, damage: 11, defense: 3, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'burrling', tint: 0xb8ecff,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'ice', min: 1, max: 3, chance: 0.5 }, { item: 'coin', min: 1, max: 3, chance: 0.7 }],
-    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [2] }, color: 0xa8d8f0,
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [2] }, docile: true, color: 0xa8d8f0,
   },
   rift_burrling: {
     id: 'rift_burrling', name: 'Rift Burrling', hp: 42, damage: 16, defense: 5, speed: 5.5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.2, model: 'burrling', skin: 'riftleaves', tint: 0xd0f0ff,
@@ -148,12 +153,12 @@ Object.assign(CREATURES, {
   moss_burrling: {
     id: 'moss_burrling', name: 'Moss Burrling', hp: 32, damage: 12, defense: 3, speed: 4.2, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.15, model: 'burrling', skin: 'mossleaves', tint: 0xffffff,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'rootwood', min: 1, max: 2, chance: 0.4 }, { item: 'coin', min: 1, max: 3, chance: 0.8 }],
-    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [4] }, color: 0x6a8a3e,
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [4] }, docile: true, color: 0x6a8a3e,
   },
   mossback: {
     id: 'mossback', name: 'Mossback', hp: 70, damage: 17, defense: 12, speed: 2.2, ai: 'crawler', radius: 0.75, height: 0.9, kbResist: 0.7,
     drops: [{ item: 'rootwood', min: 3, max: 6, chance: 1 }, { item: 'coin', min: 3, max: 6, chance: 1 }, { item: 'red_cap', min: 1, max: 2, chance: 0.3 }],
-    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [4] }, color: 0x5e7a36,
+    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [4] }, docile: true, color: 0x5e7a36,
   },
   bonepicker: {
     id: 'bonepicker', name: 'Bonepicker', hp: 40, damage: 17, defense: 5, speed: 8, ai: 'flyer', radius: 0.45, height: 0.8, kbResist: 0.1, model: 'gale_swift', skin: 'bone', tint: 0xfff0d8,
@@ -163,17 +168,17 @@ Object.assign(CREATURES, {
   salt_crawler: {
     id: 'salt_crawler', name: 'Saltback Crawler', hp: 48, damage: 15, defense: 10, speed: 2.9, ai: 'crawler', radius: 0.55, height: 0.7, kbResist: 0.5, model: 'rockmite', tint: 0xfff8f0,
     drops: [{ item: 'salt', min: 2, max: 5, chance: 1 }, { item: 'fossil', min: 1, max: 2, chance: 0.4 }, { item: 'coin', min: 2, max: 4, chance: 1 }],
-    spawn: { env: 'surface', time: 'any', weight: 4, biomes: [5] }, color: 0xf0ece4,
+    spawn: { env: 'surface', time: 'any', weight: 4, biomes: [5] }, docile: true, color: 0xf0ece4,
   },
   amber_burrling: {
     id: 'amber_burrling', name: 'Amber Burrling', hp: 30, damage: 11, defense: 3, speed: 4.8, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'burrling', skin: 'amber', tint: 0xffffff,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'coin', min: 3, max: 7, chance: 1 }],
-    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [6] }, color: 0xffb040,
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [6] }, docile: true, color: 0xffb040,
   },
   leafwing: {
     id: 'leafwing', name: 'Leafwing', hp: 28, damage: 13, defense: 2, speed: 6.5, ai: 'flyer', radius: 0.45, height: 0.8, kbResist: 0.1, model: 'glowmoth', skin: 'amberleaves', tint: 0xffffff,
     drops: [{ item: 'coin', min: 2, max: 4, chance: 1 }, { item: 'red_cap', min: 1, max: 1, chance: 0.25 }],
-    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [6] }, color: 0xd8702a,
+    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [6] }, docile: true, color: 0xd8702a,
   },
 } satisfies Record<string, CreatureDef>);
 
@@ -241,6 +246,8 @@ export class Creature {
   attack = 0;
   /** Spawned by a world event (counts toward its progress). */
   event: EventKind | null = null;
+  /** Struck by the player: a docile creature fights back from now on. */
+  provoked = false;
   readonly uid: number;
   private static next = 1;
   private n: [number, number, number] = [0, 0, 0];
@@ -315,6 +322,13 @@ export interface AIContext {
   /** Signed distance to terrain at a point (flyers avoid walls). */
   distance(x: number, y: number, z: number, n: [number, number, number]): number;
   throwAt(c: Creature, tx: number, ty: number, tz: number): void;
+  /** Daytime with no event running: docile creatures leave the player alone. */
+  calm: boolean;
+}
+
+/** True while a creature is ignoring the player (docile, unprovoked, calm). */
+export function peaceful(c: Creature, calm: boolean) {
+  return !!c.def.docile && !c.provoked && calm;
 }
 
 const tmpN: [number, number, number] = [0, 0, 0];
@@ -328,7 +342,7 @@ export function think(c: Creature, ctx: AIContext) {
   const dx = ctx.px - c.x, dz = ctx.pz - c.z, dy = ctx.py + 0.9 - c.cy;
   const dist = Math.hypot(dx, dz);
   const d = c.def;
-  const aggro = dist < (d.aggro ?? 38);
+  const aggro = !peaceful(c, ctx.calm) && dist < (d.aggro ?? 38);
   c.attack = Math.max(0, c.attack - dt);
 
   switch (d.ai) {

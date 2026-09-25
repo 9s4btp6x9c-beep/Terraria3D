@@ -11,7 +11,7 @@ import type { WorldCollision } from '../world/collision';
 import type { TerrainField } from '../world/terrain';
 import { type Boss, Deepwyrm } from './boss';
 import { TempestRoc } from './roc';
-import { CREATURES, Creature, type CreatureDef, type SpawnEnv, think } from './creatures';
+import { CREATURES, Creature, type CreatureDef, type SpawnEnv, peaceful, think } from './creatures';
 import type { EventKind } from './events';
 
 export interface CombatHooks {
@@ -76,7 +76,7 @@ interface Projectile {
   bossCd: number;
 }
 
-const CAPS = { day: 5, night: 10, cave: 8, sky: 3 };
+const CAPS = { day: 4, night: 9, cave: 8, sky: 3 };
 /** Above this height the player is in the high sky (floating islands). */
 export const SKY_Y = 112;
 /** Raiders alive at once during the Hollow March. */
@@ -174,7 +174,7 @@ export class Combat {
     if (regular >= cap) return;
 
     for (let attempt = 0; attempt < 6; attempt++) {
-      const a = Math.random() * Math.PI * 2, d = 24 + Math.random() * 22;
+      const a = Math.random() * Math.PI * 2, d = 28 + Math.random() * 22;
       const x = px + Math.cos(a) * d, z = pz + Math.sin(a) * d;
       if (x < 4 || z < 4 || x > this.field.sx - 4 || z > this.field.sz - 4 || !h.isLoaded(x, z)) continue;
       let y: number, env: SpawnEnv;
@@ -236,6 +236,11 @@ export class Combat {
     const dmg = Math.max(1, Math.round((raw * (0.9 + Math.random() * 0.2) - c.def.defense * 0.5) * (crit ? 2 : 1)));
     c.hp -= dmg;
     c.hitFlash = 1;
+    // Striking a docile creature rouses it, and its kin nearby.
+    if (c.def.docile && !c.provoked) {
+      for (const o of this.creatures) if (o.def.id === c.def.id && Math.hypot(o.x - c.x, o.z - c.z) < 12) o.provoked = true;
+      c.provoked = true;
+    }
     c.knock(fromX, fromZ, knock);
     this.hooks.damageNumber(c.cx, c.y + c.def.height + 0.3, c.cz, String(dmg), crit ? '#ff9a3a' : '#ffffff');
     this.hooks.particles(c.cx, c.cy, c.cz, 0, 0.6, 0, c.def.color, 6, 3);
@@ -393,8 +398,9 @@ export class Combat {
       this.trySpawn(px, py, pz);
     }
 
+    const calm = !this.hooks.isNight() && !this.hooks.activeEvent();
     const ctx = {
-      px, py, pz, dt, world: this.world,
+      px, py, pz, dt, world: this.world, calm,
       distance: (x: number, y: number, z: number, n: [number, number, number]) => this.world.distance(x, y, z, n),
       throwAt: (c: Creature, tx: number, ty: number, tz: number) => {
         const r = c.def.ranged!;
@@ -424,7 +430,7 @@ export class Combat {
       const dx = px - c.x, dz = pz - c.z;
       const horiz = Math.hypot(dx, dz);
       const overlapY = py < c.y + c.def.height && py + 1.8 > c.y;
-      if (horiz < c.def.radius + 0.45 && overlapY) {
+      if (horiz < c.def.radius + 0.45 && overlapY && !peaceful(c, calm)) {
         const heavy = c.def.kbResist > 0.8;
         if (this.hooks.hurtPlayer(c.def.damage, c.x, c.z, heavy ? 14 : 7) > 0) c.attack = Math.max(c.attack, 0.6);
       }

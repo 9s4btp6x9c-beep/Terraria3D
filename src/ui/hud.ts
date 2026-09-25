@@ -38,9 +38,10 @@ export class Hud {
 
   constructor(private inv: Inventory, private icons: IconAtlas) {
     inv.onChange(() => this.render());
-    this.hotbar.addEventListener('mousedown', e => {
+    // Pointer events cover mouse and touch alike (taps select immediately).
+    this.hotbar.addEventListener('pointerdown', e => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('.slot');
-      if (el?.dataset.hot) this.inv.select(Number(el.dataset.hot));
+      if (el?.dataset.hot) { e.preventDefault(); e.stopPropagation(); this.inv.select(Number(el.dataset.hot)); }
     });
     this.render();
   }

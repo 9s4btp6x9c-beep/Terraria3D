@@ -187,12 +187,15 @@ export class Game {
       const plan = planStructures(this.gen);
       for (const p of plan.pieces) this.structures.add(p);
       for (const f of plan.furniture) this.furniture.add(f);
+      // A light start: tools and torches on the hotbar, supplies in the pack.
       this.inventory.add('copper_pickaxe', 1);
       this.inventory.add('copper_axe', 1);
       this.inventory.add('wooden_sword', 1);
       this.inventory.add('torch', 12);
       this.inventory.add('wood', 20);
       this.inventory.add('healing_potion', 2);
+      this.inventory.swap(4, HOTBAR);
+      this.inventory.swap(5, HOTBAR + 1);
     }
 
     cb.progress(0.06, 'Computing skylight');

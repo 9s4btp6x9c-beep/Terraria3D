@@ -125,17 +125,33 @@ function axe(head: MetalLayer) {
   return merge(parts);
 }
 
+/**
+ * A broad, flat blade (extruded outline with bevelled edges and a darker
+ * fuller down the middle), a wide crossguard, a wrapped grip and a pommel.
+ */
 function sword(head: MetalLayer) {
   const wooden = head === 'planks';
-  const blade = new THREE.CylinderGeometry(0.045, 0.06, 0.78, 4);
-  blade.rotateY(Math.PI / 4);
-  blade.scale(1, 1, 0.35);
+  const tint = wooden ? 0xe0c090 : 0xffffff;
+  const w = wooden ? 0.075 : 0.07, len = 0.66;
+  const outline = new THREE.Shape();
+  outline.moveTo(-w, 0);
+  outline.lineTo(-w, len);
+  outline.lineTo(0, len + 0.16);
+  outline.lineTo(w, len);
+  outline.lineTo(w, 0);
+  outline.closePath();
+  const blade = new THREE.ExtrudeGeometry(outline, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.012, bevelSegments: 1 });
+  blade.translate(0, 0.16, -0.006);
   const parts = [
-    part(place(blade, { y: 0.52 }), head, wooden ? 0xe0c090 : 0xffffff),
-    cone(0.06, 0.12, 4, head, { y: 0.97, ry: Math.PI / 4 }, wooden ? 0xe0c090 : 0xffffff),
-    box(0.3, 0.05, 0.07, wooden ? 'planks' : 'gold', { y: 0.12 }),
+    part(blade, head, tint),
+    // Fuller: a darker groove running most of the blade's length.
+    box(0.026, len * 0.72, 0.04, head, { y: 0.16 + len * 0.42 }, wooden ? 0xa07850 : 0x9a9aa8),
+    // Crossguard with flared tips.
+    box(0.34, 0.055, 0.08, wooden ? 'planks' : 'gold', { y: 0.13 }),
+    box(0.05, 0.09, 0.09, wooden ? 'planks' : 'gold', { x: 0.17, y: 0.14 }),
+    box(0.05, 0.09, 0.09, wooden ? 'planks' : 'gold', { x: -0.17, y: 0.14 }),
     box(0.05, 0.2, 0.05, 'cloth', { y: 0.0 }, 0x4a3a50),
-    octa(0.05, wooden ? 'planks' : 'gold', { y: -0.12 }),
+    octa(0.05, wooden ? 'planks' : 'gold', { y: -0.13 }),
   ];
   return merge(parts);
 }

@@ -95,6 +95,15 @@ try {
     return btns.some(hit) || btns.some(hitHot);
   });
   check('touch controls avoid the minimap and hotbar', !overlap);
+  // Every hotbar slot can be tapped, including those over the look area.
+  const picked = [];
+  for (const i of [0, 3, 5, 8]) {
+    const r = await page.locator(`#hotbar .slot[data-hot="${i}"]`).boundingBox();
+    await page.touchscreen.tap(r.x + r.width / 2, r.y + r.height / 2);
+    await page.evaluate(() => { __game.simulate(0.05); });
+    picked.push(await page.evaluate(() => __game.inventory.selected));
+  }
+  check('tapping any hotbar slot selects it', picked.join() === '0,3,5,8', picked.join());
   await page.screenshot({ path: `${OUT}/m1-touch.png` });
   check('no runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 } catch (e) {

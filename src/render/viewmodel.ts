@@ -36,6 +36,7 @@ export class Viewmodel {
   private draw = 0;
   private bob = 0;
   private equipT = 1;
+  private tool = false;
 
   /**
    * @param material   dedicated object-space world material (depth test is disabled
@@ -77,10 +78,14 @@ export class Viewmodel {
     const bs = this.itemMesh.geometry.boundingSphere!;
     // Held blocks/furniture are normalised; long tools/weapons are shrunk so
     // they read like a hand-held item rather than filling the screen.
-    const scale = this.pose === 'hold' ? Math.min(1.1, 0.16 / bs.radius) : Math.min(0.55, 0.27 / bs.radius);
+    const scale = this.pose === 'hold' ? Math.min(1.1, 0.16 / bs.radius) : Math.min(0.5, 0.25 / bs.radius);
     this.itemMesh.scale.setScalar(scale);
     this.itemMesh.position.set(0, 0, 0);
     this.itemMesh.rotation.set(0, 0, 0);
+    // Picks and axes are modelled with the head across x; turn them so the
+    // head points away from the player and the swing strikes forward.
+    this.tool = def.kind === 'tool';
+    if (this.tool) this.itemMesh.rotation.set(0, Math.PI / 2, 0);
     if (this.pose === 'hold') this.itemMesh.position.set(-bs.center.x * scale, -bs.center.y * scale + 0.02, -bs.center.z * scale);
     if (this.pose === 'bow') this.itemMesh.rotation.set(0, Math.PI / 2, 0);
   }
@@ -107,10 +112,17 @@ export class Viewmodel {
     const p = this.pivot;
     switch (this.pose) {
       case 'swing': {
-        // Wind up slightly, then chop down and across.
-        const a = this.swing > 0 ? (k < 0.25 ? -k * 1.6 : -0.4 + (k - 0.25) * 2.4) : 0;
-        p.position.set(bobX + 0.02, bobY - drop - s * 0.05, 0);
-        p.rotation.set(-0.28 - a * 1.2, 0.25, 0.12 + s * 0.45);
+        // Wind up (raise and pull back), then strike down and forward.
+        const a = this.swing > 0 ? (k < 0.3 ? -k * 1.6 : -0.48 + (k - 0.3) * 2.2) : 0;
+        if (this.tool) {
+          // Picks and axes: held upright in profile, head forward.
+          p.position.set(bobX + 0.03, bobY - drop - 0.04 - s * 0.05, -s * 0.06);
+          p.rotation.set(-0.12 - a * 1.5, 1.0, 0.18);
+        } else {
+          // Blades: flat of the blade toward the player, a diagonal slash.
+          p.position.set(bobX + 0.02, bobY - drop - 0.04 - s * 0.04, -s * 0.05);
+          p.rotation.set(-0.05 - a * 1.1, 0.3 - s * 0.3, 0.2 + s * 0.7);
+        }
         break;
       }
       case 'bow':
