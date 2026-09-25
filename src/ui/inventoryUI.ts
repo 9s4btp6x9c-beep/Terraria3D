@@ -65,7 +65,11 @@ export class InventoryUI {
       this.tip.style.top = `${Math.min(window.innerHeight - 120, e.clientY + 18)}px`;
     });
     this.panel.addEventListener('contextmenu', e => e.preventDefault());
+    this.panel.querySelector<HTMLButtonElement>('.close')!.onclick = () => this.onClose?.();
   }
+
+  /** Close button pressed. */
+  onClose: (() => void) | null = null;
 
   setOpen(open: boolean) {
     this.open = open;

@@ -194,15 +194,14 @@ function buildTuft(flower: boolean): THREE.BufferGeometry {
 }
 
 const NEAR_TREES = 110;
-const FAR_TREES = 520;
-const GRASS_RADIUS = 46;
+const GRASS_RADIUS_MAX = 46;
 const MAX_TUFTS = 14000;
 /** Grass cell offsets within the radius, nearest first (fills in around the player first). */
-const CELL_OFFSETS: [number, number][] = (() => {
-  const r = Math.ceil(GRASS_RADIUS / TUFT_CELL), out: [number, number][] = [];
+const cellOffsets = (radius: number): [number, number][] => {
+  const r = Math.ceil(radius / TUFT_CELL), out: [number, number][] = [];
   for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dz * dz <= r * r) out.push([dx, dz]);
   return out.sort((a, b) => a[0] ** 2 + a[1] ** 2 - b[0] ** 2 - b[1] ** 2);
-})();
+};
 
 interface TreeSet { near: THREE.InstancedMesh; far: THREE.InstancedMesh; trees: Tree[] }
 
@@ -220,8 +219,11 @@ export class VegetationRenderer {
   private p = new THREE.Vector3();
   private up = new THREE.Vector3(0, 1, 0);
   treesDirty = true;
+  private offsets: [number, number][];
 
-  constructor(private veg: Vegetation, treeMat: THREE.Material, grassMat: THREE.Material) {
+  constructor(private veg: Vegetation, treeMat: THREE.Material, grassMat: THREE.Material,
+    private grassRadius = GRASS_RADIUS_MAX, private farTrees = 520) {
+    this.offsets = cellOffsets(Math.min(grassRadius, GRASS_RADIUS_MAX));
     const groups = new Map<string, Tree[]>();
     for (const t of veg.trees) {
       const key = `${t.kind}-${t.variant}`;
@@ -270,7 +272,7 @@ export class VegetationRenderer {
           set.near.setMatrixAt(n, this.treeMatrix(t));
           this.nearSlot.set(t.id, { set, index: n });
           n++;
-        } else if (d < FAR_TREES) {
+        } else if (d < this.farTrees) {
           set.far.setMatrixAt(f++, this.treeMatrix(t));
         }
       }
@@ -283,7 +285,7 @@ export class VegetationRenderer {
   private rebuildGrass(cx: number, cz: number) {
     let gi = 0, fi = 0, generated = 0;
     this.lastGrass.missing = false;
-    for (const [dx, dz] of CELL_OFFSETS) {
+    for (const [dx, dz] of this.offsets) {
       // Generate at most a few new cells per frame; the rest fill in next frames.
       const before = this.veg.tuftVersion;
       const list = generated < 10 ? this.veg.tufts(cx + dx, cz + dz) : this.veg.tuftsCached(cx + dx, cz + dz);
@@ -319,7 +321,7 @@ export class VegetationRenderer {
       g.cx = cx; g.cz = cz; g.version = this.veg.tuftVersion;
       g.retry = g.missing ? 0.05 : 0.5;
     }
-    this.veg.trimTufts(focus.x, focus.z, GRASS_RADIUS + 40);
+    this.veg.trimTufts(focus.x, focus.z, this.grassRadius + 40);
   }
 
   get counts() {

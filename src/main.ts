@@ -1,4 +1,6 @@
 import { Game, savedGame } from './game';
+import { TouchControls } from './ui/touch';
+import { isTouchDevice } from './ui/quality';
 import { clearSave } from './world/persistence';
 
 const overlay = document.querySelector('#overlay') as HTMLElement;
@@ -31,9 +33,34 @@ async function begin(useSave: boolean) {
   });
   game.start();
   (window as unknown as { __ready: boolean }).__ready = true;
-  status.textContent = 'Click to play';
-  const resume = () => { overlay.style.display = 'none'; game.input.lock(); };
+  const isTouch = isTouchDevice() || params.has('touch');
+  status.textContent = isTouch ? 'Tap to play' : 'Click to play';
+  const touch = isTouch ? new TouchControls(game.input, {
+    inventory: () => game.toggleInventory(),
+    cycleMode: () => game.cycleBuildMode(),
+    pause: () => {
+      game.input.locked = false;
+      touch?.setVisible(false);
+      overlay.style.display = 'flex';
+      status.textContent = 'Paused';
+    },
+    menuOpen: () => game.menuOpen,
+  }) : null;
+  if (touch) {
+    document.body.classList.add('touch');
+    game.onFrame = () => touch.update();
+  }
+  game.input.onFreeLook(active => {
+    overlay.style.display = active ? 'none' : 'flex';
+    if (!active) status.textContent = 'Paused';
+  });
+  const resume = () => {
+    overlay.style.display = 'none';
+    touch?.setVisible(true);
+    game.input.lock();
+  };
   button('Play', resume);
+  button('Save', () => { game.saveGame(); status.textContent = 'World saved'; });
   overlay.onclick = e => { if (e.target === overlay) resume(); };
   document.addEventListener('pointerlockchange', () => {
     if (!document.pointerLockElement && !game.menuOpen) {

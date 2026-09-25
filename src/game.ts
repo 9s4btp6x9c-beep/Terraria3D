@@ -190,7 +190,7 @@ export class Game {
     };
     this.scene.add(this.terrain.group);
 
-    this.vegRenderer = new VegetationRenderer(this.veg, worldMat, plantMat);
+    this.vegRenderer = new VegetationRenderer(this.veg, worldMat, plantMat, this.quality.grass, this.quality.trees);
     this.scene.add(this.vegRenderer.group);
     this.structureRenderer = new StructureRenderer(this.structures, worldMat);
     this.scene.add(this.structureRenderer.group);
@@ -229,6 +229,7 @@ export class Game {
       this.hud.message(t, c);
       if (t.startsWith('Crafted')) this.audio.play('craft');
     });
+    this.invUI.onClose = () => this.toggleInventory(false);
     this.minimap = new Minimap($<HTMLCanvasElement>('#minimap'), this.field, this.sky, cfg.seaLevel,
       (x, z, h) => {
         const dh = Math.hypot(this.gen.height(x + 1, z) - this.gen.height(x - 1, z), this.gen.height(x, z + 1) - this.gen.height(x, z - 1)) / 2;
@@ -537,10 +538,14 @@ export class Game {
     this.post?.resize();
   }
 
+  /** Called once per rendered frame (UI overlays). */
+  onFrame: (() => void) | null = null;
+
   start() {
     this.lastFrame = performance.now();
     const loop = (now: number) => {
       requestAnimationFrame(loop);
+      this.onFrame?.();
       const dt = Math.min((now - this.lastFrame) / 1000, 0.1);
       this.lastFrame = now;
       if (this.manual) return;
@@ -616,11 +621,16 @@ export class Game {
     if (open) this.input.unlock(); else this.input.lock();
   }
 
+  cycleBuildMode() {
+    this.interaction.cycleMode();
+    this.refreshHeld();
+  }
+
   private handleKeys() {
     const inp = this.input;
     for (let i = 0; i < HOTBAR; i++) if (inp.wasPressed(`Digit${i + 1}`)) this.inventory.select(i);
     if (inp.wheel && !this.invUI.open) this.inventory.select(this.inventory.selected + inp.wheel);
-    if (inp.wasPressed('KeyQ')) { this.interaction.cycleMode(); this.refreshHeld(); }
+    if (inp.wasPressed('KeyQ')) this.cycleBuildMode();
     if (inp.wasPressed('F3')) this.hud.debugVisible = !this.hud.debugVisible;
     if (inp.wasPressed('F5')) this.saveGame();
     if (inp.wasPressed('F9')) location.href = `${location.pathname}?continue=1`;
@@ -653,6 +663,7 @@ export class Game {
     }
     // Move.
     const k = (c: string) => (active && inp.down(c) ? 1 : 0);
+    const axisF = active ? inp.axisForward : 0, axisS = active ? inp.axisStrafe : 0;
     const outdoorsHere = this.sky.visibility(this.player.x, this.player.y + 1, this.player.z) > 0.5;
     // Grappling hook (F): fire / release; jump releases; back key pays out rope.
     const hook = st.hook;
@@ -674,8 +685,8 @@ export class Game {
     }
     if (alive) {
       this.player.update(dt, {
-        forward: k('KeyW') - k('KeyS'),
-        strafe: k('KeyD') - k('KeyA'),
+        forward: Math.max(-1, Math.min(1, k('KeyW') - k('KeyS') + axisF)),
+        strafe: Math.max(-1, Math.min(1, k('KeyD') - k('KeyA') + axisS)),
         jump: !!k('Space'),
         sprint: !!(k('ShiftLeft') || k('ShiftRight')),
         crouch: !!k('KeyC'),

@@ -12,12 +12,15 @@ export interface Quality {
   mobile: boolean;
   /** Terrain detail distance scale. */
   detail: number;
+  /** Grass draw radius (m) and far-tree distance (m). */
+  grass: number;
+  trees: number;
 }
 
 const PRESETS: Record<Quality['name'], Omit<Quality, 'mobile'>> = {
-  low: { name: 'low', pixelRatio: 0.85, shadowSize: 1024, msaa: 0, detail: 0.72 },
-  medium: { name: 'medium', pixelRatio: 1, shadowSize: 1024, msaa: 2, detail: 0.9 },
-  high: { name: 'high', pixelRatio: 1.5, shadowSize: 2048, msaa: 4, detail: 1 },
+  low: { name: 'low', pixelRatio: 0.85, shadowSize: 1024, msaa: 0, detail: 0.72, grass: 30, trees: 360 },
+  medium: { name: 'medium', pixelRatio: 1, shadowSize: 1024, msaa: 2, detail: 0.9, grass: 40, trees: 460 },
+  high: { name: 'high', pixelRatio: 1.5, shadowSize: 2048, msaa: 4, detail: 1, grass: 46, trees: 520 },
 };
 
 export function isTouchDevice(): boolean {
