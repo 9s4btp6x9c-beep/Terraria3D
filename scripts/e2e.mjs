@@ -277,14 +277,14 @@ try {
   await shot('12-inventory');
   await page.evaluate(() => { __game.toggleInventory(false); __game.input.locked = true; });
 
-  // By day a Burrling grazes beside the player without attacking; struck, it fights back.
+  // By day a Blob grazes beside the player without attacking; struck, it fights back.
   const temper = await page.evaluate(() => {
     const g = __game;
     g.combat.spawning = false;
     g.combat.clear();
     g.atmosphere.timeOfDay = 0.4;
     g.vitals.hp = g.vitals.maxHp;
-    const c = g.spawnCreature('burrling', g.player.x + 0.8, g.player.y + 0.3, g.player.z);
+    const c = g.spawnCreature('blob', g.player.x + 0.8, g.player.y + 0.3, g.player.z);
     for (let i = 0; i < 40; i++) g.simulate(0.1);
     const calmHp = g.vitals.hp;
     c.provoked = true;
@@ -295,9 +295,9 @@ try {
     g.vitals.hp = g.vitals.maxHp;
     return out;
   });
-  check('Burrlings are docile by day until provoked', temper.calmHp === temper.max && temper.provokedHp < temper.max, JSON.stringify(temper));
+  check('Blobs are docile by day until provoked', temper.calmHp === temper.max && temper.provokedHp < temper.max, JSON.stringify(temper));
 
-  // Melee combat: a Burrling in front of the player, killed with the sword.
+  // Melee combat: a Blob in front of the player, killed with the sword.
   const fight = await page.evaluate(() => {
     const g = __game;
     g.combat.spawning = false;
@@ -305,20 +305,20 @@ try {
     const sw = g.inventory.slots.findIndex(s => s && s.id === 'wooden_sword');
     g.inventory.swap(sw, 5); g.inventory.select(5);
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw);
-    const c = g.spawnCreature('burrling', g.player.x + fx * 2.2, g.player.y + 0.3, g.player.z + fz * 2.2);
+    const c = g.spawnCreature('blob', g.player.x + fx * 2.2, g.player.y + 0.3, g.player.z + fz * 2.2);
     g.player.pitch = -0.3;
     return { gel: g.inventory.count('gel'), hp: c.hp, kills: g.combat.kills };
   });
   await act(() => { __game.input.lmb = true; }, 4);
   await page.evaluate(() => __game.simulate(1.5));
   const after2 = await page.evaluate(() => ({ kills: __game.combat.kills, gel: __game.inventory.count('gel'), drops: __game.pickups.count, hp: __game.vitals.hp }));
-  check('sword kills a Burrling and it drops sap', after2.kills > fight.kills && (after2.gel > fight.gel || after2.drops > 0), `kills ${after2.kills}, gel ${fight.gel} -> ${after2.gel}, pickups ${after2.drops}, player hp ${after2.hp.toFixed(0)}`);
+  check('sword kills a Blob and it drops sap', after2.kills > fight.kills && (after2.gel > fight.gel || after2.drops > 0), `kills ${after2.kills}, gel ${fight.gel} -> ${after2.gel}, pickups ${after2.drops}, player hp ${after2.hp.toFixed(0)}`);
 
   // Creature lineup for visual review.
   await page.evaluate(() => {
     const g = __game;
     g.combat.clear();
-    const ids = ['burrling', 'deep_burrling', 'rootwalker', 'drifter', 'duskwing', 'rockmite', 'hollow_miner'];
+    const ids = ['blob', 'deep_blob', 'rootwalker', 'drifter', 'duskwing', 'rockmite', 'ashdelver'];
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw), sx = -fz, sz = fx;
     ids.forEach((id, i) => {
       const o = (i - 3) * 1.6;
@@ -335,7 +335,7 @@ try {
   await page.evaluate(() => {
     const g = __game;
     g.combat.clear();
-    const ids = ['moss_burrling', 'mossback', 'bonepicker', 'salt_crawler', 'amber_burrling', 'leafwing', 'rotfang', 'sporebound', 'spore_drifter'];
+    const ids = ['moss_blob', 'mossback', 'bonepicker', 'salt_crawler', 'amber_blob', 'leafwing', 'rotfang', 'sporebound', 'spore_drifter'];
     const fly = new Set(['bonepicker', 'leafwing', 'spore_drifter']);
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw), sx = -fz, sz = fx;
     ids.forEach((id, i) => {
@@ -387,16 +387,42 @@ try {
     return { x0, z0, y };
   });
   await settle();
-  const housing = await page.evaluate(() => { const g = __game; return g.town.tryRegister(g.player.x, g.player.y, g.player.z, true); });
-  check('a built room is recognised as valid housing', housing.ok, housing.ok ? `${housing.volume.toFixed(0)} m³` : housing.missing.join(', '));
-  await page.evaluate(() => { __game.simulate(11); });
-  const npcs = await page.evaluate(() => __game.town.npcs.map(n => n.def.name));
-  check('an NPC moves into the house', npcs.length >= 1, npcs.join(', '));
-  await page.evaluate(() => {
-    const g = __game, n = g.town.npcs[0];
-    if (n) { g.player.yaw = Math.atan2(-(n.body.x - g.player.x), -(n.body.z - g.player.z)); g.player.pitch = -0.15; }
+  // ------------------------------------------------------ wandering merchant
+  // Nobody moves in: the merchant arrives at dawn on a visit day, camps near
+  // the spawn point, sells a seeded stock and leaves at dusk.
+  const arrival = await page.evaluate(() => {
+    const g = __game;
+    g.merchant.state.next = g.events.nights + 1;
+    g.atmosphere.timeOfDay = 0.95; g.simulate(0.2);   // night
+    g.atmosphere.timeOfDay = 0.3; g.simulate(0.2);    // dawn
+    const c = g.merchant.state.camp, s = g.spawnPoint;
+    return { here: !!g.merchant.npc, dist: c ? Math.hypot(c.x - s.x, c.z - s.z) : null, stock: c ? c.stock.map(e => e.item) : [], next: g.merchant.state.next, msgs: [...document.querySelectorAll('#messages div')].map(e => e.textContent).slice(-2) };
   });
-  await shot('15-house-npc');
+  check('the wandering merchant arrives at dawn and camps near spawn', arrival.here && arrival.dist < 25 && arrival.stock.includes('healing_potion') && arrival.stock.length >= 5, JSON.stringify(arrival));
+  const shop = await page.evaluate(async () => {
+    const g = __game, n = g.merchant.npc;
+    g.player.teleport(n.body.x + 2, n.body.y + 0.3, n.body.z);
+    g.player.yaw = Math.atan2(-(n.body.x - g.player.x), -(n.body.z - g.player.z)); g.player.pitch = -0.1;
+    g.simulate(0.1);
+    g['dialogue'].show(n);
+    g.inventory.add('coin', 50);
+    const before = g.inventory.count('healing_potion');
+    document.querySelector('#dialogue [data-a="shop"]').click();
+    const i = n.def.shop.findIndex(e => e.item === 'healing_potion');
+    document.querySelector(`#dialogue .ware[data-i="${i}"]`).click();
+    return { name: document.querySelector('#dialogue .who').textContent, bought: g.inventory.count('healing_potion') - before, wares: document.querySelectorAll('#dialogue .ware').length };
+  });
+  check('talking to the merchant opens his shop and buying works', shop.bought === 1 && shop.wares >= 5 && /Pell/.test(shop.name), JSON.stringify(shop));
+  await shot('15-merchant');
+  const departure = await page.evaluate(() => {
+    const g = __game;
+    g['dialogue'].close();
+    g.atmosphere.timeOfDay = 0.95; g.simulate(0.2);
+    const gone = !g.merchant.npc && !g.merchant.state.camp;
+    g.atmosphere.timeOfDay = 0.4; g.simulate(0.2);
+    return { gone, back: !!g.merchant.npc };
+  });
+  check('the merchant moves on at dusk and does not return the next morning', departure.gone && !departure.back, JSON.stringify(departure));
 
   // Grappling hook.
   const grapple = await page.evaluate(() => {
@@ -542,7 +568,7 @@ try {
     const g = __game;
     g.player.pitch = -0.12;
     g.simulate(0.1);
-    const ids = ['spore_burrling', 'rotfang', 'sporebound', 'spore_drifter', 'hollow_brute', 'hollow_sapper', 'raid_miner'];
+    const ids = ['spore_blob', 'rotfang', 'sporebound', 'spore_drifter', 'basalt_colossus', 'firebrand', 'cinder_raider'];
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw), sx = -fz, sz = fx;
     ids.forEach((id, i) => {
       const o = (i - 3) * 1.7;
@@ -595,16 +621,16 @@ try {
   });
   check('the Sporefall ends at dawn', dawn.kind === null && dawn.bar === 'none', JSON.stringify(dawn));
 
-  // Hollow March: sound the war horn in town, watch raiders march, repel them.
+  // Cinder Siege: sound the Ember Horn by your Hearth, watch raiders march, repel them.
   await page.evaluate(h => { const g = __game; g.player.teleport(h.x0 + 3, h.y + 0.5, h.z0 - 3); g.player.yaw = 0; }, house);
   await settle();
   const horn = await page.evaluate(() => {
     const g = __game;
     g.vitals.hp = g.vitals.maxHp = 400;
     const started = g['consume']({ id: 'hollow_horn' });
-    return { started, kind: g.events.kind, goal: g.events.goal, town: g.townInfo(), player: [g.player.x, g.player.z], msgs: [...document.querySelectorAll('#messages div')].map(e => e.textContent).slice(-3) };
+    return { started, kind: g.events.kind, goal: g.events.goal, base: g.baseInfo(), player: [g.player.x, g.player.z], msgs: [...document.querySelectorAll('#messages div')].map(e => e.textContent).slice(-3) };
   });
-  check('the war horn starts the Hollow March near town', horn.started && horn.kind === 'raid' && horn.goal > 0, JSON.stringify(horn));
+  check('the Ember Horn starts the Cinder Siege by the Hearth', horn.started && horn.kind === 'raid' && horn.goal > 0, JSON.stringify(horn));
   const march = await page.evaluate(() => {
     const g = __game;
     let first = null, closest = Infinity, count = 0;
@@ -621,7 +647,7 @@ try {
     }
     return { count, first, closest };
   });
-  check('raiders spawn around the town and march in', march.count >= 4 && march.closest < march.first - 5, JSON.stringify(march));
+  check('Cinderbound raiders spawn around the base and march in', march.count >= 4 && march.closest < march.first - 5, JSON.stringify(march));
   await page.evaluate(() => {
     const g = __game;
     const r = g.combat.creatures.filter(c => c.event === 'raid').sort((a, b) => Math.hypot(a.x - g.player.x, a.z - g.player.z) - Math.hypot(b.x - g.player.x, b.z - g.player.z))[0];
@@ -702,7 +728,7 @@ try {
     g.combat.spawning = false;
     return [...seen];
   }, island);
-  check('sky creatures live around the islands', skySpawns.some(id => id === 'gale_swift' || id === 'cloud_burrling'), skySpawns.join(', '));
+  check('sky creatures live around the islands', skySpawns.some(id => id === 'gale_swift' || id === 'cloud_blob'), skySpawns.join(', '));
   await page.evaluate(() => {
     const g = __game;
     const c = g.combat.creatures.find(c => c.def.id === 'gale_swift') ?? g.spawnCreature('gale_swift', g.player.x + 3, g.player.y + 3, g.player.z - 5);
@@ -765,7 +791,8 @@ try {
     g.simulate(0.05);
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw);
     const targets = [3, 5.5].map(d => g.spawnCreature('rootwalker', g.player.x + fx * d, g.player.y + 0.2, g.player.z + fz * d));
-    targets.forEach(t => { t.hp = 999; t.cooldown = 9; });
+    // Pin them in place (no walking, no knockback) so only the piercing is tested.
+    targets.forEach(t => { t.hp = 999; t.cooldown = 9; t.def = { ...t.def, speed: 0, kbResist: 1 }; });
     g.simulate(0.3);
     // Aim through both (the ground may slope).
     const far = targets[1];
@@ -821,7 +848,7 @@ try {
     if (got) g['consume']({ id: 'life_crystal', grow: { life: 20 } }) && g.inventory.remove('life_crystal', 1);
     return { broken: !g.furniture.items.has(c.uid), got, before, after: g.vitals.maxHp, saved: g.snapshot().extra.maxHp };
   }, crystal);
-  check('Heartroots grow in caves and raise max Vigor', crystal.count >= 10 && grown.broken && grown.got === 1 && grown.after === grown.before + 20 && grown.saved === grown.after, JSON.stringify({ count: crystal.count, ...grown }));
+  check('Red Essence crystals grow in caves and raise max health', crystal.count >= 10 && grown.broken && grown.got === 1 && grown.after === grown.before + 20 && grown.saved === grown.after, JSON.stringify({ count: crystal.count, ...grown }));
   const star = await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;
     g.player.teleport(s.x, s.y + 0.5, s.z);
@@ -842,7 +869,7 @@ try {
     g.simulate(0.2);
     return { landed, crafted, before, after: g.vitals.maxMana };
   });
-  check('Starseeds drift down at night and seal into Glim Vessels', star.landed && star.crafted && star.after === star.before + 20, JSON.stringify(star));
+  check('Starseeds drift down at night and condense into Blue Essence', star.landed && star.crafted && star.after === star.before + 20, JSON.stringify(star));
 
   // ------------------------------------------------------- mushroom caverns
   const cavern = await page.evaluate(() => {
@@ -1001,6 +1028,84 @@ try {
   console.log('render stats', JSON.stringify(stats));
   check('far terrain uses LOD regions', stats.nodes > 10, `${stats.nodes} LOD nodes, ${stats.meshes} visible terrain meshes`);
 
+  // ------------------------------------------------------ volcanoes and lava
+  const volcano = await page.evaluate(() => {
+    const g = __game, v = g.gen.volcanoes[0];
+    if (!v) return null;
+    if (g.vitals.dead) g.vitals.respawn();
+    g.vitals.hp = g.vitals.maxHp;
+    g.atmosphere.timeOfDay = 0.42;
+    // Stand on the highest point of the rim, looking down into the crater.
+    let best = null;
+    for (let a = 0; a < 6.28; a += 0.2) for (const r of [v.rc, v.rc + 1.5, v.rc + 3]) {
+      const x = v.x + Math.cos(a) * r, z = v.z + Math.sin(a) * r, sf = g.gen.surfaceAt(x, z);
+      if (sf && (!best || sf.y > best.y)) best = { x, y: sf.y, z };
+    }
+    g.player.teleport(best.x, best.y + 1.2, best.z);
+    g.player.yaw = Math.atan2(-(v.x - best.x), -(v.z - best.z));
+    g.player.pitch = -Math.atan2(best.y + 1.6 - v.lavaLevel, Math.hypot(v.x - best.x, v.z - best.z)) * 0.8;
+    return { x: v.x, z: v.z, rc: v.rc, rim: v.rim, lavaLevel: v.lavaLevel, chamber: v.chamber, biome: g.gen.biomeAt(v.x + v.rc + 10, v.z) };
+  });
+  check('the world has a volcano in the Cinder Peaks', volcano && volcano.biome === 7 && volcano.rim > volcano.lavaLevel, JSON.stringify(volcano));
+  await settle();
+  await page.evaluate(() => __game.simulate(1));
+  const crater = await page.evaluate(v => {
+    const g = __game;
+    let cells = 0;
+    for (const key of g.lava.cells.keys()) { const [i, , k] = g.lava.unkey(key); if (Math.hypot(i - v.x, k - v.z) < v.rc * 1.3) cells++; }
+    return { cells };
+  }, volcano);
+  check('the crater holds a lava lake', crater.cells > 20, JSON.stringify(crater));
+  await shot('40-volcano-crater');
+  const burn = await page.evaluate(v => {
+    const g = __game;
+    g.vitals.hp = g.vitals.maxHp = 400;
+    // Wade into the lava lake.
+    let at = null;
+    for (const key of g.lava.cells.keys()) {
+      const [i, j, k] = g.lava.unkey(key);
+      if (Math.hypot(i - v.x, k - v.z) < v.rc && g.lava.level(i, j, k) > 0.9 && g.lava.level(i, j + 1, k) < 0.5) { at = [i + 0.5, j + 0.1, k + 0.5]; break; }
+    }
+    if (!at) return null;
+    g.player.teleport(at[0], at[1], at[2]);
+    const hp = g.vitals.hp;
+    for (let t = 0; t < 2; t += 0.1) g.simulate(0.1);
+    return { lost: hp - g.vitals.hp, at };
+  }, volcano);
+  check('lava burns the player', burn && burn.lost > 20, JSON.stringify(burn));
+  const obsidian = await page.evaluate(v => {
+    const g = __game;
+    g.vitals.hp = g.vitals.maxHp = 100;
+    const lx = Math.floor(v.x), lz = Math.floor(v.z);
+    // Find the lava surface at the crater centre and pour water onto it.
+    let j = Math.floor(v.lavaLevel) + 2;
+    while (j > v.lavaLevel - 6 && g.lava.level(lx, j, lz) < 0.2) j--;
+    const n0 = g.log.edits.length;
+    g.player.teleport(lx + 0.5 + v.rc * 0.6, v.lavaLevel + 6, lz + 0.5);
+    g.water.add(lx, j + 1, lz, 1);
+    for (let t = 0; t < 1.5; t += 0.1) g.simulate(0.1);
+    // The water hardens the lava it lands on into solid obsidian and is used up.
+    const made = g.log.edits.slice(n0).filter(e => e[0] === 1 && e[5] === 29 && Math.hypot(e[1] - lx, e[3] - lz) < 3);
+    const solid = made.filter(e => g.field.density(e[1], e[2], e[3]) > 0).length;
+    let water = 0;
+    for (let y = j + 2; y >= j - 4; y--) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) water += g.water.level(lx + dx, y, lz + dz);
+    return { j, made: made.length, solid, water: +water.toFixed(2) };
+  }, volcano);
+  check('water poured on lava hardens into obsidian', obsidian.made > 0 && obsidian.solid === obsidian.made && obsidian.water < 0.2, JSON.stringify(obsidian));
+  const tube = await page.evaluate(v => {
+    const g = __game, c = v.chamber;
+    g.vitals.hp = g.vitals.maxHp = 400;
+    g.player.teleport(c.x + c.r * 0.55, c.y - c.r * 0.2, c.z);
+    g.player.yaw = Math.PI / 2; g.player.pitch = -0.25;
+    return { open: g.gen.densityAt(c.x, c.y, c.z) < 0 };
+  }, volcano);
+  check('the volcano has an open magma chamber inside', tube.open, JSON.stringify(tube));
+  await settle();
+  await page.evaluate(() => __game.simulate(0.5));
+  await shot('41-magma-chamber');
+  await page.evaluate(() => { const g = __game; g.vitals.hp = g.vitals.maxHp = 100; g.player.teleport(g.gen.spawn.x, g.gen.spawn.y + 1, g.gen.spawn.z); g.simulate(0.2); });
+  await settle();
+
   // --------------------------------------------- full save / reload round trip
   const saved2 = await page.evaluate(() => {
     const g = __game;
@@ -1011,7 +1116,7 @@ try {
       maxHp: g.vitals.maxHp, maxMana: g.vitals.maxMana, progress: { ...g.progress }, event: g.events.kind,
       crystals: [...g.furniture.items.values()].filter(f => f.type === 'life_crystal').length,
       deadShrooms: g.veg.trees.filter(t => t.kind === 'mushroom' && !t.alive).map(t => t.id),
-      wings: g.equipment.items[4]?.id, houses: g.town.houses.length, npcs: g.town.npcs.map(n => n.def.id),
+      wings: g.equipment.items[4]?.id, merchant: JSON.stringify(g.merchant.serialize()),
     };
   });
   await boot('?continue=1');
@@ -1021,12 +1126,12 @@ try {
       maxHp: g.vitals.maxHp, maxMana: g.vitals.maxMana, progress: { ...g.progress }, event: g.events.kind,
       crystals: [...g.furniture.items.values()].filter(f => f.type === 'life_crystal').length,
       deadShrooms: g.veg.trees.filter(t => t.kind === 'mushroom' && !t.alive).map(t => t.id),
-      wings: g.equipment.items[4]?.id, flight: g.stats.flight, houses: g.town.houses.length, npcs: g.town.npcs.map(n => n.def.id),
+      wings: g.equipment.items[4]?.id, flight: g.stats.flight, merchant: JSON.stringify(g.merchant.serialize()),
     };
   });
   const same = saved2.maxHp === loaded2.maxHp && saved2.maxMana === loaded2.maxMana && JSON.stringify(saved2.progress) === JSON.stringify(loaded2.progress) &&
     saved2.event === loaded2.event && saved2.crystals === loaded2.crystals && JSON.stringify(saved2.deadShrooms) === JSON.stringify(loaded2.deadShrooms) &&
-    loaded2.wings === 'roc_wings' && loaded2.flight > 0 && saved2.houses === loaded2.houses && JSON.stringify(saved2.npcs) === JSON.stringify(loaded2.npcs);
+    loaded2.wings === 'roc_wings' && loaded2.flight > 0 && saved2.merchant === loaded2.merchant;
   check('everything new survives a save and reload', same && saved2.deadShrooms.length > 0, JSON.stringify({ saved: saved2, loaded: loaded2 }));
 
   check('no runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '));

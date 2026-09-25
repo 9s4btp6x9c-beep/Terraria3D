@@ -1,5 +1,5 @@
-// Player Vigor (life), Glim (mana), defense, regeneration, i-frames, fall damage, death and
-// respawn. Numbers: 100 Vigor to start, natural regen
+// Player health, mana, defense, regeneration, i-frames, fall damage, death and
+// respawn. Numbers: 100 health to start, natural regen
 // that ramps up while not taking damage, defense subtracts half its value.
 
 export interface DamageEvent { amount: number; fromX: number; fromZ: number; knockback: number }
@@ -11,7 +11,7 @@ export class PlayerVitals {
   mana = 40;
   defense = 0;
   regenBonus = 0;
-  /** Multiplier on Glim regeneration (Rested). */
+  /** Multiplier on mana regeneration (Rested). */
   manaRegenMul = 1;
   invuln = 0;
   dead = false;

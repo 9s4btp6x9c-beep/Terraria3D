@@ -16,6 +16,8 @@ export interface PlayerStats {
   /** Seconds of wing flight (0 = no wings). */
   flight: number;
   setBonus: string | null;
+  /** Wade through lava unharmed (full Ember armor). */
+  lavaProof: boolean;
 }
 
 const SLOT_DEFS: { label: string; accepts(def: ItemDef): boolean }[] = [
@@ -54,7 +56,7 @@ export class Equipment {
   }
 
   stats(): PlayerStats {
-    const st: PlayerStats = { defense: 0, moveSpeed: 1, extraJumps: 0, noFallDamage: false, miningSpeed: 1, lightBoost: 0, hook: null, regen: 0, flight: 0, setBonus: null };
+    const st: PlayerStats = { defense: 0, moveSpeed: 1, extraJumps: 0, noFallDamage: false, miningSpeed: 1, lightBoost: 0, hook: null, regen: 0, flight: 0, setBonus: null, lavaProof: false };
     const sets = new Map<string, number>();
     for (const s of this.items) {
       if (!s) continue;
@@ -79,7 +81,7 @@ export class Equipment {
       st.setBonus = set;
       if (set === 'copper') { st.defense += 2; st.miningSpeed += 0.15; }
       if (set === 'iron') { st.defense += 3; st.moveSpeed += 0.05; }
-      if (set === 'ember') { st.defense += 5; st.regen += 1.5; st.lightBoost += 0.5; }
+      if (set === 'ember') { st.defense += 5; st.regen += 1.5; st.lightBoost += 0.5; st.lavaProof = true; }
       if (set === 'aerite') { st.defense += 3; st.extraJumps += 1; st.moveSpeed += 0.1; st.noFallDamage = true; st.flight *= 1.35; }
     }
     return st;

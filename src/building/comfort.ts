@@ -1,5 +1,5 @@
 // Comfort and resting. Sitting out of the weather by a lit Hearth makes you
-// Rested: faster Vigor and Glim regeneration for a while. The better the
+// Rested: faster health and mana regeneration for a while. The better the
 // room around the Hearth — a bed, a chair, a table, a chest, lamps — the
 // higher its comfort and the longer the rest lasts. It gives bases a reason
 // to be homes rather than boxes.

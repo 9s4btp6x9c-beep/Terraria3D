@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/noise';
 import { TREE_KINDS, TREE_VARIANTS, TUFT_CELL, type Tree, type TreeKind, type Vegetation } from '../world/vegetation';
+import { Mat } from '../world/materials';
 import { mergeNonIndexed } from './sky';
 import { layerOf } from './textures';
 
@@ -130,10 +131,11 @@ function buildTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
     parts.push(tagLayer(new THREE.OctahedronGeometry(0.05, 0).scale(1, 0.6, 1).translate(0.03, 0.99, 0), layerOf('red')));
   } else if (kind === 'mushroom') {
     return buildMushroom(rand, 7);
-  } else if (kind === 'dead' || kind === 'bleached') {
-    // Riftlands: dead trees hung with crystal; Ossuary: bare, sun-bleached snags.
-    const bleached = kind === 'bleached';
-    const bark = (g: THREE.BufferGeometry) => tagLayer(g, layerOf(bleached ? 'bone' : 'deadbark'));
+  } else if (kind === 'dead' || kind === 'bleached' || kind === 'charred') {
+    // Riftlands: dead trees hung with crystal; Ossuary: bare, sun-bleached
+    // snags; Cinder Peaks: burnt black stumps.
+    const bleached = kind !== 'dead';
+    const bark = (g: THREE.BufferGeometry) => tagLayer(g, kind === 'charred' ? Mat.Basalt : layerOf(kind === 'bleached' ? 'bone' : 'deadbark'));
     const t = new THREE.CylinderGeometry(0.02, 0.045, H, 5, 1, true);
     t.translate(0, H / 2, 0);
     parts.push(bark(t));
@@ -218,7 +220,7 @@ function buildFarTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
   } else if (kind === 'gnarl') {
     parts.push(trunk(0.07, 0.035, 0.62, 0, 0, 0, 0, 0, 4, 'rootbark'));
     parts.push(blob(rand, 0.34, 0.18, 0.34, 0, 0.7, 0, 0, 'mossleaves'));
-  } else if (kind === 'cactus' || kind === 'dead' || kind === 'bleached') {
+  } else if (kind === 'cactus' || kind === 'dead' || kind === 'bleached' || kind === 'charred') {
     return buildTree(kind, variant);
   } else if (kind === 'mushroom') {
     return buildMushroom(rand, 5);

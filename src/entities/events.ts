@@ -1,7 +1,7 @@
 // World events: the Sporefall (a random night when glowing spores rain down
-// and the fungal horrors walk) and the Hollow March (an army that marches on
-// the town once the Deepwyrm is dead).
-// Pure state machine — the game feeds it the time of day, town and player
+// and the fungal horrors walk) and the Cinder Siege (the Cinderbound come up
+// from the mountains to take the fire from your base once the Deepwyrm is
+// dead). Pure state machine — the game feeds it the time of day, base and player
 // position, and reacts to the transitions it reports.
 
 export type EventKind = 'sporefall' | 'raid';
@@ -10,15 +10,15 @@ export interface EventInfo { name: string; color: string; subtitle: string }
 
 export const EVENT_INFO: Record<EventKind, EventInfo> = {
   sporefall: { name: 'Sporefall', color: '#7af0c8', subtitle: 'Survive until dawn' },
-  raid: { name: 'The Hollow March', color: '#e6dcc0', subtitle: 'Defend the town' },
+  raid: { name: 'The Cinder Siege', color: '#ff9a4a', subtitle: 'Defend your fire' },
 };
 
 export interface EventWorld {
   /** 0 at night .. 1 at full day. */
   daylight: number;
   px: number; pz: number;
-  /** Centre of the town (average of houses), or null without houses. */
-  town: { x: number; z: number; npcs: number } | null;
+  /** Your base: around your nearest Hearth (`size` = Hearths there), or null without one. */
+  base: { x: number; z: number; size: number } | null;
   bossDefeated: boolean;
 }
 
@@ -29,9 +29,9 @@ export type EventSignal =
 
 /** Sporefall odds per night (not on the first night). */
 export const SPOREFALL_CHANCE = 1 / 6;
-/** Raid odds per dawn once the boss is dead and at least two NPCs live in town. */
+/** Siege odds per dawn once the boss is dead and you have a Hearth. */
 export const RAID_CHANCE = 1 / 4;
-/** How far from the town the raid still counts as defended. */
+/** How far from the base the siege still counts as defended. */
 export const RAID_LEASH = 140;
 
 export class WorldEvents {
@@ -50,15 +50,15 @@ export class WorldEvents {
   get active() { return this.kind !== null; }
   get info() { return this.kind ? EVENT_INFO[this.kind] : null; }
 
-  start(kind: EventKind, world: Pick<EventWorld, 'town' | 'px' | 'pz'>): EventSignal[] {
+  start(kind: EventKind, world: Pick<EventWorld, 'base' | 'px' | 'pz'>): EventSignal[] {
     if (this.kind) return [];
     this.kind = kind;
     this.progress = 0;
     this.away = 0;
     if (kind === 'raid') {
-      const t = world.town ?? { x: world.px, z: world.pz, npcs: 0 };
+      const t = world.base ?? { x: world.px, z: world.pz, size: 0 };
       this.target = { x: t.x, z: t.z };
-      this.goal = 30 + 8 * Math.min(4, t.npcs);
+      this.goal = 30 + 8 * Math.min(4, t.size);
     } else {
       this.target = null;
       this.goal = 0;
@@ -95,13 +95,13 @@ export class WorldEvents {
     }
     if (dawn) {
       if (this.kind === 'sporefall') out.push(...this.end(true));
-      const t = w.town;
-      if (!this.kind && w.bossDefeated && t && t.npcs >= 2 && Math.hypot(w.px - t.x, w.pz - t.z) < 80 && this.rand() < RAID_CHANCE) {
+      const t = w.base;
+      if (!this.kind && w.bossDefeated && t && t.size >= 1 && Math.hypot(w.px - t.x, w.pz - t.z) < 80 && this.rand() < RAID_CHANCE) {
         out.push(...this.start('raid', w));
       }
     }
     if (this.kind === 'raid' && this.target) {
-      // Abandoning the town for a while lets the raiders win (they leave).
+      // Abandoning the base for a while lets the Cinderbound win (they leave).
       this.away = Math.hypot(w.px - this.target.x, w.pz - this.target.z) > RAID_LEASH ? this.away + dt : 0;
       if (this.away > 20) out.push(...this.end(false));
     }

@@ -41,6 +41,9 @@ try {
     if (skull) out.push({ name: 'ossuary', target: center(skull), dist: 34, yawOff: 2.2 });
     const nod = feats(MAT.amber)[0];
     if (nod) out.push({ name: 'amberwood', target: center(nod), dist: 14 });
+    // The Cinder Peaks: the volcano seen from its lower slopes.
+    const vol = g.volcanoes[0];
+    if (vol) out.push({ name: 'cinder-peaks', target: [vol.x, vol.foot + vol.height * 0.6, vol.z], dist: vol.r * 0.9, yawOff: 0 });
     for (const [name, b] of [['riftlands', 3], ['dunes', 1], ['frostmere', 2]]) {
       for (let i = 0; i < 4000; i++) {
         const x = 60 + Math.random() * (g.size.x - 120), z = 60 + Math.random() * (g.size.z - 120);

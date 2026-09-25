@@ -30,51 +30,46 @@ function pivot(parent: THREE.Object3D, x: number, y: number, z: number) {
 }
 
 /**
- * Burrling: a hopping seed-pod covered in hooked burrs, with a sprout on top.
- * Variants swap the pod's surface (`skin`) and tint.
+ * Blob: a wobbling dome of jelly with a glowing nucleus inside and two eyes
+ * on stalks. Variants swap the jelly (`skin`) and tint.
  */
-function burrling(mat: THREE.Material, tint: number, skin = 'burr'): CreatureVisual {
+function blob(mat: THREE.Material, tint: number, skin = 'gel'): CreatureVisual {
   const root = new THREE.Group();
   const body = pivot(root, 0, 0, 0);
-  const spikes: THREE.BufferGeometry[] = [];
-  // Burr spikes spread evenly over the upper pod (golden-angle spiral).
-  for (let i = 0; i < 16; i++) {
-    const y = 1 - (i + 0.5) / 16 * 1.3, r = Math.sqrt(Math.max(0, 1 - y * y)), a = i * 2.4;
-    const dx = Math.cos(a) * r, dz = Math.sin(a) * r;
-    if (dz > 0.55 && y > -0.2 && y < 0.6) continue; // keep the face clear
-    const g = new THREE.ConeGeometry(0.06, 0.24, 4).translate(0, 0.12, 0);
-    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx, y * 0.78, dz).normalize()));
-    g.translate(dx * 0.46, 0.4 + y * 0.36, dz * 0.46);
-    spikes.push(g);
-  }
+  const jelly = new THREE.SphereGeometry(0.52, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.62).toNonIndexed();
+  jelly.scale(1, 0.85, 1).translate(0, 0.12, 0);
   mesh(merge([
-    ico(0.52, skin, { y: 0.4, sy: 0.78, detail: 1, jitter: 0.12, seed: 3 }, tint),
-    ...spikes.map(g => partOf(g, skin, mulTint(0xd8d0b0, tint))),
-    // Face: two glowing slit eyes and a seam of a mouth.
-    box(0.13, 0.07, 0.04, 'flame', { x: 0.14, y: 0.5, z: 0.43, rz: -0.2 }, 0xfff0a0),
-    box(0.13, 0.07, 0.04, 'flame', { x: -0.14, y: 0.5, z: 0.43, rz: 0.2 }, 0xfff0a0),
-    box(0.22, 0.03, 0.04, 'plain', { y: 0.34, z: 0.46 }, 0x1a1410),
-    // Sprout.
-    cyl(0.025, 0.035, 0.22, 5, 'bark', { y: 0.82 }, 0x9ac468),
-    taper(0.16, 0.02, 0.09, 0.4, 1, 'leaves', { x: 0.08, y: 0.94, rz: -0.6 }, 0xb8e070),
-    taper(0.13, 0.02, 0.08, 0.4, 1, 'leaves', { x: -0.07, y: 0.92, rz: 0.7 }, 0xb8e070),
+    parts.part(jelly, skin, tint),
+    cyl(0.44, 0.4, 0.12, 10, skin, { y: 0.06 }, mulTint(0xd8d8d8, tint)),
+    // Nucleus.
+    ico(0.15, 'flame', { y: 0.34, detail: 1 }, mulTint(0xfff0a0, tint)),
+    // Little pseudopods around the rim.
+    ...[0, 1, 2, 3, 4].map(k => ico(0.1, skin, { x: Math.cos(k * 1.26) * 0.42, y: 0.05, z: Math.sin(k * 1.26) * 0.42, sy: 0.6 }, tint)),
   ]), mat, body);
+  const stalks = [0.13, -0.13].map(x => {
+    const p = pivot(body, x, 0.52, 0.18);
+    mesh(merge([
+      cyl(0.03, 0.04, 0.24, 5, skin, { y: 0.12 }, tint),
+      ico(0.075, 'plain', { y: 0.27 }, 0xfaf6f0),
+      ico(0.04, 'plain', { y: 0.28, z: 0.05 }, 0x101018),
+    ]), mat, p);
+    return p;
+  });
   let squash = 0;
   return {
     root,
     animate(c, dt) {
       const target = c.grounded ? (c.cooldown < 0.25 ? -0.25 : 0) : Math.max(-0.2, Math.min(0.35, c.vy * 0.04));
       squash += (target - squash) * Math.min(1, dt * 12);
-      body.scale.set(1 - squash * 0.5, 1 + squash, 1 - squash * 0.5);
-      body.rotation.y = Math.sin(c.t * 1.7) * 0.15;
+      const wob = Math.sin(c.t * 5) * 0.03;
+      body.scale.set(1 - squash * 0.5 + wob, 1 + squash - wob, 1 - squash * 0.5 + wob);
+      stalks[0].rotation.z = -0.2 + Math.sin(c.t * 3) * 0.2;
+      stalks[1].rotation.z = 0.2 + Math.sin(c.t * 3 + 1) * 0.2;
+      stalks[0].rotation.x = stalks[1].rotation.x = Math.sin(c.t * 2) * 0.15 - squash * 0.8;
     },
   };
 }
 
-/** Re-tag a prebuilt geometry's layer and tint (spikes built with lookAt). */
-function partOf(g: THREE.BufferGeometry, layer: string, tint: number) {
-  return parts.part(g, layer, tint);
-}
 
 /**
  * Rootwalker: a lurching figure of braided roots with a knotted head, ember
@@ -247,53 +242,58 @@ function rockmite(mat: THREE.Material, tint = 0xffffff): CreatureVisual {
   };
 }
 
-function hollowMiner(mat: THREE.Material, sapper = false): CreatureVisual {
+/**
+ * Cinderbound: fire-cult kin of the volcanoes. Basalt plates over an ashen
+ * robe, a deep hood with ember eyes and a crest of obsidian spikes, and
+ * glowing cracks where the heat shows through. Ashdelvers carry a pick and
+ * throw hot rock; Firebrands carry a satchel of fire bombs.
+ */
+function cinderbound(mat: THREE.Material, firebrand = false): CreatureVisual {
   const root = new THREE.Group();
-  const bone = (g: THREE.BufferGeometry[]) => merge(g);
+  const robe = firebrand ? 0x6a3a2a : 0x5a5458, glow = 0xff7a2a;
   const hipL = pivot(root, 0.12, 0.92, 0), hipR = pivot(root, -0.12, 0.92, 0);
-  for (const h of [hipL, hipR]) mesh(bone([box(0.08, 0.88, 0.08, 'bone', { y: -0.44 }), box(0.12, 0.08, 0.2, 'bone', { y: -0.9, z: 0.04 })]), mat, h);
+  for (const h of [hipL, hipR]) mesh(merge([
+    box(0.14, 0.88, 0.16, 'fabric', { y: -0.44 }, robe),
+    box(0.16, 0.26, 0.19, 'basalt', { y: -0.72 }),
+    box(0.17, 0.1, 0.25, 'basalt', { y: -0.9, z: 0.04 }),
+  ]), mat, h);
   const torso = pivot(root, 0, 0.92, 0);
-  mesh(bone([
-    box(0.34, 0.1, 0.2, 'bone', { y: 0.02 }),
-    box(0.06, 0.6, 0.06, 'bone', { y: 0.32, z: -0.06 }),
-    ...[0, 1, 2, 3].map(i => box(0.4 - i * 0.04, 0.05, 0.24, 'bone', { y: 0.25 + i * 0.1 })),
-    box(0.5, 0.08, 0.14, 'bone', { y: 0.62 }),
-    box(0.3, 0.3, 0.02, 'fabric', { x: 0.05, y: 0.3, z: 0.13, rz: 0.1 }, 0x4a3a30),
+  mesh(merge([
+    taper(0.44, 0.66, 0.28, 0.85, 0.85, 'fabric', { y: 0.33 }, robe),
+    box(0.46, 0.34, 0.3, 'basalt', { y: 0.45 }),
+    // Glowing seams between the plates.
+    box(0.47, 0.03, 0.31, 'flame', { y: 0.36 }, glow),
+    box(0.03, 0.3, 0.31, 'flame', { x: 0.08, y: 0.46 }, glow),
+    ...[1, -1].map(sx => box(0.16, 0.12, 0.3, 'basalt', { x: sx * 0.27, y: 0.62 })),
+    box(0.3, 0.08, 0.02, 'fabric', { y: 0.05, z: 0.15 }, 0x2a2224),
   ]), mat, torso);
-  const head = pivot(torso, 0, 0.68, 0);
-  mesh(bone([
-    box(0.28, 0.26, 0.28, 'bone', { y: 0.14 }),
-    box(0.22, 0.08, 0.24, 'bone', { y: -0.01, z: 0.02 }),
-    box(0.07, 0.07, 0.02, 'metal', { x: 0.07, y: 0.14, z: 0.14 }, 0x101010),
-    box(0.07, 0.07, 0.02, 'metal', { x: -0.07, y: 0.14, z: 0.14 }, 0x101010),
-    octa(0.02, 'flame', { x: 0.07, y: 0.14, z: 0.16 }, 0x80ffff),
-    octa(0.02, 'flame', { x: -0.07, y: 0.14, z: 0.16 }, 0x80ffff),
-    ...(sapper ? [
-      // Leather hood and brass goggles.
-      box(0.32, 0.18, 0.32, 'fabric', { y: 0.3 }, 0x6a4a30),
-      box(0.3, 0.05, 0.05, 'metal', { y: 0.2, z: 0.16 }, 0x3a2a20),
-      cyl(0.05, 0.05, 0.04, 6, 'gold', { x: 0.07, y: 0.2, z: 0.18, rx: Math.PI / 2 }),
-      cyl(0.05, 0.05, 0.04, 6, 'gold', { x: -0.07, y: 0.2, z: 0.18, rx: Math.PI / 2 }),
-    ] : [
-      cyl(0.2, 0.21, 0.12, 8, 'metal', { y: 0.3 }, 0xd0b060),
-      cyl(0.25, 0.25, 0.03, 8, 'metal', { y: 0.25 }, 0xd0b060),
-      box(0.1, 0.08, 0.06, 'flame', { y: 0.32, z: 0.2 }),
-    ]),
+  const head = pivot(torso, 0, 0.7, 0);
+  mesh(merge([
+    // Hood with a dark opening and two ember eyes.
+    box(0.34, 0.36, 0.34, 'fabric', { y: 0.16 }, robe),
+    box(0.22, 0.2, 0.04, 'plain', { y: 0.14, z: 0.16 }, 0x0e0a0c),
+    octa(0.035, 'flame', { x: 0.055, y: 0.16, z: 0.19 }, 0xffb040),
+    octa(0.035, 'flame', { x: -0.055, y: 0.16, z: 0.19 }, 0xffb040),
+    // Obsidian crest.
+    ...[-0.1, 0, 0.1].map((x, k) => cone(0.04, 0.2 + (k === 1 ? 0.08 : 0), 4, 'obsidian', { x, y: 0.42, z: -0.04, rx: -0.3 })),
+    ...(firebrand ? [box(0.36, 0.05, 0.05, 'fabric', { y: 0.06, z: 0.16 }, 0x3a2a20)] : []),
   ]), mat, head);
-  if (sapper) {
-    // Satchel of bombs on the hip.
+  if (firebrand) {
     mesh(merge([
-      box(0.2, 0.2, 0.12, 'fabric', { x: -0.22, y: 0.05, z: 0.02 }, 0x6a4a30),
-      box(0.62, 0.04, 0.03, 'fabric', { y: 0.35, z: 0.11, rz: -0.8 }, 0x4a3020),
-      ico(0.07, 'metal', { x: -0.2, y: 0.18, z: 0.03 }, 0x6a6878),
-      ico(0.06, 'metal', { x: -0.27, y: 0.17, z: -0.02 }, 0x6a6878),
+      box(0.2, 0.2, 0.12, 'fabric', { x: -0.22, y: 0.05, z: 0.02 }, 0x4a2a1e),
+      box(0.62, 0.04, 0.03, 'fabric', { y: 0.35, z: 0.14, rz: -0.8 }, 0x3a2018),
+      ico(0.07, 'basalt', { x: -0.2, y: 0.18, z: 0.03 }),
+      octa(0.03, 'flame', { x: -0.2, y: 0.26, z: 0.03 }, 0xffd060),
     ]), mat, torso);
   }
-  const shL = pivot(torso, 0.28, 0.6, 0), shR = pivot(torso, -0.28, 0.6, 0);
-  mesh(bone([box(0.07, 0.62, 0.07, 'bone', { y: -0.31 })]), mat, shL);
-  mesh(bone([box(0.07, 0.62, 0.07, 'bone', { y: -0.31 })]), mat, shR);
-  const tool = new THREE.Mesh(itemModel(item(sapper ? 'bomb' : 'iron_pickaxe')), mat);
-  if (sapper) tool.position.set(0, -0.72, 0.02);
+  const shL = pivot(torso, 0.3, 0.6, 0), shR = pivot(torso, -0.3, 0.6, 0);
+  for (const sh of [shL, shR]) mesh(merge([
+    box(0.12, 0.44, 0.13, 'fabric', { y: -0.22 }, robe),
+    box(0.14, 0.2, 0.15, 'basalt', { y: -0.5 }),
+    box(0.15, 0.03, 0.16, 'flame', { y: -0.42 }, glow),
+  ]), mat, sh);
+  const tool = new THREE.Mesh(itemModel(item(firebrand ? 'bomb' : 'iron_pickaxe')), mat);
+  if (firebrand) tool.position.set(0, -0.66, 0.02);
   else { tool.position.set(0, -0.6, 0.05); tool.rotation.set(Math.PI / 2, 0, 0); }
   shR.add(tool);
   return {
@@ -301,8 +301,8 @@ function hollowMiner(mat: THREE.Material, sapper = false): CreatureVisual {
     animate(c) {
       const sp = Math.min(1, Math.hypot(c.vx, c.vz) / 2);
       const ph = c.t * 7;
-      hipL.rotation.x = Math.sin(ph) * 0.55 * sp;
-      hipR.rotation.x = -Math.sin(ph) * 0.55 * sp;
+      hipL.rotation.x = Math.sin(ph) * 0.5 * sp;
+      hipR.rotation.x = -Math.sin(ph) * 0.5 * sp;
       shL.rotation.x = -Math.sin(ph) * 0.4 * sp;
       // Throwing arm winds up just before the next throw.
       const r = c.def.ranged!;
@@ -503,48 +503,46 @@ function rotfang(mat: THREE.Material): CreatureVisual {
   };
 }
 
-/** Hollow Brute: a hulking armoured skeleton with a studded bone club. */
-function hollowBrute(mat: THREE.Material): CreatureVisual {
+/** Basalt Colossus: a hulking golem of stacked basalt with lava running in its cracks. */
+function basaltColossus(mat: THREE.Material): CreatureVisual {
   const root = new THREE.Group();
-  const hipL = pivot(root, 0.22, 1.25, 0), hipR = pivot(root, -0.22, 1.25, 0);
-  for (const h of [hipL, hipR]) {
-    mesh(merge([
-      box(0.14, 0.62, 0.14, 'bone', { y: -0.3 }),
-      box(0.22, 0.28, 0.24, 'iron', { y: -0.2, z: 0.02 }),
-      box(0.12, 0.58, 0.12, 'bone', { y: -0.86 }),
-      box(0.24, 0.12, 0.34, 'metal', { y: -1.18, z: 0.06 }, 0x5a5460),
-    ]), mat, h);
-  }
-  const torso = pivot(root, 0, 1.25, 0);
+  const glow = 0xff6a1a;
+  const hipL = pivot(root, 0.24, 1.2, 0), hipR = pivot(root, -0.24, 1.2, 0);
+  for (const h of [hipL, hipR]) mesh(merge([
+    box(0.32, 0.6, 0.34, 'basalt', { y: -0.3 }),
+    box(0.33, 0.04, 0.35, 'flame', { y: -0.58 }, glow),
+    box(0.3, 0.56, 0.32, 'basalt', { y: -0.9 }),
+    box(0.36, 0.12, 0.44, 'basalt', { y: -1.14, z: 0.05 }),
+  ]), mat, h);
+  const torso = pivot(root, 0, 1.2, 0);
   mesh(merge([
-    box(0.6, 0.16, 0.34, 'metal', { y: 0.04 }, 0x5a4a3a),
-    box(0.1, 0.8, 0.1, 'bone', { y: 0.46, z: -0.1 }),
-    ...[0, 1, 2, 3].map(i => box(0.66 - i * 0.05, 0.07, 0.36, 'bone', { y: 0.34 + i * 0.13 })),
-    taper(0.86, 0.36, 0.44, 1, 0.9, 'iron', { y: 0.86 }),
-    box(0.3, 0.3, 0.05, 'iron', { y: 0.5, z: 0.2 }, 0xc8c0b8),
+    box(0.64, 0.3, 0.42, 'basalt', { y: 0.12 }),
+    taper(0.9, 0.8, 0.56, 1.15, 1, 'basalt', { y: 0.7 }),
+    box(0.92, 0.04, 0.58, 'flame', { y: 0.3 }, glow),
+    box(0.04, 0.7, 0.58, 'flame', { x: 0.14, y: 0.68 }, glow),
+    ico(0.14, 'magmarock', { y: 0.72, z: 0.26 }),
     ...[1, -1].flatMap(sx => [
-      ico(0.2, 'iron', { x: sx * 0.46, y: 0.98, sy: 0.7 }),
-      cone(0.06, 0.26, 5, 'bone', { x: sx * 0.52, y: 1.15, rz: -sx * 0.5 }),
+      ico(0.26, 'basalt', { x: sx * 0.58, y: 1.02, sy: 0.8, jitter: 0.25, seed: 70 + sx }),
+      cone(0.08, 0.3, 4, 'obsidian', { x: sx * 0.6, y: 1.28, rz: -sx * 0.4 }),
     ]),
   ]), mat, torso);
-  const head = pivot(torso, 0, 1.08, 0.04);
+  const head = pivot(torso, 0, 1.12, 0.06);
   mesh(merge([
-    box(0.34, 0.32, 0.34, 'bone', { y: 0.16 }),
-    box(0.3, 0.1, 0.3, 'bone', { y: -0.02, z: 0.04 }),
-    box(0.09, 0.08, 0.02, 'metal', { x: 0.08, y: 0.17, z: 0.17 }, 0x101010),
-    box(0.09, 0.08, 0.02, 'metal', { x: -0.08, y: 0.17, z: 0.17 }, 0x101010),
-    octa(0.028, 'flame', { x: 0.08, y: 0.17, z: 0.19 }, 0x80ffff),
-    octa(0.028, 'flame', { x: -0.08, y: 0.17, z: 0.19 }, 0x80ffff),
-    cyl(0.22, 0.24, 0.14, 8, 'iron', { y: 0.36 }),
-    cone(0.07, 0.3, 5, 'bone', { x: 0.22, y: 0.4, rz: -0.7 }),
-    cone(0.07, 0.3, 5, 'bone', { x: -0.22, y: 0.4, rz: 0.7 }),
+    box(0.36, 0.3, 0.34, 'basalt', { y: 0.14 }),
+    box(0.26, 0.06, 0.02, 'flame', { y: 0.16, z: 0.175 }, 0xffc040),
+    cone(0.06, 0.24, 4, 'obsidian', { x: 0.12, y: 0.36, rz: -0.3 }),
+    cone(0.06, 0.24, 4, 'obsidian', { x: -0.12, y: 0.36, rz: 0.3 }),
   ]), mat, head);
-  const shL = pivot(torso, 0.5, 0.92, 0), shR = pivot(torso, -0.5, 0.92, 0);
-  mesh(merge([box(0.13, 0.5, 0.13, 'bone', { y: -0.25 }), box(0.11, 0.48, 0.11, 'bone', { y: -0.72 }), box(0.18, 0.14, 0.18, 'metal', { y: -1.0 }, 0x5a4a3a)]), mat, shL);
-  mesh(merge([box(0.13, 0.5, 0.13, 'bone', { y: -0.25 }), box(0.11, 0.48, 0.11, 'bone', { y: -0.72 }), box(0.18, 0.14, 0.18, 'metal', { y: -1.0 }, 0x5a4a3a)]), mat, shR);
+  const shL = pivot(torso, 0.6, 0.92, 0), shR = pivot(torso, -0.6, 0.92, 0);
+  for (const sh of [shL, shR]) mesh(merge([
+    box(0.24, 0.5, 0.24, 'basalt', { y: -0.25 }),
+    box(0.25, 0.04, 0.25, 'flame', { y: -0.5 }, glow),
+    box(0.22, 0.46, 0.22, 'basalt', { y: -0.74 }),
+    box(0.3, 0.2, 0.3, 'basalt', { y: -1.02 }),
+  ]), mat, sh);
   const club = new THREE.Mesh(itemModel(item('bonebreaker')), mat);
   club.scale.setScalar(1.7);
-  club.position.set(0, -1.02, 0.05);
+  club.position.set(0, -1.04, 0.05);
   club.rotation.set(Math.PI / 2, 0, 0);
   club.castShadow = true;
   shR.add(club);
@@ -557,7 +555,7 @@ function hollowBrute(mat: THREE.Material): CreatureVisual {
       hipR.rotation.x = -Math.sin(ph) * 0.45 * sp;
       shL.rotation.x = -Math.sin(ph) * 0.3 * sp;
       torso.rotation.z = Math.sin(ph) * 0.05 * sp;
-      // Overhead smash when it lands a hit, otherwise the club rests forward.
+      // Overhead smash when it lands a hit, otherwise the maul rests forward.
       const a = c.attack > 0 ? Math.sin((1 - c.attack / 0.6) * Math.PI) : 0;
       shR.rotation.x = -0.5 - a * 2.2 + Math.sin(ph) * 0.2 * sp;
       head.rotation.y = Math.sin(c.t * 0.7) * 0.25;
@@ -606,19 +604,19 @@ function mulTint(a: number, b: number) {
 
 export function buildCreatureVisual(id: string, mat: THREE.Material, tint = 0xffffff, skin?: string): CreatureVisual {
   switch (id) {
-    case 'burrling': return burrling(mat, tint, skin);
+    case 'blob': return blob(mat, tint, skin);
     case 'rootwalker': return rootwalker(mat, tint, skin);
     case 'drifter': return drifter(mat, tint, skin);
     case 'duskwing': return duskwing(mat, tint);
     case 'rockmite': return rockmite(mat, tint);
-    case 'hollow_miner': return hollowMiner(mat);
-    case 'hollow_sapper': return hollowMiner(mat, true);
-    case 'hollow_brute': return hollowBrute(mat);
+    case 'ashdelver': return cinderbound(mat);
+    case 'firebrand': return cinderbound(mat, true);
+    case 'basalt_colossus': return basaltColossus(mat);
     case 'rotfang': return rotfang(mat);
     case 'gale_swift': return galeSwift(mat, skin);
     case 'sporeling': return sporeling(mat);
     case 'glowmoth': return glowmoth(mat, skin);
     case 'mossback': return mossback(mat);
-    default: return burrling(mat, tint, skin);
+    default: return blob(mat, tint, skin);
   }
 }

@@ -113,7 +113,7 @@ export function planStructures(gen: WorldGenerator): StructurePlan {
     furniture.push({ type: 'torch', x: x0 + 3.6, y: y + 0.25, z: z0 + 0.4, rot: 0 });
   });
 
-  // Heartroots on cave floors, well away from each other and the cabins.
+  // Red Essence crystals on cave floors, well away from each other and the cabins.
   const rand = mulberry32(gen.cfg.seed ^ 0x11fe);
   const crystals: { x: number; y: number; z: number }[] = [];
   const want = Math.round((gen.size.x * gen.size.z) / (512 * 512) * 36);

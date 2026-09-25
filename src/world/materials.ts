@@ -30,6 +30,10 @@ export const enum Mat {
   Fossil = 24,
   Leaflitter = 25,
   Amber = 26,
+  Basalt = 27,
+  Ash = 28,
+  Obsidian = 29,
+  Magmarock = 30,
 }
 
 /** Procedural pixel-art texture recipe (see render/textures.ts). */
@@ -86,6 +90,12 @@ const defs: MaterialDef[] = [
   // ---- Amberwood: an autumn forest that bleeds glowing resin.
   { id: Mat.Leaflitter, name: 'Leaf Litter', texture: 'litter', palette: [0x6a4a2e, 0x3e2a1a, 0xd8742a, 0xe8b440], hardness: 0.35, tier: 0, drop: 'dirt', volumePerItem: 2, emissive: 0, particle: 0xc8702e },
   { id: Mat.Amber, name: 'Amber Deposit', texture: 'crystal', palette: [0xe8901e, 0x9a4a0e, 0xffc050, 0xfff0a0], hardness: 1.0, tier: 0, drop: 'coin', volumePerItem: 0.35, emissive: 0.6, particle: 0xffb040 },
+  // ---- volcanoes: black basalt cones under grey ash, glowing magma rock at the vents,
+  // and obsidian where lava meets water.
+  { id: Mat.Basalt, name: 'Basalt', texture: 'cobble', palette: [0x3e383c, 0x16121a, 0x524a4e, 0x2e2628], hardness: 1.3, tier: 1, drop: 'basalt', volumePerItem: 2, emissive: 0, particle: 0x3e383c },
+  { id: Mat.Ash, name: 'Ash', texture: 'dither', palette: [0x6a6668, 0x4e4a4e, 0x86828a, 0x9a6a4a], hardness: 0.3, tier: 0, drop: 'ash', volumePerItem: 2, emissive: 0, particle: 0x7a767a },
+  { id: Mat.Obsidian, name: 'Obsidian', texture: 'crystal', palette: [0x2a1e3a, 0x0e0816, 0x4a3a66, 0x8a6ac8], hardness: 2.2, tier: 2, drop: 'obsidian', volumePerItem: 1.5, emissive: 0.08, particle: 0x3a2a4e },
+  { id: Mat.Magmarock, name: 'Magma Rock', texture: 'ore', palette: [0x3a1c14, 0x160806, 0xff6a1a, 0xffc040], hardness: 1.6, tier: 1, drop: 'basalt', volumePerItem: 2, emissive: 0.35, particle: 0xff7a2a },
 ];
 
 export const MATERIALS: readonly MaterialDef[] = defs;

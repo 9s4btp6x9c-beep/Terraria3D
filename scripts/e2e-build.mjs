@@ -212,12 +212,10 @@ try {
     g.furniture.add({ type: 'torch', x: x0 + 0.3, y: top + 1.5, z: z0 + 1, rot: 0, wall: [1, 0, 0] });
     __stand(x0 + 2.6, top + 0.1, z0 + 1.6);
     g.simulate(0.2);
-    const house = g.town.check(g.player.x, g.player.y, g.player.z);
     for (let t = 0; t < 12; t += 0.25) g.simulate(0.25);
-    return { door: !!door, doorY: door ? +(door.y - top).toFixed(2) : null, house: house.ok ? 'ok' : house.missing.join(', '), rested: Math.round(g.rested), comfort: g.comfort, buff: document.querySelector('#buffs').textContent };
+    return { door: !!door, doorY: door ? +(door.y - top).toFixed(2) : null, rested: Math.round(g.rested), comfort: g.comfort, buff: document.querySelector('#buffs').textContent };
   }, site);
   check('a door dropped at a doorway snaps into it', home.door && home.doorY === 0, JSON.stringify(home));
-  check('the built house is a valid home', home.house === 'ok', JSON.stringify(home));
   check('resting by the Hearth under the roof makes you Rested', home.rested > 0 && home.comfort >= 4 && /Rested/.test(home.buff), JSON.stringify(home));
   await page.evaluate(({ x: x0, z: z0 }) => {
     const g = __game;

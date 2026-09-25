@@ -34,7 +34,7 @@ export const RECIPES: Recipe[] = [
   R('salt_lamp', 1, 'workbench', ['salt', 6], ['torch', 1]),
   R('amber_lantern', 1, 'workbench', ['rootwood', 4], ['coin', 12], ['torch', 1]),
   R('heartwood_bow', 1, 'workbench', ['rootwood', 14], ['gel', 4]),
-  // hearth: draughts brew over the fire
+  // hearth: elixirs brew over the fire
   R('healing_potion', 1, 'hearth', ['gel', 2], ['red_cap', 1], ['glass_bottle', 1]),
   R('healing_potion', 2, 'hearth', ['salt', 2], ['red_cap', 1], ['glass_bottle', 2]),
   R('mana_potion', 2, 'hearth', ['fallen_star', 1], ['gel', 2], ['glass_bottle', 2]),
@@ -75,7 +75,7 @@ export const RECIPES: Recipe[] = [
   // Sporefall spoils.
   R('heartstone', 1, 'anvil', ['blood_shard', 10], ['iron_bar', 3], ['glowcap', 2]),
   R('sanguine_blade', 1, 'anvil', ['blood_shard', 14], ['iron_bar', 8]),
-  // Calls the Hollow March once the Deepwyrm's scales are in hand.
+  // Calls the Cinder Siege once the Deepwyrm's scales are in hand.
   R('hollow_horn', 1, 'anvil', ['wyrm_scale', 3], ['iron_bar', 5], ['bat_wing', 2]),
   // The Lumite Forge needs scales from the Deepwyrm: defeating the boss opens lumite gear.
   R('forge', 1, 'anvil', ['lumite', 12], ['iron_bar', 8], ['wyrm_scale', 6]),

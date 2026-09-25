@@ -66,6 +66,50 @@ varying vec3 vWN;`)
   return mat;
 }
 
+/**
+ * Lava: an opaque, self-lit crust of dark rock broken by bright, slowly
+ * churning molten seams; falling lava is a bright streaming curtain.
+ */
+export function createLavaMaterial(u: WorldUniforms) {
+  // Glowing: unlit and unfogged, so it shows through smoke and cave haze.
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, fog: false });
+  mat.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, u);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+attribute float foam;
+varying float vFoam;
+varying vec3 vWW;`)
+      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+vFoam = foam;
+vWW = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform float uTime;
+varying float vFoam;
+varying vec3 vWW;`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+  {
+    vec3 p = floor(vWW * 5.0) / 5.0;
+    float t = uTime * 0.3;
+    // Slow large swirls plus fine cracks: dark crust plates split by glowing seams.
+    float big = sin(p.x * 0.45 + t) + sin(p.z * 0.55 - t * 0.8) + sin((p.x + p.z) * 0.3 + t * 0.6);
+    float fine = sin(p.x * 2.3 + p.z * 0.7 + t * 1.7) * sin(p.z * 2.1 - p.x * 0.9 - t * 1.3) + sin(p.y * 3.0 + p.x * 1.1 - t);
+    float n = big * 0.55 + fine;
+    float seam = smoothstep(-0.25, 0.45, n);
+    vec3 crust = vec3(0.32, 0.06, 0.03), hot = vec3(1.0, 0.36, 0.04), bright = vec3(1.0, 0.72, 0.2);
+    vec3 c = mix(crust, hot, seam);
+    c = mix(c, bright, smoothstep(1.1, 1.9, n));
+    // Falling lava streams in bright ribbons.
+    float streak = step(0.5, fract((p.y + uTime * 0.8) * 0.9 + sin(p.x * 2.1 + p.z * 1.7) * 0.5));
+    c = mix(c, mix(hot, bright, streak), vFoam * 0.85);
+    diffuseColor.rgb = c;
+  }`);
+  };
+  mat.customProgramCacheKey = () => 'lava';
+  return mat;
+}
+
 export class WaterRenderer {
   readonly group = new THREE.Group();
   private meshes = new Map<number, THREE.Mesh>();

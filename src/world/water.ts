@@ -1,4 +1,5 @@
-// Liquid water on a 1 m grid (the terrain itself stays a smooth field; only
+// Liquids on a 1 m grid (water, and lava with its own slower, thicker
+// settings) (the terrain itself stays a smooth field; only
 // the water is cellular). Each cell holds a level in
 // 0..1. Water falls, then spreads sideways and levels out; the ocean is an
 // infinite source/sink below sea level, so tunnels dug from the coast flood.
@@ -16,6 +17,11 @@ export interface WaterWorld {
   oceanFloor(i: number, k: number): number | null;
   /** Close enough to the coast for sea pressure to flood instantly. */
   nearCoast?(i: number, k: number): boolean;
+  /**
+   * Thickness below which the liquid stops spreading sideways. Water is
+   * thin (0.1); lava is thick and stops in lumpy tongues.
+   */
+  spreadMin?: number;
 }
 
 /** Below this a cell is dry. */
@@ -213,7 +219,7 @@ export class WaterSim {
         if (l <= 0) return;
       }
     }
-    if (l < SPREAD_MIN) return;
+    if (l < (this.w.spreadMin ?? SPREAD_MIN)) return;
     // Only spread sideways once the cell below is full or solid.
     if (!this.solid(i, j - 1, k) && this.level(i, j - 1, k) < 0.99) return;
 
@@ -257,6 +263,9 @@ export class WaterSim {
       this.dirty.add(this.regionKey(i, j, k));
     }
   }
+
+  /** Let every stored cell settle again (they are simulated once the player comes near). */
+  wakeAll() { for (const key of this.cells.keys()) this.active.add(key); }
 
   /** Set a cell directly (world generation). */
   fill(i: number, j: number, k: number, v: number, wake = false) {

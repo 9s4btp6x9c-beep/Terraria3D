@@ -44,26 +44,28 @@ export interface CreatureDef {
    * struck (its neighbours join in). At night it hunts like anything else.
    */
   docile?: boolean;
+  /** Unharmed by lava (creatures of the volcanoes and the Ember Depths). */
+  fireproof?: boolean;
 }
 
 export const CREATURES: Record<string, CreatureDef> = {
-  burrling: {
-    id: 'burrling', name: 'Burrling', hp: 18, damage: 8, defense: 0, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0,
+  blob: {
+    id: 'blob', name: 'Blob', hp: 18, damage: 8, defense: 0, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'coin', min: 1, max: 2, chance: 0.6 }],
     spawn: { env: 'surface', time: 'any', weight: 6, biomes: [0] }, docile: true, color: 0x8aaa4e,
   },
-  dune_burrling: {
-    id: 'dune_burrling', name: 'Dune Burrling', hp: 26, damage: 11, defense: 2, speed: 5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'burrling', tint: 0xf0d070,
+  dune_blob: {
+    id: 'dune_blob', name: 'Dune Blob', hp: 26, damage: 11, defense: 2, speed: 5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'blob', tint: 0xf0d070,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'sand', min: 2, max: 4, chance: 0.5 }, { item: 'coin', min: 1, max: 3, chance: 0.7 }],
     spawn: { env: 'surface', time: 'any', weight: 6, biomes: [1] }, docile: true, color: 0xe0c060,
   },
-  frost_burrling: {
-    id: 'frost_burrling', name: 'Frost Burrling', hp: 28, damage: 11, defense: 3, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'burrling', tint: 0xb8ecff,
+  frost_blob: {
+    id: 'frost_blob', name: 'Frost Blob', hp: 28, damage: 11, defense: 3, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'blob', tint: 0xb8ecff,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'ice', min: 1, max: 3, chance: 0.5 }, { item: 'coin', min: 1, max: 3, chance: 0.7 }],
     spawn: { env: 'surface', time: 'any', weight: 6, biomes: [2] }, docile: true, color: 0xa8d8f0,
   },
-  rift_burrling: {
-    id: 'rift_burrling', name: 'Rift Burrling', hp: 42, damage: 16, defense: 5, speed: 5.5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.2, model: 'burrling', skin: 'riftleaves', tint: 0xd0f0ff,
+  rift_blob: {
+    id: 'rift_blob', name: 'Rift Blob', hp: 42, damage: 16, defense: 5, speed: 5.5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.2, model: 'blob', skin: 'riftleaves', tint: 0xd0f0ff,
     drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'coin', min: 2, max: 5, chance: 1 }],
     spawn: { env: 'surface', time: 'any', weight: 5, biomes: [3] }, color: 0x4ab8c8,
   },
@@ -77,18 +79,18 @@ export const CREATURES: Record<string, CreatureDef> = {
     drops: [{ item: 'coin', min: 2, max: 5, chance: 1 }, { item: 'bat_wing', min: 1, max: 1, chance: 0.3 }],
     spawn: { env: 'surface', time: 'any', weight: 3, biomes: [3] }, color: 0x4ad8e8,
   },
-  cinder_burrling: {
-    id: 'cinder_burrling', name: 'Cinder Burrling', hp: 75, damage: 26, defense: 12, speed: 6, ai: 'hopper', radius: 0.65, height: 0.9, kbResist: 0.3, model: 'burrling', skin: 'ember', tint: 0xffffff,
+  cinder_blob: {
+    id: 'cinder_blob', name: 'Cinder Blob', hp: 75, damage: 26, defense: 12, speed: 6, ai: 'hopper', radius: 0.65, height: 0.9, kbResist: 0.3, model: 'blob', skin: 'ember', tint: 0xffffff,
     drops: [{ item: 'gel', min: 3, max: 5, chance: 1 }, { item: 'emberite', min: 1, max: 3, chance: 0.5 }, { item: 'coin', min: 4, max: 9, chance: 1 }],
-    spawn: { env: 'depths', time: 'any', weight: 5 }, color: 0xff6a2a,
+    spawn: { env: 'depths', time: 'any', weight: 5 }, fireproof: true, color: 0xff6a2a,
   },
   cinder_bat: {
     id: 'cinder_bat', name: 'Cinder Bat', hp: 44, damage: 24, defense: 8, speed: 8.5, ai: 'flyer', radius: 0.35, height: 0.7, kbResist: 0.1, model: 'duskwing', tint: 0xff9050,
     drops: [{ item: 'bat_wing', min: 1, max: 2, chance: 0.6 }, { item: 'coin', min: 3, max: 6, chance: 1 }],
-    spawn: { env: 'depths', time: 'any', weight: 4 }, color: 0xff7030,
+    spawn: { env: 'depths', time: 'any', weight: 4 }, fireproof: true, color: 0xff7030,
   },
-  deep_burrling: {
-    id: 'deep_burrling', name: 'Deep Burrling', hp: 34, damage: 13, defense: 2, speed: 5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.1, model: 'burrling', tint: 0x80a8ff,
+  deep_blob: {
+    id: 'deep_blob', name: 'Deep Blob', hp: 34, damage: 13, defense: 2, speed: 5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.1, model: 'blob', tint: 0x80a8ff,
     drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'coin', min: 1, max: 3, chance: 0.8 }],
     spawn: { env: 'cave', time: 'any', weight: 4 }, color: 0x3a8ae8,
   },
@@ -112,10 +114,10 @@ export const CREATURES: Record<string, CreatureDef> = {
     drops: [{ item: 'stone', min: 2, max: 5, chance: 1 }, { item: 'copper_ore', min: 1, max: 3, chance: 0.5 }, { item: 'iron_ore', min: 1, max: 2, chance: 0.3 }],
     spawn: { env: 'cave', time: 'any', weight: 3 }, color: 0x8a8890,
   },
-  hollow_miner: {
-    id: 'hollow_miner', name: 'Hollow Miner', hp: 70, damage: 18, defense: 8, speed: 2.4, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.3,
+  ashdelver: {
+    id: 'ashdelver', name: 'Ashdelver', hp: 70, damage: 18, defense: 8, speed: 2.4, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.3,
     drops: [{ item: 'barbed_hook', min: 1, max: 1, chance: 0.18 }, { item: 'iron_ore', min: 2, max: 5, chance: 0.7 }, { item: 'coin', min: 3, max: 8, chance: 1 }, { item: 'miners_band', min: 1, max: 1, chance: 0.03 }],
-    spawn: { env: 'deep', time: 'any', weight: 4 }, color: 0xe6dcc0,
+    spawn: { env: 'deep', time: 'any', weight: 4 }, fireproof: true, color: 0xff7a2a,
     ranged: { damage: 14, interval: 2.4, speed: 17, range: 16 },
   },
 };
@@ -127,8 +129,8 @@ Object.assign(CREATURES, {
     drops: [{ item: 'sky_feather', min: 1, max: 3, chance: 0.85 }, { item: 'coin', min: 2, max: 5, chance: 1 }],
     spawn: { env: 'sky', time: 'any', weight: 5 }, aggro: 50, color: 0xdce4ee,
   },
-  cloud_burrling: {
-    id: 'cloud_burrling', name: 'Cloud Burrling', hp: 38, damage: 14, defense: 4, speed: 5, ai: 'hopper', radius: 0.58, height: 0.85, kbResist: 0.1, model: 'burrling', skin: 'glass', tint: 0xf4faff,
+  cloud_blob: {
+    id: 'cloud_blob', name: 'Cloud Blob', hp: 38, damage: 14, defense: 4, speed: 5, ai: 'hopper', radius: 0.58, height: 0.85, kbResist: 0.1, model: 'blob', skin: 'glass', tint: 0xf4faff,
     drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'aerite_ore', min: 1, max: 2, chance: 0.35 }, { item: 'coin', min: 1, max: 3, chance: 0.8 }],
     spawn: { env: 'sky', time: 'any', weight: 4 }, color: 0xe8f4ff,
   },
@@ -150,8 +152,8 @@ Object.assign(CREATURES, {
 
 // ---- Rootwold (4), Ossuary Flats (5) and Amberwood (6)
 Object.assign(CREATURES, {
-  moss_burrling: {
-    id: 'moss_burrling', name: 'Moss Burrling', hp: 32, damage: 12, defense: 3, speed: 4.2, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.15, model: 'burrling', skin: 'mossleaves', tint: 0xffffff,
+  moss_blob: {
+    id: 'moss_blob', name: 'Moss Blob', hp: 32, damage: 12, defense: 3, speed: 4.2, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.15, model: 'blob', skin: 'mossleaves', tint: 0xffffff,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'rootwood', min: 1, max: 2, chance: 0.4 }, { item: 'coin', min: 1, max: 3, chance: 0.8 }],
     spawn: { env: 'surface', time: 'any', weight: 6, biomes: [4] }, docile: true, color: 0x6a8a3e,
   },
@@ -170,8 +172,8 @@ Object.assign(CREATURES, {
     drops: [{ item: 'salt', min: 2, max: 5, chance: 1 }, { item: 'fossil', min: 1, max: 2, chance: 0.4 }, { item: 'coin', min: 2, max: 4, chance: 1 }],
     spawn: { env: 'surface', time: 'any', weight: 4, biomes: [5] }, docile: true, color: 0xf0ece4,
   },
-  amber_burrling: {
-    id: 'amber_burrling', name: 'Amber Burrling', hp: 30, damage: 11, defense: 3, speed: 4.8, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'burrling', skin: 'amber', tint: 0xffffff,
+  amber_blob: {
+    id: 'amber_blob', name: 'Amber Blob', hp: 30, damage: 11, defense: 3, speed: 4.8, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'blob', skin: 'amber', tint: 0xffffff,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'coin', min: 3, max: 7, chance: 1 }],
     spawn: { env: 'surface', time: 'any', weight: 6, biomes: [6] }, docile: true, color: 0xffb040,
   },
@@ -182,12 +184,27 @@ Object.assign(CREATURES, {
   },
 } satisfies Record<string, CreatureDef>);
 
+// ---- the Cinder Peaks (7): volcano slopes and lava tubes
+Object.assign(CREATURES, {
+  ash_blob: {
+    id: 'ash_blob', name: 'Ash Blob', hp: 46, damage: 16, defense: 6, speed: 5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.2, model: 'blob', skin: 'basalt', tint: 0xffffff,
+    drops: [{ item: 'gel', min: 2, max: 3, chance: 1 }, { item: 'ash', min: 2, max: 4, chance: 0.6 }, { item: 'coin', min: 2, max: 5, chance: 1 }],
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [7] }, fireproof: true, color: 0x6a6668,
+  },
+  cinder_scout: {
+    id: 'cinder_scout', name: 'Cinderbound Scout', hp: 80, damage: 19, defense: 9, speed: 2.8, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.3, model: 'ashdelver',
+    drops: [{ item: 'basalt', min: 2, max: 5, chance: 0.8 }, { item: 'obsidian', min: 1, max: 2, chance: 0.25 }, { item: 'coin', min: 4, max: 9, chance: 1 }, { item: 'barbed_hook', min: 1, max: 1, chance: 0.08 }],
+    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [7] }, fireproof: true, color: 0xff7a2a,
+    ranged: { damage: 16, interval: 2.4, speed: 17, range: 16 },
+  },
+} satisfies Record<string, CreatureDef>);
+
 const EVENT_DROPS: Drop[] = [{ item: 'blood_shard', min: 1, max: 2, chance: 0.45 }];
 
 // ---- world-event creatures (see entities/events.ts)
 Object.assign(CREATURES, {
-  spore_burrling: {
-    id: 'spore_burrling', name: 'Spore Burrling', hp: 40, damage: 15, defense: 4, speed: 6, ai: 'hopper', radius: 0.62, height: 0.9, kbResist: 0.15, model: 'burrling', skin: 'spore',
+  spore_blob: {
+    id: 'spore_blob', name: 'Spore Blob', hp: 40, damage: 15, defense: 4, speed: 6, ai: 'hopper', radius: 0.62, height: 0.9, kbResist: 0.15, model: 'blob', skin: 'spore',
     drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'coin', min: 2, max: 4, chance: 1 }, ...EVENT_DROPS],
     spawn: null, event: { kind: 'sporefall', weight: 5 }, aggro: 55, color: 0x3ac8a0,
   },
@@ -206,22 +223,22 @@ Object.assign(CREATURES, {
     drops: [{ item: 'coin', min: 2, max: 5, chance: 1 }, ...EVENT_DROPS],
     spawn: null, event: { kind: 'sporefall', weight: 3 }, aggro: 60, color: 0x3ac8a0,
   },
-  raid_miner: {
-    id: 'raid_miner', name: 'Hollow Raider', hp: 90, damage: 20, defense: 10, speed: 2.8, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.3, model: 'hollow_miner',
+  cinder_raider: {
+    id: 'cinder_raider', name: 'Cinderbound Raider', hp: 90, damage: 20, defense: 10, speed: 2.8, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.3, model: 'ashdelver',
     drops: [{ item: 'coin', min: 4, max: 9, chance: 1 }, { item: 'iron_ore', min: 2, max: 4, chance: 0.5 }, { item: 'barbed_hook', min: 1, max: 1, chance: 0.05 }],
-    spawn: null, event: { kind: 'raid', weight: 6 }, aggro: 120, color: 0xe6dcc0,
+    spawn: null, event: { kind: 'raid', weight: 6 }, aggro: 120, fireproof: true, color: 0xff7a2a,
     ranged: { damage: 16, interval: 2.2, speed: 17, range: 16 },
   },
-  hollow_sapper: {
-    id: 'hollow_sapper', name: 'Hollow Sapper', hp: 70, damage: 16, defense: 6, speed: 3, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.2,
+  firebrand: {
+    id: 'firebrand', name: 'Firebrand', hp: 70, damage: 16, defense: 6, speed: 3, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.2,
     drops: [{ item: 'bomb', min: 1, max: 3, chance: 0.6 }, { item: 'coin', min: 4, max: 8, chance: 1 }],
-    spawn: null, event: { kind: 'raid', weight: 3 }, aggro: 120, color: 0xe6dcc0,
+    spawn: null, event: { kind: 'raid', weight: 3 }, aggro: 120, fireproof: true, color: 0xff7a2a,
     ranged: { damage: 26, interval: 3.4, speed: 13, range: 18, projectile: 'bomb' },
   },
-  hollow_brute: {
-    id: 'hollow_brute', name: 'Hollow Brute', hp: 220, damage: 32, defense: 14, speed: 2.4, ai: 'walker', radius: 0.62, height: 2.7, kbResist: 0.85,
+  basalt_colossus: {
+    id: 'basalt_colossus', name: 'Basalt Colossus', hp: 220, damage: 32, defense: 14, speed: 2.4, ai: 'walker', radius: 0.62, height: 2.7, kbResist: 0.85,
     drops: [{ item: 'coin', min: 10, max: 20, chance: 1 }, { item: 'iron_bar', min: 1, max: 3, chance: 0.6 }, { item: 'bonebreaker', min: 1, max: 1, chance: 0.1 }],
-    spawn: null, event: { kind: 'raid', weight: 2 }, aggro: 120, color: 0xe6dcc0,
+    spawn: null, event: { kind: 'raid', weight: 2 }, aggro: 120, fireproof: true, color: 0xff7a2a,
   },
 } satisfies Record<string, CreatureDef>);
 
@@ -248,6 +265,8 @@ export class Creature {
   event: EventKind | null = null;
   /** Struck by the player: a docile creature fights back from now on. */
   provoked = false;
+  /** Seconds spent burning in lava since the last burn tick. */
+  burn = 0;
   readonly uid: number;
   private static next = 1;
   private n: [number, number, number] = [0, 0, 0];

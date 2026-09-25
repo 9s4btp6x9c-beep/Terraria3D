@@ -71,15 +71,16 @@ a minimap, particles, and a held-item viewmodel.
 | M11 Interface | Title screen over the live world (orbiting camera), loading screen with tips, new world, settings, controls, pause and death screens; bundled pixel fonts, a pixel icon set replacing all emoji, one panel style across HUD, inventory and dialogue | `scripts/ui-shots.mjs`, e2e suites |
 | M12 Hollowdeep identity | Retheme away from genre conventions: Vigor/Glim gauges, Amber currency, Heartroots, drifting Starseeds and Glim Vessels, Hearth-based homes and draughts, Burrlings, Rootwalkers, Drifters, the Sporefall and the Hollow March; three new biomes (the Rootwold's petrified root arches, the Ossuary Flats' titan skeletons, the Amberwood's resin) built from a generic terrain-feature system, the Riftlands recolour, biome titles; world grown to 768 m with legacy saves kept at 512 m | `tests/biomes.test.ts`, `scripts/biome-shots.mjs`, `scripts/creature-shots.mjs`, e2e suites |
 | M13 Building | Builder's Hammer and build menu (desktop and touch), 14 multi-part pieces (foundation, floor, wall, doorway, glazed window, half wall, fence, post, beam, stairs, steep and low roofs, gables) in five materials; snapping to built pieces (stacked walls, level floors, upper storeys, roofs on wall tops and continuing slopes), foundations with automatic footings, support check, rotation and free placement, deconstruct with full refund, doors snapping into doorways, a level-ground terrain edit, Hearth comfort and the Rested buff | `tests/building2.test.ts`, `scripts/e2e-build.mjs` (a house built by aiming and clicking), mobile check |
+| M14 Fire and wanderers | Plain names (Health and Mana, Red and Blue Elixirs, Red and Blue Essence, Blobs and Gel); settlers and housing removed in favour of a wandering merchant who arrives at dawn every few days, camps near your spawn point with a pack cart, sells a seeded stock that grows with progress and leaves at dusk; the Hollow faction replaced by the Cinderbound (basalt-plated fire cultists: Ashdelvers, Firebrands, Cinderbound Raiders, Basalt Colossi) and the Cinder Siege on your Hearth; lava as a second, slower, damaging liquid that hardens into obsidian where it meets water; the Cinder Peaks volcano biome (ash cones, crater lava lakes, lava tubes into a magma chamber, basalt, charred trees, Ash Blobs and Cinder Scouts), basalt brick building material | `tests/merchant.test.ts`, `tests/biomes.test.ts`, merchant, siege and lava e2e checks |
 
 ## Next phases
 
-1. **Fishing and water creatures**, lava in the Ember Depths, brine pools
-   on the Ossuary Flats.
+1. **Fishing and water creatures**, brine pools on the Ossuary Flats,
+   lava-proof fishing in crater lakes.
 2. **Hardmode-style world shift** after a final boss: new ores seeded into
    the existing world, harder variants of every biome.
-3. **More NPCs** unlocked by progress (a smith who reforges gear, a guide
-   who explains recipes).
+3. **More travellers** who visit like the merchant (a smith who reforges
+   gear, a cartographer who marks volcanoes and cabins on the map).
 4. **Mounts and pets** from rare drops.
 5. **More underground variety:** crystal geodes and buried temples.
 

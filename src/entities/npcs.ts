@@ -1,6 +1,6 @@
-// Town NPCs: data-driven definitions, arrival rules, homes, dialogue and
-// shops. NPCs move into valid houses (see building/housing.ts), wander near
-// home by day and stay inside at night.
+// The wandering merchant: data (dialogue, stock pool) and the walking body
+// shared with other NPCs. There are no settlers; see entities/merchant.ts for
+// when the merchant visits and where he camps.
 
 import type { Inventory } from '../items/inventory';
 import type { WorldCollision } from '../world/collision';
@@ -12,8 +12,6 @@ export interface NpcDef {
   id: string;
   name: string;
   title: string;
-  /** Arrival condition (checked when a vacant house exists). */
-  canArrive(ctx: NpcContext): boolean;
   lines(ctx: NpcContext): string[];
   shop?: ShopEntry[];
   colors: { shirt: number; pants: number; hair: number; hat?: number };
@@ -31,85 +29,64 @@ export interface NpcContext {
   hasStation(id: string): boolean;
 }
 
-export const NPCS: NpcDef[] = [
-  {
-    id: 'surveyor', name: 'Aldo', title: 'the Lamplighter',
-    canArrive: () => true,
-    colors: { shirt: 0x4a8a5a, pants: 0x5a4a3a, hair: 0x6a4a2a },
-    lines: ctx => {
-      const t: string[] = [];
-      if (!ctx.hasStation('workbench')) t.push('First light, then everything else. Ten wood makes a Workbench — Tab opens crafting.');
-      else if (!ctx.hasStation('hearth')) t.push('Stone, wood and two torches make a Hearth. No settler stays where there is no fire to sit by.');
-      else if (!ctx.hasStation('furnace')) t.push('Stone, wood and three torches make a Furnace. Smelt your ore into bars.');
-      else if (!ctx.hasStation('anvil')) t.push('Iron ore glints pale in the rock. Five iron bars make an Anvil for real tools and armor.');
-      if (ctx.inv.count('gel') === 0) t.push('Burrlings ooze sap when you pop them. Sap and wood make torches, and you will want a lot of torches.');
-      t.push('I keep the lamps lit so folk can find their way home. A room with a door, a Hearth and a bed is a home.');
-      t.push('Heartroots grow in the caves: roots curled round a little ember. Break one open and the warmth stays with you.');
-      t.push('On clear nights the stars shed seeds of light. They drift slow — run and catch them before they fade at dawn.');
-      t.push('West of here the roots of something enormous rise out of the moss. The Rootwold. Their wood rings like stone.');
-      t.push('Out on the salt flats lie the bones of titans. Nobody knows what killed them. Bring me a rib and I\'ll sleep worse.');
-      t.push('The Amberwood bleeds resin that glows. Pell pays in amber, so you could say money grows on trees there.');
-      t.push('Stay clear of the Riftlands at dusk. The ground is split to the bone, and the light down there is the wrong colour.');
-      t.push('Old cabins are buried under the hills. Their chests hold boots, charms and other trinkets.');
-      t.push('The islands up high are laced with aerite — pale blue ore, light as air. A grappling hook helps you reach them.');
-      if (!ctx.rocDefeated) t.push('Gale Swifts nest on the islands. Enough of their feathers and some aerite make an idol, and a great bird answers it.');
-      else t.push('You brought down the Tempest Roc! With its wings you can finally reach every island.');
-      if (ctx.isNight) t.push('Rootwalkers pull themselves out of the soil after dark, and Drifters come down from the clouds. Keep a lamp burning.');
-      if (ctx.event === 'Sporefall') t.push('Spores! Breathe through your sleeve. The things that walk in this light drop Sporeglass, if you are brave.');
-      else t.push('Some nights the sky turns green and spores fall like snow. Everything that walks in it has gone to rot.');
-      if (!ctx.bossDefeated) t.push('Something vast burrows beneath us. Drive a Tremor Totem into the ground at night and it will come.');
-      else t.push('You beat the Deepwyrm! Its scales can be forged into gear that bites through the Ember Depths.');
-      if (ctx.bossDefeated && !ctx.raidDefeated) t.push('The Hollowfolk will have felt the Deepwyrm fall. Expect them to march on this town, or call them with a war horn.');
-      if (ctx.event === 'The Hollow March') t.push('They\'re marching! Hold the line. They lose heart once enough of them fall.');
-      return t;
-    },
-  },
-  {
-    id: 'merchant', name: 'Pell', title: 'the Wayfarer',
-    canArrive: ctx => ctx.inv.count('coin') >= 30,
-    colors: { shirt: 0x6a3a8a, pants: 0x3a3048, hair: 0xd8d0c0, hat: 0x3a2a4a },
-    lines: () => [
-      'Amber, friend. Real amber, with the spark still in it. Show me some and I\'ll show you my pack.',
-      'Torches, draughts, arrows. I walked them here from three biomes away, so the price is the price.',
-      'I once traded a bomb to a Burrling. It ate it. We were both disappointed.',
-      'Salt from the Flats keeps meat and mends wounds. Brew it at a Hearth with a red cap if you don\'t believe me.',
-    ],
-    shop: [
-      { item: 'torch', count: 5, price: 3 },
-      { item: 'healing_potion', count: 1, price: 12 },
-      { item: 'wooden_arrow', count: 25, price: 6 },
-      { item: 'bomb', count: 3, price: 15 },
-      { item: 'glass_bottle', count: 2, price: 2 },
-      { item: 'red_cap', count: 1, price: 4 },
-      { item: 'gel', count: 5, price: 5 },
-      { item: 'salt_lamp', count: 1, price: 20 },
-      { item: 'grappling_hook', count: 1, price: 150 },
-    ],
-  },
-  {
-    id: 'tinkerer', name: 'Wren', title: 'the Clockwright',
-    canArrive: ctx => ctx.raidDefeated,
-    colors: { shirt: 0xc07a2a, pants: 0x4a4a58, hair: 0xa84a2a },
-    lines: ctx => [
-      'I followed the Hollow March here to see who could turn it back. Turns out it was you.',
-      'Boots, jars, charms. I rebuild whatever the Hollowfolk leave behind, springs and all. For a price.',
-      'A Delver\'s Band and Burrowing Claws together? You\'d dig faster than the Deepwyrm.',
-      ctx.isNight ? 'Night work is the best work. Fewer interruptions — mostly.' : 'Have you tried jumping twice? No? Then you need an Updraft Jar.',
-    ],
-    shop: [
-      { item: 'swift_boots', count: 1, price: 220 },
-      { item: 'updraft_jar', count: 1, price: 280 },
-      { item: 'feather_charm', count: 1, price: 180 },
-      { item: 'miners_band', count: 1, price: 320 },
-      { item: 'hollow_horn', count: 1, price: 90 },
-      { item: 'bomb', count: 5, price: 20 },
-    ],
-  },
+/** Something the merchant may bring; `after` gates it behind progress. */
+export interface StockItem extends ShopEntry { weight: number; after?: 'boss' | 'roc' | 'siege' }
+
+/** Everything the merchant might carry. Each visit he brings a handful. */
+export const MERCHANT_STOCK: StockItem[] = [
+  { item: 'torch', count: 5, price: 3, weight: 99 },
+  { item: 'healing_potion', count: 1, price: 12, weight: 99 },
+  { item: 'mana_potion', count: 1, price: 14, weight: 6 },
+  { item: 'wooden_arrow', count: 25, price: 6, weight: 6 },
+  { item: 'bomb', count: 3, price: 15, weight: 5 },
+  { item: 'glass_bottle', count: 2, price: 2, weight: 4 },
+  { item: 'red_cap', count: 2, price: 6, weight: 4 },
+  { item: 'rootwood', count: 10, price: 18, weight: 3 },
+  { item: 'salt', count: 10, price: 14, weight: 3 },
+  { item: 'fossil', count: 5, price: 30, weight: 2 },
+  { item: 'salt_lamp', count: 1, price: 20, weight: 3 },
+  { item: 'amber_lantern', count: 1, price: 45, weight: 2 },
+  { item: 'grappling_hook', count: 1, price: 150, weight: 3 },
+  { item: 'swift_boots', count: 1, price: 220, weight: 2 },
+  { item: 'updraft_jar', count: 1, price: 280, weight: 2 },
+  { item: 'feather_charm', count: 1, price: 180, weight: 2 },
+  { item: 'miners_band', count: 1, price: 320, weight: 2 },
+  { item: 'glow_charm', count: 1, price: 260, weight: 1 },
+  { item: 'wyrm_bait', count: 1, price: 60, weight: 2 },
+  { item: 'aerite_ore', count: 6, price: 40, weight: 2, after: 'boss' },
+  { item: 'hollow_horn', count: 1, price: 90, weight: 3, after: 'boss' },
+  { item: 'gale_idol', count: 1, price: 150, weight: 1, after: 'boss' },
+  { item: 'lumite_bar', count: 3, price: 90, weight: 1, after: 'siege' },
 ];
 
-/** Physics body shape for townsfolk. */
+export const MERCHANT: NpcDef = {
+  id: 'merchant', name: 'Pell', title: 'the Wandering Merchant',
+  colors: { shirt: 0x6a3a8a, pants: 0x3a3048, hair: 0xd8d0c0, hat: 0x3a2a4a },
+  lines: ctx => {
+    const t: string[] = [
+      'Amber, friend. Real amber, with the spark still in it. Show me some and I will show you my pack.',
+      'I never stay long. By nightfall I am on the road again, and the pack changes every time.',
+      'I once traded a bomb to a Blob. It ate it. We were both disappointed.',
+      'Salt from the Flats keeps meat and mends wounds. Brew it at a Hearth with a red cap if you don\'t believe me.',
+      'Build on foundations, friend. They stay level on any slope, and I have seen too many houses slide downhill.',
+      'Red crystals grow in the caves. Break one and drink in its essence and you will stand up to a lot more.',
+      'On clear nights seeds of light drift down. Catch five and they condense into Blue Essence.',
+      'The Rootwold, the salt flats, the Amberwood: every land has its own stone and wood. I buy from all of them.',
+    ];
+    if (!ctx.hasStation('hearth')) t.push('No fire yet? Stone, wood and two torches make a Hearth. Rest by it under a roof and you will feel it.');
+    if (!ctx.bossDefeated) t.push('Something vast burrows under this land. Drive a Tremor Totem into the ground at night and it will come to you.');
+    else t.push('You felled the Deepwyrm! Now the Cinderbound will have felt it. They come up from the mountains for fire when the deep goes quiet.');
+    if (ctx.isNight) t.push('Out after dark? The Rootwalkers pull themselves from the soil, and Drifters come down from the clouds.');
+    if (ctx.event === 'Sporefall') t.push('Spores! Cover your mouth. The things walking in this light drop Sporeglass, if you are brave.');
+    if (ctx.event === 'The Cinder Siege') t.push('The Cinderbound are here for your fire! Hold them off and they give up.');
+    return t;
+  },
+  shop: [],
+};
+
+/** Physics body shape for people. */
 const NPC_BODY: CreatureDef = {
-  id: 'npc', name: 'Townsperson', hp: 250, damage: 0, defense: 10, speed: 1.6, ai: 'walker', radius: 0.35, height: 1.8, kbResist: 1,
+  id: 'npc', name: 'Traveller', hp: 250, damage: 0, defense: 10, speed: 1.6, ai: 'walker', radius: 0.35, height: 1.8, kbResist: 1,
   drops: [], spawn: null, color: 0xffffff,
 };
 
@@ -133,8 +110,8 @@ export class Npc {
     } else {
       this.wait -= dt;
       if (!this.target && this.wait <= 0) {
-        // Day: wander around home; night: stay inside.
-        const r = night ? 1.5 : 7;
+        // Potter about the camp; stay close to it at night.
+        const r = night ? 1.5 : 5;
         const a = Math.random() * Math.PI * 2, k = Math.random() * r;
         this.target = { x: this.home.x + Math.cos(a) * k, z: this.home.z + Math.sin(a) * k };
       }

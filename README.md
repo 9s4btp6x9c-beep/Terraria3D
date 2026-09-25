@@ -4,8 +4,9 @@ An original 3D sandbox about digging down, building up and surviving the
 night, with organic, destructible, **non-voxel** terrain and a stylized
 low-poly / pixel-texture look. Hollowdeep has its own lands, creatures and
 lore: the Rootwold's petrified arches, the titan bones of the Ossuary Flats,
-glowing resin in the Amberwood, Starseeds drifting down on clear nights and
-the green-skied Sporefall.
+glowing resin in the Amberwood, the smoking volcanoes of the Cinder Peaks,
+Starseeds drifting down on clear nights, the green-skied Sporefall and the
+Cinderbound, fire cultists who come down from the mountains for your Hearth.
 
 Engine: **TypeScript + Three.js + Vite** (runs in the browser).
 
@@ -42,10 +43,9 @@ menu screen for review.
 | WASD / Mouse | Move / look |
 | Shift · Space · C or Ctrl | Sprint · jump / swim up · crouch |
 | LMB | Use held item (mine, chop, attack, place, drink) |
-| RMB | Interact: doors, chests, beds, talk to NPCs |
+| RMB | Interact: doors, chests, beds, talk to the merchant |
 | F | Grappling hook (equip a hook in an accessory slot) |
 | Space (hold, in the air) | Fly with wings, then glide |
-| H | Check whether the room you stand in is a valid home |
 | 1–9, mouse wheel | Select hotbar slot |
 | Q | With the Builder's Hammer: open the build menu (pieces and material) |
 | R · hold Shift | Rotate / flip the piece · place without snapping to other pieces |
@@ -81,27 +81,29 @@ Touch devices start on the low quality preset.
   - **Doors** drop straight into doorways. Aim the hammer at a piece and
     press RMB to take it down for a full refund.
   - **Resting:** stand under a roof near a lit Hearth to become **Rested**
-    (faster Vigor and Glim regeneration). Beds, chairs, tables, chests and
+    (faster health and mana regeneration). Beds, chairs, tables, chests and
     lamps nearby raise the room's comfort, and higher comfort makes the rest
     last longer.
 - **Crafting:** recipes by hand and at stations (workbench, Hearth, furnace,
   anvil, Lumite Forge). Copper and iron tool tiers gate harder rock.
-  Draughts are brewed over a Hearth.
-- **Hearth and home:** doors, torches, chairs, beds, chests and lamps. A
-  home is an enclosed room with a door, a lit **Hearth** and somewhere to
-  rest (a bed or chair). Settlers move in: Aldo the Lamplighter, Pell the
-  Wayfarer (who trades for Amber) and, later, Wren the Clockwright.
-- **Vigor and Glim:** your life is **Vigor**, an ember gauge; **Glim** is
-  the stored light that powers staves. Both gauges lengthen as you grow.
-- **Combat:** swords, mauls, bows, staves and bombs against Burrlings
-  (hopping burr-pods), Rootwalkers, Drifters (sky jellyfish that come down at
-  night), Duskwings, crawlers and the Hollowfolk. Enemies vary by biome and
-  depth, and you respawn at your bed.
-- **Growing stronger:** **Heartroots** (petrified roots caged round an ember
-  core) grow on cave floors: break one and use it for +20 max Vigor (up to
-  400). On clear nights **Starseeds** drift slowly down like dandelion seeds:
-  catch them in the air or find where they land. Five, sealed in glass, make
-  a **Glim Vessel** (+20 max Glim, up to 200).
+  **Red Elixirs** (health) and **Blue Elixirs** (mana) are brewed over a
+  Hearth.
+- **No settlers, no housing checks:** your base is wherever your Hearth is.
+  Doors, torches, chairs, beds, chests and lamps make it comfortable.
+- **The wandering merchant:** every two or three days, at dawn, Pell the
+  Wandering Merchant arrives with a pack cart and camps near your spawn
+  point (your bed). He always carries torches and Red Elixirs, plus a
+  handful of goods drawn from a pool that grows as you beat bosses and the
+  Cinder Siege, and he moves on at dusk. Talk to him for tips.
+- **Health and mana:** both bars grow as you use Red and Blue Essence.
+- **Combat:** swords, mauls, bows, staves and bombs against Blobs (wobbling
+  jelly with eye stalks, in a colour for every biome), Rootwalkers, Drifters
+  (sky jellyfish that come down at night), Duskwings, crawlers and the
+  Cinderbound. Enemies vary by biome and depth, and you respawn at your bed.
+- **Growing stronger:** red crystals grow on cave floors: break one for
+  **Red Essence** (+20 max health, up to 400). On clear nights **Starseeds**
+  drift slowly down like dandelion seeds: catch them in the air or find where
+  they land. Five condense into **Blue Essence** (+20 max mana, up to 200).
 - **Amber** is Hollowdeep's currency: dropped by creatures and dug out of the
   Amberwood's glowing resin.
 - **Biomes:** crossing into a new land shows its name.
@@ -111,21 +113,25 @@ Touch devices start on the low quality preset.
     crystal growing on dead trees.
   - **The Rootwold:** deep olive moss under colossal **petrified root arches**
     and gnarled, moss-hung trees. Mossbacks (crawlers carrying a boulder of
-    moss) and Moss Burrlings live here. Petrified Root makes the Bramble Maul,
+    moss) and Moss Blobs live here. Petrified Root makes the Bramble Maul,
     the Heartwood Longbow and Amber Lanterns.
   - **Ossuary Flats:** a dead salt pan with cracked crust, strewn with the
     half-sunk skeletons of titans (spines, ribcages, skulls and tusks).
     Bonepickers circle overhead and Saltback Crawlers pick at the crust.
     Titan Bone makes the fast Titanbone Pickaxe, and salt makes Salt Lamps
-    and brews Mending Draughts.
+    and brews Red Elixirs.
   - **Amberwood:** an autumn forest of orange crowns over leaf litter, with
-    glowing resin nodules and amber pockets underground. Amber Burrlings
+    glowing resin nodules and amber pockets underground. Amber Blobs
     and Leafwings live here.
+  - **The Cinder Peaks:** smoking volcanoes on ash slopes among charred
+    trees. Climb to the crater rim to look down on a lava lake; a lava tube
+    runs from the flank to a glowing magma chamber inside. Basalt, obsidian
+    and magma rock, Ash Blobs, and Cinder Scouts who throw burning rocks.
   - Underground are caves, cabins with loot chests, glowing lumite crystals,
     the molten Ember Depths and the **glowing mushroom caverns**. These are
     wide mud halls with luminous floors and giant blue mushrooms, home to
     Sporelings and Glowmoths. Fell the mushrooms for glowcaps, which brew
-    Glim Draughts and make Glowcap Lamps.
+    Blue Elixirs and make Glowcap Lamps.
 - **Bosses:**
   - **The Deepwyrm:** carve a Tremor Totem at an anvil and drive it into
     the ground at night or underground. It is a segmented worm that tunnels through the real
@@ -136,20 +142,28 @@ Touch devices start on the low quality preset.
     Wings (flight) and the Tempest Staff.
 - **Events:**
   - **Sporefall:** any night after the first, the sky can turn a sickly
-    green while glowing spores sift down. Spore Burrlings, Rotfangs
+    green while glowing spores sift down. Spore Blobs, Rotfangs
     (fungus-backed hounds), Sporebound and Spore Drifters walk, and drop
-    Sporeglass for the Mycelheart Amulet and the vigor-drinking Sporecleaver.
-  - **The Hollow March:** once the Deepwyrm is dead, the Hollowfolk may march
-    on a town with two residents (or sound a Hollow War Horn). Raiders,
-    bomb-lobbing Sappers and club-wielding Brutes attack until enough of
-    them fall. Winning brings Wren the Clockwright, who sells accessories.
+    Sporeglass for the Mycelheart Amulet and the life-drinking Sporecleaver.
+  - **The Cinder Siege:** once the Deepwyrm is dead, the **Cinderbound**
+    (a fire cult in basalt plate and ash robes, with ember eyes under their
+    hoods) may come down from the mountains at dawn for your fire, or you can
+    call them by sounding an Ember Horn by your Hearth. Cinderbound Raiders,
+    bomb-throwing Firebrands and huge Basalt Colossi march on your Hearth
+    until enough of them fall. Winning makes the merchant bring rarer goods.
+    Deep underground, Ashdelvers of the same cult dig for embers.
 - **Sky tier:** the floating islands hold Aerite ore and are home to Gale
-  Swifts and Cloud Burrlings. Aerite makes the Skyforged armor set (extra jump,
+  Swifts and Cloud Blobs. Aerite makes the Skyforged armor set (extra jump,
   speed, no fall damage and longer wing flight) and the two-arrow Gale Bow.
 - **Water:** lakes sit in carved bowls with sandy shores, and pools lie in
   the caves. Water falls and spreads, and levels out in whatever you dig.
   Tunnels dug from the coast below sea level flood. You can swim anywhere
   (watch the breath bubbles), and buckets scoop water up and pour it out.
+- **Lava:** fills volcano craters, magma chambers and pools in the Ember
+  Depths. It flows like water but slower and thicker, stopping in lumpy
+  tongues, glows, and burns you (and most creatures) badly while slowing you
+  down; a full set of Ember armor makes you immune. Where lava meets water,
+  both turn into **obsidian**.
 - **World:** 768 m across (saves from older versions keep their 512 m
   world) with sky islands, a day/night cycle, and distant terrain drawn at
   lower detail so the whole map is visible from a high point.
@@ -185,8 +199,8 @@ src/
   world/      config, materials, TerrainField (density + CSG), generator,
               Surface Nets mesher, worker pool, SkyMap, vegetation,
               world structures (cabins, depths), collision, persistence
-  building/   modular pieces, furniture, housing check
-  entities/   creatures, combat, NPCs and town, world events, bosses
+  building/   modular pieces, furniture, Hearth comfort
+  entities/   creatures, combat, the wandering merchant, world events, bosses
               (the Deepwyrm, the Tempest Roc)
   items/      item database, recipes, inventory, equipment
   player/     controller, input, interaction, grappling hook, vitals
@@ -206,22 +220,24 @@ scripts/      e2e browser tests (desktop and mobile)
 | ![](docs/screenshots/landscape.png) | ![](docs/screenshots/overview.png) |
 | **Cave chamber (lantern + lumite crystal)** | **Tunnel dug with the pickaxe** |
 | ![](docs/screenshots/cave.png) | ![](docs/screenshots/mined-tunnel.png) |
-| **Far view (distant LOD)** | **An NPC moves into a valid house** |
-| ![](docs/screenshots/far-view.jpg) | ![](docs/screenshots/house-npc.jpg) |
+| **Far view (distant LOD)** | **The wandering merchant's camp** |
+| ![](docs/screenshots/far-view.jpg) | ![](docs/screenshots/merchant.jpg) |
 | **Sunscar Dunes** | **Ember Depths** |
 | ![](docs/screenshots/desert.jpg) | ![](docs/screenshots/ember-depths.jpg) |
 | **Crafting stations** | **The Deepwyrm** |
 | ![](docs/screenshots/crafting-stations.jpg) | ![](docs/screenshots/deepwyrm.jpg) |
-| **Sporefall** | **The Hollow March** |
-| ![](docs/screenshots/sporefall.jpg) | ![](docs/screenshots/hollow-raid.jpg) |
+| **Sporefall** | **The Cinder Siege** |
+| ![](docs/screenshots/sporefall.jpg) | ![](docs/screenshots/cinder-siege.jpg) |
 | **The Tempest Roc** | **Gale Swifts over a sky island** |
 | ![](docs/screenshots/tempest-roc.jpg) | ![](docs/screenshots/gale-swifts.jpg) |
-| **A house built with the hammer** | **Inside: Hearth, bed and a settler** |
+| **A house built with the hammer** | **Inside: Hearth, bed and chair** |
 | ![](docs/screenshots/house-built.jpg) | ![](docs/screenshots/house-inside.jpg) |
 | **The build menu** | **Mushroom cavern** |
 | ![](docs/screenshots/build-menu.jpg) | ![](docs/screenshots/mushroom-cavern.jpg) |
-| **Heartroot** | |
-| ![](docs/screenshots/heartroot.jpg) | |
+| **Red crystal (Red Essence)** | **A volcano crater in the Cinder Peaks** |
+| ![](docs/screenshots/red-crystal.jpg) | ![](docs/screenshots/volcano.jpg) |
+| **Inside the magma chamber** | **The Cinder Peaks** |
+| ![](docs/screenshots/magma-chamber.jpg) | ![](docs/screenshots/cinder-peaks.jpg) |
 | **The Rootwold** | **Ossuary Flats** |
 | ![](docs/screenshots/rootwold.jpg) | ![](docs/screenshots/ossuary.jpg) |
 | **Amberwood** | **The Riftlands** |

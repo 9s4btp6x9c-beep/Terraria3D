@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { WorldEvents, type EventWorld } from '../src/entities/events';
 
 const world = (daylight: number, extra: Partial<EventWorld> = {}): EventWorld => ({
-  daylight, px: 100, pz: 100, town: { x: 100, z: 100, npcs: 2 }, bossDefeated: false, ...extra,
+  daylight, px: 100, pz: 100, base: { x: 100, z: 100, size: 1 }, bossDefeated: false, ...extra,
 });
 
 /** Advance through `n` full day/night cycles, collecting signals. */
@@ -42,26 +42,26 @@ describe('world events', () => {
     expect(s).toEqual([]);
   });
 
-  it('raids need the boss defeated and a town with two residents', () => {
+  it('sieges need the boss defeated and a base with a Hearth', () => {
     const ev = new WorldEvents(() => 0.2); // above the Sporefall odds, below the raid odds
     expect(cycle(ev, 3, { bossDefeated: false })).toEqual([]);
-    expect(cycle(ev, 3, { bossDefeated: true, town: { x: 100, z: 100, npcs: 1 } })).toEqual([]);
+    expect(cycle(ev, 3, { bossDefeated: true, base: { x: 100, z: 100, size: 0 } })).toEqual([]);
     const s = cycle(ev, 1, { bossDefeated: true });
     expect(s).toContainEqual({ type: 'start', kind: 'raid' });
-    expect(ev.goal).toBe(46);
+    expect(ev.goal).toBe(38);
   });
 
   it('killing enough raiders wins the raid', () => {
     const ev = new WorldEvents();
-    ev.start('raid', { town: { x: 0, z: 0, npcs: 0 }, px: 0, pz: 0 });
+    ev.start('raid', { base: { x: 0, z: 0, size: 0 }, px: 0, pz: 0 });
     for (let i = 0; i < 29; i++) expect(ev.kill()[0].type).toBe('progress');
     expect(ev.kill()).toEqual([{ type: 'end', kind: 'raid', won: true }]);
     expect(ev.active).toBe(false);
   });
 
-  it('abandoning the town loses the raid', () => {
+  it('abandoning the base loses the siege', () => {
     const ev = new WorldEvents();
-    ev.start('raid', { town: { x: 0, z: 0, npcs: 0 }, px: 0, pz: 0 });
+    ev.start('raid', { base: { x: 0, z: 0, size: 0 }, px: 0, pz: 0 });
     let s = ev.update(10, world(1, { px: 500, pz: 0 }));
     expect(s).toEqual([]);
     s = ev.update(15, world(1, { px: 500, pz: 0 }));
@@ -82,7 +82,7 @@ describe('world events', () => {
 
   it('round-trips through a save', () => {
     const ev = new WorldEvents();
-    ev.start('raid', { town: { x: 5, z: 6, npcs: 1 }, px: 0, pz: 0 });
+    ev.start('raid', { base: { x: 5, z: 6, size: 1 }, px: 0, pz: 0 });
     ev.kill();
     const copy = new WorldEvents();
     copy.load(JSON.parse(JSON.stringify(ev.serialize())));

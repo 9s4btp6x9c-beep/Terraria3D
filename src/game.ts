@@ -7,7 +7,7 @@ import { FurnitureSet, type Placed } from './building/furniture';
 import { Structures } from './building/structures';
 import { Combat } from './entities/combat';
 import type { NpcContext } from './entities/npcs';
-import { Town } from './entities/town';
+import { WanderingMerchant } from './entities/merchant';
 import { CREATURES, type Creature } from './entities/creatures';
 import { type EventKind, type EventSignal, WorldEvents } from './entities/events';
 import { Equipment, type PlayerStats } from './items/equipment';
@@ -51,7 +51,7 @@ import type { Tree } from './world/vegetation';
 import { Vegetation } from './world/vegetation';
 import { caveFloor, planStructures } from './world/worldStructures';
 import { MIN_LEVEL, WaterSim } from './world/water';
-import { WaterRenderer, createWaterMaterial } from './render/waterRenderer';
+import { WaterRenderer, createLavaMaterial, createWaterMaterial } from './render/waterRenderer';
 import { TerrainWorkerPool } from './world/workerPool';
 
 export interface LoadCallbacks { progress(fraction: number, label: string): void }
@@ -84,13 +84,24 @@ export class Game {
   stats!: PlayerStats;
   spawnPoint = { x: 0, y: 0, z: 0 };
   grapple!: Grapple;
-  town!: Town;
+  merchant!: WanderingMerchant;
+  private wasDaylight: boolean | null = null;
   private dialogue!: DialogueUI;
   /** World progression flags (bosses defeated, events). */
   progress = { bossDefeated: false, raidDefeated: false, rocDefeated: false };
   readonly events = new WorldEvents();
   water!: WaterSim;
   private waterRenderer!: WaterRenderer;
+  /** Lava: the same liquid grid, thicker and slower, that burns. */
+  lava!: WaterSim;
+  private lavaRenderer!: WaterRenderer;
+  private lavaAcc = 0;
+  private lavaReact = 0;
+  /** Where lava glows (craters, chambers, pools) for nearby lights. */
+  private lavaSources: { x: number; y: number; z: number }[] = [];
+  private lavaLights = new Map<number, number>();
+  private lavaLightTimer = 0;
+  private burnWarned = 0;
   private waterAcc = 0;
   private structVersion = -1;
   private furnVersion = -1;
@@ -235,6 +246,7 @@ export class Game {
     this.terrain = new TerrainSystem(this.field, this.log, this.pool, worldMat, this.quality.detail);
     this.terrain.onColumnResident = (x0, z0) => {
       this.water?.invalidate();
+      this.lava?.invalidate();
       this.markSky(x0, z0, x0 + 31, z0 + 31);
       this.veg.invalidateTufts(x0 + 16, z0 + 16, 20);
     };
@@ -243,22 +255,29 @@ export class Game {
     // Liquid water (lakes, pools, floods). Distance to the coast (in columns)
     // limits how far the sea's pressure floods tunnels instantly.
     const coast = coastDistance(this.field.sx, this.field.sz, (x, z) => this.gen.oceanFloor(x + 0.5, z + 0.5) !== null);
+    const liquidSolid = (i: number, j: number, k: number) => {
+      const x = i + 0.5, y = j + 0.5, z = k + 0.5;
+      if (this.field.sample(x, y, z) > 0) return true;
+      const near = this.structures.near(x, y, z, 1.5);
+      if (near.length && Structures.distance(near, x, y, z) < 0.05) return true;
+      const furn = this.furniture.colliders(x, y, z, 1.5);
+      return furn.length > 0 && FurnitureSet.distance(furn, x, y, z) < 0;
+    };
     this.water = new WaterSim({
       sx: this.field.sx, sy: this.field.sy, sz: this.field.sz, seaLevel: cfg.seaLevel,
-      solid: (i, j, k) => {
-        const x = i + 0.5, y = j + 0.5, z = k + 0.5;
-        if (this.field.sample(x, y, z) > 0) return true;
-        const near = this.structures.near(x, y, z, 1.5);
-        if (near.length && Structures.distance(near, x, y, z) < 0.05) return true;
-        const furn = this.furniture.colliders(x, y, z, 1.5);
-        return furn.length > 0 && FurnitureSet.distance(furn, x, y, z) < 0;
-      },
+      solid: liquidSolid,
       oceanFloor: (i, k) => this.gen.oceanFloor(i + 0.5, k + 0.5),
       nearCoast: (i, k) => coast[i + k * this.field.sx] <= 48,
     });
     if (save?.extra?.water) this.water.load(save.extra.water as never);
     else this.fillInitialWater();
     this.waterRenderer = new WaterRenderer(this.water, createWaterMaterial(u), (x, y, z) => this.sky.visibility(x, y, z) < 0.3);
+    this.lava = new WaterSim({ sx: this.field.sx, sy: this.field.sy, sz: this.field.sz, seaLevel: -1, solid: liquidSolid, oceanFloor: () => null, spreadMin: 0.3 });
+    this.lavaSources = this.findLavaSources();
+    if (save?.extra?.lava) { this.lava.load(save.extra.lava as never); this.lava.wakeAll(); }
+    else this.fillInitialLava();
+    this.lavaRenderer = new WaterRenderer(this.lava, createLavaMaterial(u), (x, y, z) => this.sky.visibility(x, y, z) < 0.3);
+    this.scene.add(this.lavaRenderer.group);
     this.scene.add(this.waterRenderer.group);
 
     this.vegRenderer = new VegetationRenderer(this.veg, worldMat, plantMat, this.quality.grass, this.quality.trees);
@@ -329,10 +348,10 @@ export class Game {
     this.scene.add(this.rope.group);
     this.setupCombat(collision);
     this.setupInteraction();
-    this.town = new Town(this.field, this.structures, this.furniture, collision,
+    this.merchant = new WanderingMerchant(collision,
       () => createWorldMaterial(u, { vertexColors: true, objectSpace: { scale: 3, visibility: null } }));
-    this.town.onMessage = (t, c) => this.hud.message(t, c);
-    this.scene.add(this.town.group);
+    this.merchant.onMessage = (t, c) => this.hud.message(t, c);
+    this.scene.add(this.merchant.group);
     this.dialogue = new DialogueUI($('#hud'), this.inventory, this.icons, () => this.npcContext(),
       (ok, name) => {
         this.hud.message(ok ? `Bought ${name}` : 'Not enough amber (or no room)', ok ? '#ffe08a' : '#ff9a7a');
@@ -346,7 +365,7 @@ export class Game {
     this.buildMenu.onClose = () => { if (!this.menuOpen) this.input.lock(); };
     if (typeof save?.extra?.rested === 'number') this.rested = save.extra.rested;
     if (save?.extra?.build) this.interaction.build = { ...this.interaction.build, ...(save.extra.build as object) };
-    if (save?.extra?.town) this.town.load(save.extra.town as never);
+    if (save?.extra?.merchant) this.merchant.load(save.extra.merchant as never);
     if (save?.extra?.progress) Object.assign(this.progress, save.extra.progress);
     if (save?.extra?.events) this.events.load(save.extra.events as never);
     this.inventory.onChange(() => this.refreshHeld());
@@ -388,6 +407,7 @@ export class Game {
       carve: (x, y, z, r, drops) => {
         const res = this.log.commit(this.field, 'sub', x, y, z, r, Mat.Air, drops ? 1 : 99);
         this.water.wake(x, y, z, r + 1.5);
+        this.lava.wake(x, y, z, r + 1.5);
         const pad = r + 1;
         this.markSky(x - pad, z - pad, x + pad, z + pad);
         this.veg.invalidateTufts(x, z, r + 1);
@@ -428,6 +448,7 @@ export class Game {
       safeZone: (x, y, z) => this.furniture.near(x, y, z, 18).some(f => f.type === 'bed' || f.type === 'door'),
       mushroomAt: (x, y, z) => this.gen.mushroomAt(x, y, z),
       inWater: (x, y, z) => this.waterLevelAt(x, y, z) !== null,
+      inLava: (x, y, z) => this.lava.surfaceAt(x, y, z) !== null,
       activeEvent: () => (this.events.kind ? { kind: this.events.kind, target: this.events.target } : null),
       eventKill: () => this.onEventSignals(this.events.kill()),
     });
@@ -509,7 +530,7 @@ export class Game {
         return w.speed;
       }
       case 'magic': {
-        if (!this.vitals.useMana(w.manaCost ?? 5)) { this.hud.message('Not enough Glim', '#8ab8ff'); return 0.3; }
+        if (!this.vitals.useMana(w.manaCost ?? 5)) { this.hud.message('Not enough mana', '#8ab8ff'); return 0.3; }
         const o = eye.clone().addScaledVector(dir, 0.8);
         const boring = def.id === 'wyrmfang_staff', gale = def.id === 'tempest_staff';
         this.combat.fire(boring ? 'drill' : gale ? 'gust' : 'bolt', o.x, o.y - 0.15, o.z, dir.x, dir.y, dir.z, w.projectileSpeed!, w.damage, w.knockback);
@@ -532,9 +553,9 @@ export class Game {
 
   private consume(def: ItemDef): boolean {
     if (def.id === 'hollow_horn') {
-      const t = this.townInfo();
+      const t = this.baseInfo();
       if (this.events.active) { this.hud.message(`${this.events.info!.name} is already under way!`, '#ffb070'); return false; }
-      if (!t || Math.hypot(t.x - this.player.x, t.z - this.player.z) > 80) { this.hud.message('Sound the horn near a town with residents — that is what the raiders want.', '#ffb070'); return false; }
+      if (!t || Math.hypot(t.x - this.player.x, t.z - this.player.z) > 80) { this.hud.message('Sound the horn near your Hearth. It is the fire they want.', '#ffb070'); return false; }
       this.startEvent('raid');
       return true;
     }
@@ -565,29 +586,29 @@ export class Game {
     if (def.grow) {
       const v = this.vitals;
       if (def.grow.life) {
-        if (v.maxHp >= 400) { this.hud.message('Your Vigor is already at its peak', '#ffb070'); return false; }
+        if (v.maxHp >= 400) { this.hud.message('Your health is already at its peak', '#ffb070'); return false; }
         v.maxHp += def.grow.life; v.hp = Math.min(v.maxHp, v.hp + def.grow.life);
-        this.hud.message(`Max Vigor increased to ${v.maxHp}`, '#ffb070');
+        this.hud.message(`Max health increased to ${v.maxHp}`, '#ff8a9a');
       }
       if (def.grow.mana) {
-        if (v.maxMana >= 200) { this.hud.message('Your Glim is already at its peak', '#ffb070'); return false; }
+        if (v.maxMana >= 200) { this.hud.message('Your mana is already at its peak', '#ffb070'); return false; }
         v.maxMana += def.grow.mana; v.mana = Math.min(v.maxMana, v.mana + def.grow.mana);
-        this.hud.message(`Max Glim increased to ${v.maxMana}`, '#8ab8ff');
+        this.hud.message(`Max mana increased to ${v.maxMana}`, '#8ab8ff');
       }
       this.particles.burst(this.player.x, this.player.y + 1.2, this.player.z, 0, 1, 0, def.grow.life ? 0xff9a3a : 0x6ac8ff, 24, { speed: 3, gravity: -1 });
       this.audio.play('magic');
       return true;
     }
     if (def.mana) {
-      if (this.vitals.mana >= this.vitals.maxMana) { this.hud.message('Glim is already full', '#ffb070'); return false; }
+      if (this.vitals.mana >= this.vitals.maxMana) { this.hud.message('Mana is already full', '#ffb070'); return false; }
       this.vitals.mana = Math.min(this.vitals.maxMana, this.vitals.mana + def.mana);
       this.labels.add(this.player.x, this.player.y + 2, this.player.z, `+${def.mana}`, '#7aa8ff');
       this.audio.play('drink');
       return true;
     }
     if (def.heal) {
-      if (this.potionCooldown > 0) { this.hud.message(`Still queasy from the last draught (${Math.ceil(this.potionCooldown)}s)`, '#ffb070'); return false; }
-      if (this.vitals.hp >= this.vitals.maxHp) { this.hud.message('Already at full Vigor', '#ffb070'); return false; }
+      if (this.potionCooldown > 0) { this.hud.message(`Still queasy from the last elixir (${Math.ceil(this.potionCooldown)}s)`, '#ffb070'); return false; }
+      if (this.vitals.hp >= this.vitals.maxHp) { this.hud.message('Already at full health', '#ffb070'); return false; }
       this.vitals.heal(def.heal);
       this.potionCooldown = 20;
       this.labels.add(this.player.x, this.player.y + 2, this.player.z, `+${def.heal}`, '#6aff8a');
@@ -598,16 +619,32 @@ export class Game {
   }
 
   /**
-   * The town nearest the player: the cluster of occupied houses around the
-   * closest one (stray valid rooms such as explored cabins don't count).
+   * Your base: the Hearths clustered around the one nearest the player
+   * (within 150 m). The Cinder Siege marches on it.
    */
-  townInfo(): { x: number; z: number; npcs: number } | null {
-    const occupied = this.town.houses.filter(h => h.npc);
-    if (!occupied.length) return null;
+  baseInfo(): { x: number; z: number; size: number } | null {
     const px = this.player.x, pz = this.player.z;
-    const anchor = occupied.reduce((a, h) => (Math.hypot(h.x - px, h.z - pz) < Math.hypot(a.x - px, a.z - pz) ? h : a));
-    const cluster = occupied.filter(h => Math.hypot(h.x - anchor.x, h.z - anchor.z) < 60);
-    return { x: cluster.reduce((a, h) => a + h.x, 0) / cluster.length, z: cluster.reduce((a, h) => a + h.z, 0) / cluster.length, npcs: cluster.length };
+    const hearths = [...this.furniture.items.values()].filter(f => f.type === 'hearth' && Math.hypot(f.x - px, f.z - pz) < 150);
+    if (!hearths.length) return null;
+    const anchor = hearths.reduce((a, h) => (Math.hypot(h.x - px, h.z - pz) < Math.hypot(a.x - px, a.z - pz) ? h : a));
+    const cluster = hearths.filter(h => Math.hypot(h.x - anchor.x, h.z - anchor.z) < 40);
+    return { x: cluster.reduce((a, h) => a + h.x, 0) / cluster.length, z: cluster.reduce((a, h) => a + h.z, 0) / cluster.length, size: cluster.length };
+  }
+
+  /** Open, dry ground near your spawn point (bed) where the merchant can camp. */
+  campSpot(): { x: number; y: number; z: number } | null {
+    const s = this.spawnPoint;
+    for (let k = 0; k < 24; k++) {
+      const a = k * 2.4, r = 7 + (k % 4) * 3;
+      const x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r;
+      if (x < 4 || z < 4 || x > this.field.sx - 4 || z > this.field.sz - 4) continue;
+      const hit = this.field.raycast(x, s.y + 30, z, 0, -1, 0, 60);
+      if (!hit || hit.ny < 0.8 || Math.abs(hit.y - s.y) > 8) continue;
+      if (this.waterLevelAt(x, hit.y + 0.3, z) !== null) continue;
+      if (this.structures.near(x, hit.y, z, 3).length || this.furniture.near(x, hit.y, z, 3).length) continue;
+      return { x, y: hit.y + 0.1, z };
+    }
+    return null;
   }
 
   /**
@@ -649,6 +686,90 @@ export class Game {
     this.inventory.remove('water_bucket', 1);
     this.inventory.add('bucket', 1);
     this.audio.play('splash');
+  }
+
+  /** Crater lakes, magma chambers and pools in the Ember Depths (for lights and the first fill). */
+  private findLavaSources() {
+    const g = this.gen, out: { x: number; y: number; z: number }[] = [];
+    for (const v of g.volcanoes) {
+      out.push({ x: v.x, y: v.lavaLevel + 1, z: v.z });
+      out.push({ x: v.chamber.x, y: v.chamber.y - v.chamber.r * 0.3, z: v.chamber.z });
+    }
+    const rand = mulberry32(g.cfg.seed ^ 0x1a7a);
+    const want = Math.round((g.size.x * g.size.z) / (512 * 512) * 14);
+    for (let tries = 0, n = 0; n < want && tries < 2000; tries++) {
+      const x = 24 + rand() * (g.size.x - 48), z = 24 + rand() * (g.size.z - 48);
+      const fy = caveFloor(g, x, 8, z, EMBER_Y - 2);
+      if (fy === null) continue;
+      out.push({ x, y: fy + 0.5, z });
+      n++;
+    }
+    return out;
+  }
+
+  /** Fill crater lakes, chamber floors and depth pools with lava (new worlds and older saves). */
+  private fillInitialLava() {
+    const g = this.gen;
+    const bowl = (cx: number, cz: number, r: number, y0: number, level: number) => {
+      for (let k = Math.floor(cz - r); k <= Math.ceil(cz + r); k++)
+        for (let i = Math.floor(cx - r); i <= Math.ceil(cx + r); i++) {
+          if (Math.hypot(i + 0.5 - cx, k + 0.5 - cz) > r) continue;
+          let supported = false;
+          for (let j = Math.floor(y0); j <= Math.floor(level); j++) {
+            const air = g.densityAt(i + 0.5, j + 0.5, k + 0.5) < 0;
+            if (!air) { supported = true; continue; }
+            if (!supported) break;
+            this.lava.fill(i, j, k, Math.min(1, level - j));
+          }
+        }
+    };
+    for (const v of g.volcanoes) {
+      bowl(v.x, v.z, v.rc * 1.2, v.floor - 3, v.lavaLevel);
+      const c = v.chamber;
+      bowl(c.x, c.z, c.r + 1, c.y - c.r - 1, c.y - c.r * 0.35);
+    }
+    for (const s of this.lavaSources.slice(g.volcanoes.length * 2)) bowl(s.x, s.z, 2.5, s.y - 2, s.y + 0.3);
+    // Anything resting on a ledge the fill misjudged flows down on first visit.
+    this.lava.wakeAll();
+  }
+
+  /**
+   * Lava's effects each frame: it burns the player (thick and slow to wade
+   * through), lights up its surroundings, and where it touches water both
+   * turn to obsidian.
+   */
+  private updateLava(dt: number) {
+    const p = this.player;
+    // Glow: keep lights on the lava nearest the player.
+    this.lavaLightTimer -= dt;
+    if (this.lavaLightTimer <= 0) {
+      this.lavaLightTimer = 0.5;
+      const near = this.lavaSources.map((s, id) => ({ s, id, d: Math.hypot(s.x - p.x, s.y - p.y, s.z - p.z) }))
+        .filter(e => e.d < 70).sort((a, b) => a.d - b.d).slice(0, 2);
+      const keep = new Set(near.map(e => e.id));
+      for (const [id, light] of this.lavaLights) if (!keep.has(id)) { this.atmosphere.lights.remove(light); this.lavaLights.delete(id); }
+      for (const e of near) if (!this.lavaLights.has(e.id))
+        this.lavaLights.set(e.id, this.atmosphere.lights.add({ x: e.s.x, y: e.s.y + 2, z: e.s.z, color: new THREE.Color(0xff6a1a), range: 22, flicker: 0.6 }));
+    }
+    // Lava meeting water hardens into obsidian (a few cells per tick).
+    this.lavaReact -= dt;
+    if (this.lavaReact <= 0) {
+      this.lavaReact = 0.25;
+      let n = 0;
+      for (const key of this.lava.cells.keys()) {
+        const [i, j, k] = this.lava.unkey(key);
+        if (Math.abs(i - p.x) > 80 || Math.abs(k - p.z) > 80) continue;
+        const wet = [[0, 0, 0], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0]].find(([a, b, c]) => this.water.level(i + a, j + b, k + c) >= 0.2);
+        if (!wet) continue;
+        this.lava.take(i, j, k, 1);
+        this.water.take(i + wet[0], j + wet[1], k + wet[2], 1);
+        this.log.commit(this.field, 'add', i + 0.5, j + 0.5, k + 0.5, 0.95, Mat.Obsidian, 99);
+        this.onTerrainEdited(i + 0.5, j + 0.5, k + 0.5, 1);
+        this.particles.burst(i + 0.5, j + 1, k + 0.5, 0, 1, 0, 0xd8d8e0, 10, { speed: 2, gravity: -2, life: 1.2 });
+        if (Math.hypot(i - p.x, k - p.z) < 30) this.audio.play('splash', Math.hypot(i - p.x, k - p.z));
+        if (++n >= 6) break;
+      }
+    }
   }
 
   /** Fill the lakes and seed cave pools (new worlds only). */
@@ -822,7 +943,7 @@ export class Game {
 
   /** Start a world event right away (war horn, tests). */
   startEvent(kind: EventKind) {
-    this.onEventSignals(this.events.start(kind, { town: this.townInfo(), px: this.player.x, pz: this.player.z }));
+    this.onEventSignals(this.events.start(kind, { base: this.baseInfo(), px: this.player.x, pz: this.player.z }));
   }
 
   private onEventSignals(signals: EventSignal[]) {
@@ -832,7 +953,7 @@ export class Game {
           this.hud.message('Spores are falling from the sky...', '#7af0c8');
           this.audio.play('omen');
         } else {
-          this.hud.message('The Hollowfolk are marching on your town!', '#e6dcc0');
+          this.hud.message('The Cinderbound are coming for your fire!', '#ff9a4a');
           this.audio.play('horn');
           this.shake = Math.min(1, this.shake + 0.3);
         }
@@ -842,8 +963,8 @@ export class Game {
           const first = !this.progress.raidDefeated;
           this.progress.raidDefeated = true;
           this.combat.dismiss('raid');
-          this.hud.message('The Hollow March has been turned back!', '#ffe08a');
-          if (first) this.hud.message('Word of your victory will spread...', '#c89aff');
+          this.hud.message('The Cinder Siege is broken! The Cinderbound retreat to the mountains.', '#ffe08a');
+          if (first) this.hud.message('The wandering merchant will hear of this. Expect rarer goods.', '#c89aff');
           const p = this.player;
           this.pickups.spawn('coin', 120, p.x, p.y + 1.5, p.z, 1.5);
           this.pickups.spawn('healing_potion', 3, p.x, p.y + 1.5, p.z, 1.5);
@@ -851,7 +972,7 @@ export class Game {
           writeSave(this.snapshot());
         } else {
           this.combat.dismiss('raid');
-          this.hud.message('With no one to stop them, the raiders loot the outskirts and leave.', '#ffb070');
+          this.hud.message('With no one to stop them, the Cinderbound carry off embers from your fire and leave.', '#ffb070');
         }
       }
     }
@@ -925,6 +1046,7 @@ export class Game {
 
   private onTerrainEdited(x: number, y: number, z: number, r: number) {
     this.water.wake(x, y, z, r + 1.5);
+    this.lava.wake(x, y, z, r + 1.5);
     const pad = r + 1;
     this.markSky(x - pad, z - pad, x + pad, z + pad);
     this.veg.invalidateTufts(x, z, r + 1);
@@ -1004,10 +1126,11 @@ export class Game {
         hp: this.vitals.hp,
         maxHp: this.vitals.maxHp,
         maxMana: this.vitals.maxMana,
-        town: this.town.serialize(),
+        merchant: this.merchant.serialize(),
         progress: this.progress,
         events: this.events.serialize(),
         water: this.water.serialize(),
+        lava: this.lava.serialize(),
       },
     };
   }
@@ -1109,7 +1232,7 @@ export class Game {
     this.structureRenderer.update();
     this.furnitureRenderer.update(dt, cam.position);
     this.waterRenderer.update(dt, cam.position);
-    this.town.update(dt, cam.position.x, cam.position.y, cam.position.z, this.atmosphere.daylight < 0.3, this.npcContext());
+    this.lavaRenderer.update(dt, cam.position);
     this.flushSky();
     const vis = this.sky.visibility(cam.position.x, cam.position.y, cam.position.z);
     this.atmosphere.underwater = 0;
@@ -1134,7 +1257,6 @@ export class Game {
     if (inp.wasPressed('F9')) location.href = `${location.pathname}?continue=1`;
     if (this.buildMenu.open && (inp.wasPressed('Escape') || inp.wasPressed('Tab'))) { this.toggleBuildMenu(false); return; }
     if (inp.wasPressed('Tab') || inp.wasPressed('KeyE')) { if (this.dialogue.open) this.dialogue.close(); this.toggleInventory(); }
-    if (inp.wasPressed('KeyH')) this.town.tryRegister(this.player.x, this.player.y, this.player.z, true);
   }
 
   // ===================================================================== update
@@ -1168,6 +1290,16 @@ export class Game {
     const k = (c: string) => (active && inp.down(c) ? 1 : 0);
     const axisF = active ? inp.axisForward : 0, axisS = active ? inp.axisStrafe : 0;
     const waterHere = this.waterLevelAt(this.player.x, this.player.y + 0.3, this.player.z);
+    // Lava: thick to wade through, and it burns unless you wear Ember armor.
+    const lavaHere = this.lava.surfaceAt(this.player.x, this.player.y + 0.3, this.player.z);
+    if (lavaHere !== null) {
+      this.player.speedMul *= 0.45;
+      if (alive && !st.lavaProof) {
+        this.hurtPlayer(16, NaN, NaN, 0);
+        if (this.time - this.burnWarned > 4) { this.burnWarned = this.time; this.hud.message('The lava burns!', '#ff8a3a'); }
+        if (Math.random() < dt * 20) this.particles.burst(this.player.x, lavaHere, this.player.z, 0, 1, 0, Math.random() < 0.5 ? 0xff7a2a : 0xffd060, 2, { speed: 2, gravity: 4, life: 0.6 });
+      }
+    }
     // Grappling hook (F): fire / release; jump releases; back key pays out rope.
     const hook = st.hook;
     if (!hook && this.grapple.state !== 'idle') this.grapple.release();
@@ -1193,7 +1325,7 @@ export class Game {
         jump: !!k('Space'),
         sprint: !!(k('ShiftLeft') || k('ShiftRight')),
         crouch: !!k('KeyC'),
-      }, waterHere);
+      }, waterHere ?? lavaHere);
       // Splash on entering water, and breath while the head is under.
       if (this.player.inWater && !this.wasInWater && this.player.vy < -4) {
         this.particles.burst(this.player.x, waterHere ?? this.player.y, this.player.z, 0, 1, 0, 0xcfe8ff, 18, { speed: 4 });
@@ -1268,7 +1400,7 @@ export class Game {
 
     // Talk to NPCs (right-click), otherwise regular interaction.
     let alt = active && inp.consumeAlt();
-    const npcAim = this.town.pick(this.camera.position, dir, 4.5);
+    const npcAim = this.merchant.pick(this.camera.position, dir, 4.5);
     if (alt && npcAim) {
       this.dialogue.show(npcAim);
       this.input.unlock();
@@ -1294,12 +1426,17 @@ export class Game {
 
     // Water: wake after building changes, then simulate at a fixed rate.
     if (this.structures.version !== this.structVersion || this.furniture.version !== this.furnVersion) {
-      if (this.structVersion >= 0) this.water.wake(this.player.x, this.player.y, this.player.z, 10);
+      if (this.structVersion >= 0) { this.water.wake(this.player.x, this.player.y, this.player.z, 10); this.lava.wake(this.player.x, this.player.y, this.player.z, 10); }
       this.structVersion = this.structures.version; this.furnVersion = this.furniture.version;
     }
     this.waterAcc = Math.min(0.2, this.waterAcc + dt);
     while (this.waterAcc >= 1 / 15) { this.waterAcc -= 1 / 15; this.water.step(2500, this.player.x, this.player.z, 90); }
     this.waterRenderer.update(dt, this.camera.position);
+    // Lava creeps: a third of water's pace, and it stops in thick tongues.
+    this.lavaAcc += dt;
+    while (this.lavaAcc >= 1 / 5) { this.lavaAcc -= 1 / 5; this.lava.step(900, this.player.x, this.player.z, 90); }
+    this.lavaRenderer.update(dt, this.camera.position);
+    this.updateLava(dt);
 
     // World streaming + updates.
     this.terrain.update(this.camera.position, 3);
@@ -1316,13 +1453,16 @@ export class Game {
     this.updateMushroomLights(dt);
     this.pickups.update(dt, this.player.x, this.player.y, this.player.z);
     this.onEventSignals(this.events.update(dt, {
-      daylight: this.atmosphere.daylight, px: this.player.x, pz: this.player.z, town: this.townInfo(), bossDefeated: this.progress.bossDefeated,
+      daylight: this.atmosphere.daylight, px: this.player.x, pz: this.player.z, base: this.baseInfo(), bossDefeated: this.progress.bossDefeated,
     }));
     const ev = this.events.kind;
     this.combat.spawnBoost = ev === 'sporefall' ? 1.8 : ev === 'raid' ? 1.6 : 1;
     this.atmosphere.sporeTarget = ev === 'sporefall' ? 1 : 0;
     this.combat.update(dt, this.player.x, this.player.y, this.player.z, this.time, this.player.vx, this.player.vz);
-    this.town.update(dt, this.player.x, this.player.y, this.player.z, this.atmosphere.daylight < 0.3, this.npcContext());
+    const isDay = this.atmosphere.daylight >= 0.3;
+    const dawn = this.wasDaylight === false && isDay, dusk = this.wasDaylight === true && !isDay;
+    this.wasDaylight = isDay;
+    this.merchant.update(dt, this.events.nights + 1, dawn, dusk, this.field.cfg.seed, this.progress, () => this.campSpot(), this.player.x, this.player.z, !isDay);
     this.flushSky();
     for (const [id, t] of this.wobble) {
       const nt = t + dt;
@@ -1391,7 +1531,7 @@ export class Game {
   private updatePrompt() {
     const aim = this.interaction.aim;
     let text = '';
-    const npc = this.town.pick(this.camera.position, this.dir, 4.5);
+    const npc = this.merchant.pick(this.camera.position, this.dir, 4.5);
     if (npc) { this.hud.setPrompt(`[RMB] Talk to ${npc.def.name} ${npc.def.title}`); return; }
     if (aim?.kind === 'furniture' && aim.distance < 5) {
       const f = aim.hit.f;

@@ -61,3 +61,30 @@ describe('biomes', () => {
     expect(surfaces.get(Biome.Amberwood)).toContain(Mat.Leaflitter);
   });
 });
+
+describe('volcanoes', () => {
+  it('raises volcanoes away from spawn, each with a crater bowl below its rim', () => {
+    expect(gen.volcanoes.length).toBeGreaterThanOrEqual(1);
+    for (const v of gen.volcanoes) {
+      expect(Math.hypot(v.x - gen.spawn.x, v.z - gen.spawn.z)).toBeGreaterThan(v.r + 40);
+      expect(gen.height(v.x, v.z)).toBeLessThan(v.rim - 6);
+      expect(gen.height(v.x + v.rc + 3, v.z)).toBeGreaterThan(v.foot + 20);
+      expect(v.lavaLevel).toBeLessThan(v.rim);
+      expect(gen.biomeAt(v.x + v.r * 0.5, v.z)).toBe(Biome.Volcano);
+    }
+  });
+
+  it('volcanoes are made of ash, basalt and glowing magma rock, with an open lava tube inside', () => {
+    const v = gen.volcanoes[0];
+    const sx = v.x + v.r * 0.55, sz = v.z;
+    expect([Mat.Ash, Mat.Basalt, Mat.Magmarock]).toContain(gen.materialFor(sx, gen.height(sx, sz) - 0.5, sz, 0, 1));
+    // Sky islands drifting over a volcano keep their own rock.
+    for (const isl of gen.islands.filter(i => gen.volcanoAt(i.x, i.z)))
+      expect([Mat.Ash, Mat.Basalt, Mat.Magmarock, Mat.Obsidian]).not.toContain(gen.materialFor(isl.x, isl.y - 2, isl.z, 2, 0));
+    expect([Mat.Magmarock, Mat.Obsidian, Mat.Basalt]).toContain(gen.materialFor(v.x, gen.height(v.x, v.z) - 1, v.z, 2, 1));
+    const c = v.chamber;
+    expect(gen.densityAt(c.x, c.y, c.z)).toBeLessThan(0); // the magma chamber is hollow
+    const mid = gen.tubes[Math.floor(gen.tubes.length / (gen.volcanoes.length * 2))];
+    expect(gen.densityAt((mid.ax + mid.bx) / 2, (mid.ay + mid.by) / 2, (mid.az + mid.bz) / 2)).toBeLessThan(0);
+  });
+});

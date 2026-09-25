@@ -21,7 +21,7 @@ export type PieceShape =
 export type PieceSlot = 'cell' | 'edge' | 'corner';
 
 /** Surface textures pieces can be built from, and the item each costs. */
-export type BuildTexture = 'planks' | 'bricks' | 'rootplanks' | 'saltbricks' | 'bonebricks';
+export type BuildTexture = 'planks' | 'bricks' | 'rootplanks' | 'saltbricks' | 'bonebricks' | 'basaltbricks';
 export interface BuildMaterial { texture: BuildTexture; item: string; name: string }
 export const BUILD_MATERIALS: BuildMaterial[] = [
   { texture: 'planks', item: 'wood', name: 'Wood' },
@@ -29,6 +29,7 @@ export const BUILD_MATERIALS: BuildMaterial[] = [
   { texture: 'rootplanks', item: 'rootwood', name: 'Petrified Root' },
   { texture: 'saltbricks', item: 'salt', name: 'Salt Brick' },
   { texture: 'bonebricks', item: 'fossil', name: 'Titan Bone' },
+  { texture: 'basaltbricks', item: 'basalt', name: 'Basalt' },
 ];
 export function buildMaterial(texture: BuildTexture): BuildMaterial {
   return BUILD_MATERIALS.find(m => m.texture === texture) ?? BUILD_MATERIALS[0];

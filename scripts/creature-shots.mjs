@@ -21,8 +21,8 @@ page.on('pageerror', e => errors.push(String(e)));
 const settle = () => page.waitForFunction(() => { __game.simulate(0.05); return __game.terrain.complete && __game.terrain.stats.pending === 0; }, null, { timeout: 180000, polling: 200 });
 
 const GROUPS = {
-  burrlings: ['burrling', 'dune_burrling', 'frost_burrling', 'rift_burrling', 'moss_burrling', 'amber_burrling'],
-  burrlings2: ['deep_burrling', 'cinder_burrling', 'cloud_burrling', 'spore_burrling'],
+  burrlings: ['blob', 'dune_blob', 'frost_blob', 'rift_blob', 'moss_blob', 'amber_blob'],
+  burrlings2: ['deep_blob', 'cinder_blob', 'cloud_blob', 'spore_blob'],
   walkers: ['rootwalker', 'sporebound', 'rotfang', 'mossback', 'salt_crawler'],
   flyers: ['drifter', 'rift_drifter', 'spore_drifter', 'bonepicker', 'leafwing'],
 };

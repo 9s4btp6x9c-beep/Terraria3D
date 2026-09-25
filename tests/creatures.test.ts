@@ -2,22 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { CREATURES, Creature, peaceful } from '../src/entities/creatures';
 
 describe('creature temperament', () => {
-  const burrling = () => new Creature(CREATURES.burrling, 0, 70, 0);
+  const blob = () => new Creature(CREATURES.blob, 0, 70, 0);
 
   it('meadow creatures are docile by day but not at night', () => {
-    const c = burrling();
+    const c = blob();
     expect(peaceful(c, true)).toBe(true);
     expect(peaceful(c, false)).toBe(false);
   });
 
   it('a struck creature stays hostile', () => {
-    const c = burrling();
+    const c = blob();
     c.provoked = true;
     expect(peaceful(c, true)).toBe(false);
   });
 
   it('dangerous lands and night hunters are never docile', () => {
-    for (const id of ['rift_burrling', 'rootwalker', 'drifter', 'bonepicker', 'dune_crawler']) {
+    for (const id of ['rift_blob', 'rootwalker', 'drifter', 'bonepicker', 'dune_crawler']) {
       expect(peaceful(new Creature(CREATURES[id], 0, 70, 0), true)).toBe(false);
     }
   });

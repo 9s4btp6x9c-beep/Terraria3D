@@ -21,11 +21,12 @@ export interface MenuHooks {
 
 const TIPS = [
   ['Mining', 'Copper and iron yield to your first pickaxe. Deepstone and glowing lumite need iron.'],
-  ['Hearth and home', 'An enclosed room with a door, a lit Hearth and a bed or chair is a home. Settlers move into homes.'],
+  ['The wandering merchant', 'Every few days a merchant camps near your bed with a cart of goods. He leaves at dusk, and brings something different each time.'],
+  ['The Cinderbound', 'Fire-cult of the volcanoes. Once the Deepwyrm falls, they come for the fire in your Hearth. Hold them off.'],
   ['Building', 'Hold the Builder\'s Hammer and press Q to pick a piece. Start on foundations: they stay level on any slope.'],
   ['Resting', 'Stand by a lit Hearth under a roof to become Rested. The more comfortable the room, the longer it lasts.'],
-  ['Heartroots', 'Root cages with an ember core grow on cave floors. Break one and use it to raise your Vigor.'],
-  ['Starseeds', 'On clear nights seeds of light drift down from the stars. Catch five to seal a Glim Vessel.'],
+  ['Red Essence', 'Glowing red crystals grow on cave floors. Break one and use its essence to raise your maximum health.'],
+  ['Starseeds', 'On clear nights seeds of light drift down from the stars. Five of them condense into Blue Essence.'],
   ['The Sporefall', 'Some nights glowing spores rain from a green sky and fungal horrors walk. Their Sporeglass makes fine gear.'],
   ['The Rootwold', 'Petrified roots arch over the moss. Their wood is stone-hard: carve it into mauls and longbows.'],
   ['Ossuary Flats', 'Titans died on the salt pan long ago. Their bones make a pickaxe that bites fast and deep.'],
@@ -33,7 +34,7 @@ const TIPS = [
   ['Water', 'Tunnels dug from the coast below sea level will flood. Buckets carry water where you need it.'],
   ['The Deepwyrm', 'Something vast burrows beneath the world. A Tremor Totem, used at night or underground, calls it.'],
   ['Sky Islands', 'The floating islands hold aerite ore and old shrines. A grappling hook helps you reach them.'],
-  ['Mushroom Caverns', 'Deep halls glow blue with giant mushrooms. Their glowcaps brew Glim Draughts.'],
+  ['Mushroom Caverns', 'Deep halls glow blue with giant mushrooms. Their glowcaps brew Blue Elixirs.'],
   ['Breath', 'Watch the bubbles when you swim under water. Surface before they run out.'],
   ['Flight', 'Roc Wings let you fly while you hold jump, then glide down safely.'],
 ];
@@ -42,7 +43,7 @@ const DESKTOP_CONTROLS: [string, string[]][] = [
   ['Move', ['W', 'A', 'S', 'D']], ['Look', ['Mouse']], ['Jump / swim up', ['Space']], ['Sprint', ['Shift']],
   ['Crouch', ['C']], ['Use, attack, place', ['LMB']], ['Interact, talk', ['RMB']], ['Hotbar', ['1-9', 'Wheel']],
   ['Inventory & crafting', ['Tab', 'E']], ['Build menu (hammer)', ['Q']], ['Rotate piece', ['R']], ['Free placement', ['Hold Shift']],
-  ['Take a piece down (hammer)', ['RMB']], ['Grappling hook', ['F']], ['Check housing', ['H']],
+  ['Take a piece down (hammer)', ['RMB']], ['Grappling hook', ['F']],
   ['Save world', ['F5']], ['Pause', ['Esc']], ['Fly (with wings)', ['Hold Space']], ['Debug readout', ['F3']],
 ];
 const TOUCH_CONTROLS: [string, IconName | string][] = [

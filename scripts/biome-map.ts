@@ -8,7 +8,7 @@ import { deflateSync } from 'node:zlib';
 import { defaultConfig } from '../src/world/config';
 import { BIOME_NAMES, WorldGenerator } from '../src/world/generator';
 
-const COLORS = [[74, 145, 96], [220, 200, 140], [234, 242, 248], [70, 120, 140], [46, 90, 50], [200, 150, 200], [216, 116, 42]];
+const COLORS = [[74, 145, 96], [220, 200, 140], [234, 242, 248], [70, 120, 140], [46, 90, 50], [200, 150, 200], [216, 116, 42], [60, 20, 20]];
 const crcTable = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 const crc = (b: Buffer) => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
 function png(w: number, h: number, rgb: Uint8Array) {
@@ -49,5 +49,5 @@ for (const seed of process.argv.slice(2).map(Number)) {
   const pct = count.map((n, b) => `${BIOME_NAMES[b]} ${(100 * n / land).toFixed(1)}%`).join(', ');
   const kinds = new Map<number, number>();
   for (const f of gen.features) kinds.set(f.mat, (kinds.get(f.mat) ?? 0) + 1);
-  console.log(`seed ${seed} (${ms.toFixed(0)} ms): ${pct}; features ${[...kinds].map(([m, n]) => `${m}:${n}`).join(' ')}`);
+  console.log(`seed ${seed} (${ms.toFixed(0)} ms): ${pct}; features ${[...kinds].map(([m, n]) => `${m}:${n}`).join(' ')}; volcanoes ${gen.volcanoes.map(v => `(${v.x.toFixed(0)},${v.z.toFixed(0)} r${v.r.toFixed(0)} rim ${v.rim.toFixed(0)})`).join(' ')}`);
 }

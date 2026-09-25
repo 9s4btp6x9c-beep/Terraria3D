@@ -30,10 +30,10 @@ export function tooltipHtml(def: ItemDef): string {
     lines.push(`${w.damage} ${w.type === 'magic' ? 'magic' : w.type === 'bow' ? 'ranged' : w.type === 'thrown' ? 'explosive' : 'melee'} damage`);
     lines.push(`${w.speed < 0.36 ? 'Fast' : w.speed < 0.5 ? 'Average' : 'Slow'} speed · ${w.knockback >= 7 ? 'strong' : 'average'} knockback`);
     if (w.ammo) lines.push(`Uses ${item(w.ammo).name}s`);
-    if (w.manaCost) lines.push(`Uses ${w.manaCost} Glim`);
+    if (w.manaCost) lines.push(`Uses ${w.manaCost} mana`);
   }
   if (def.armor) lines.push(`${def.armor.defense} defense`);
-  if (def.heal) lines.push(`Restores ${def.heal} Vigor`);
+  if (def.heal) lines.push(`Restores ${def.heal} health`);
   if (def.kind === 'material') lines.push('<span class="dim">Material</span>');
   if (def.kind === 'placeable') lines.push('<span class="dim">Can be placed</span>');
   if (def.kind === 'accessory') lines.push('<span class="dim">Equipable</span>');

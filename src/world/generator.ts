@@ -20,10 +20,17 @@ export interface Cabin { x: number; y: number; z: number; cx: number; cz: number
 
 export const CABIN_WALL = 2.5;
 
-export const enum Biome { Forest = 0, Desert = 1, Snow = 2, Rift = 3, Rootwold = 4, Ossuary = 5, Amberwood = 6 }
+export const enum Biome { Forest = 0, Desert = 1, Snow = 2, Rift = 3, Rootwold = 4, Ossuary = 5, Amberwood = 6, Volcano = 7 }
 
 /** In-world names, shown when the player crosses into a biome. */
-export const BIOME_NAMES = ['Greenhollow', 'Sunscar Dunes', 'Frostmere', 'The Riftlands', 'The Rootwold', 'Ossuary Flats', 'Amberwood'];
+export const BIOME_NAMES = ['Greenhollow', 'Sunscar Dunes', 'Frostmere', 'The Riftlands', 'The Rootwold', 'Ossuary Flats', 'Amberwood', 'The Cinder Peaks'];
+
+/**
+ * A volcano: an ash-and-basalt cone of radius `r` rising `height` above its
+ * foot, with a crater (radius `rc`) holding a lava lake at `lavaLevel`, and a
+ * lava tube running from the foot into a magma chamber under the crater.
+ */
+export interface Volcano { x: number; z: number; r: number; foot: number; height: number; rc: number; rim: number; floor: number; lavaLevel: number; chamber: { x: number; y: number; z: number; r: number } }
 
 /** Weights of every non-forest biome at a column, each 0..1 with soft borders. */
 export interface BiomeWeights { desert: number; snow: number; rift: number; root: number; ossuary: number; amber: number }
@@ -76,6 +83,10 @@ export class WorldGenerator {
   /** Underground cabins: grid-aligned rooms carved out of the rock (x,z = min corner). */
   readonly cabins: Cabin[] = [];
   readonly lakes: Lake[] = [];
+  readonly volcanoes: Volcano[] = [];
+  /** Lava tube capsules (carved like the entrance tunnel) and their padded bounds. */
+  readonly tubes: Capsule[] = [];
+  private tubeBounds = [0, 0, 0, -1, -1, -1];
   /** AABB (min xyz, max xyz) around the entrance tunnel, padded. */
   private entranceBounds = [0, 0, 0, 0, 0, 0];
   spawn = { x: 0, y: 0, z: 0 };
@@ -116,6 +127,7 @@ export class WorldGenerator {
           this.biomes[x + z * w] = b;
         }
     }
+    this.placeVolcanoes(!(pre && pre.heights.length === w * d));
     this.placeSpawnAndEntrance();
     this.placeLakes();
     this.placeIslands();
@@ -255,6 +267,89 @@ export class WorldGenerator {
     this.entranceBounds = [b[0] - 4, b[1] - 4, b[2] - 4, b[3] + 4, b[4] + 4, b[5] + 4];
   }
 
+  /**
+   * Raise a couple of volcanoes well away from spawn: cones with gullies,
+   * a crater bowl for a lava lake and a lava tube leading to a magma chamber.
+   * `shape` is false when the heightfield came precomputed (already shaped).
+   */
+  private placeVolcanoes(shape: boolean) {
+    const rand = mulberry32(this.cfg.seed ^ 0xb01c);
+    const W = this.size.x, D = this.size.z, cx = W / 2, cz = D / 2, half = Math.min(W, D) / 2;
+    const want = Math.max(1, Math.round((W * D) / (512 * 512) * 0.9));
+    const sea = this.cfg.seaLevel;
+    for (let tries = 0; this.volcanoes.length < want && tries < 300; tries++) {
+      const a = rand() * Math.PI * 2, dist = half * (0.44 + rand() * 0.18);
+      const x = cx + Math.cos(a) * dist, z = cz + Math.sin(a) * dist;
+      const r = 52 + rand() * 14;
+      if (Math.max(Math.abs(x - cx), Math.abs(z - cz)) / half > 0.64) continue;
+      if (this.volcanoes.some(v => Math.hypot(v.x - x, v.z - z) < v.r + r + 40)) continue;
+      const ring = Array.from({ length: 12 }, (_, k) => this.height(x + Math.cos(k * 0.52) * r * 0.8, z + Math.sin(k * 0.52) * r * 0.8));
+      if (Math.min(...ring) < sea + 4) continue;
+      const foot = Math.min(...ring.map((_, k) => this.height(x + Math.cos(k * 0.52) * r, z + Math.sin(k * 0.52) * r)));
+      const height = 46 + rand() * 14, rc = 12 + rand() * 4;
+      const rim = foot + height * Math.pow(1 - rc / r, 1.35);
+      if (rim > this.size.y - 30) continue;
+      const floor = rim - 11;
+      const ta = rand() * Math.PI * 2;
+      this.volcanoes.push({
+        x, z, r, foot, height, rc, rim, floor, lavaLevel: floor + 6,
+        chamber: { x: x + Math.cos(ta) * 5, y: floor - 11, z: z + Math.sin(ta) * 5, r: 6.5 },
+      });
+    }
+    const w = W + 1;
+    for (const v of this.volcanoes) {
+      if (shape) {
+        for (let zz = Math.max(0, Math.floor(v.z - v.r)); zz <= Math.min(D, Math.ceil(v.z + v.r)); zz++)
+          for (let xx = Math.max(0, Math.floor(v.x - v.r)); xx <= Math.min(W, Math.ceil(v.x + v.r)); xx++) {
+            const d = Math.hypot(xx - v.x, zz - v.z);
+            if (d >= v.r) continue;
+            const i = xx + zz * w;
+            const t = 1 - d / v.r, ang = Math.atan2(zz - v.z, xx - v.x);
+            let cone = v.foot + v.height * Math.pow(t, 1.35) + this.hills.noise2(ang * 4 + 50, d / 9) * 2.4 * t;
+            if (d < v.rc) cone = v.floor + (v.rim - v.floor) * Math.pow(d / v.rc, 2.2);
+            const wgt = d < v.rc * 1.2 ? 1 : smoothstep(v.r, v.r * 0.72, d);
+            const old = this.heights[i];
+            this.heights[i] = d < v.rc * 1.2 ? cone : old + (Math.max(old, cone) - old) * wgt;
+            this.mountainMask[i] *= 1 - wgt;
+            if (d < v.r * 0.92 + this.detail.noise2(xx / 7, zz / 7) * 3) this.biomes[i] = Biome.Volcano;
+          }
+      }
+      // Lava tube: from the foot, winding up into the magma chamber.
+      const a = Math.atan2(v.chamber.z - v.z, v.chamber.x - v.x) + Math.PI * 0.35;
+      let px = v.x + Math.cos(a) * v.r * 0.78, pz = v.z + Math.sin(a) * v.r * 0.78;
+      let py = this.height(px, pz) + 1;
+      const n = 10;
+      for (let k = 1; k <= n; k++) {
+        const f = k / n;
+        const nx = px + (v.chamber.x - px) / (n - k + 1) + Math.sin(k * 1.7) * 1.5;
+        const nz = pz + (v.chamber.z - pz) / (n - k + 1) + Math.cos(k * 1.3) * 1.5;
+        const ny = py + (v.chamber.y - 2 - py) / (n - k + 1);
+        this.tubes.push({ ax: px, ay: py, az: pz, bx: nx, by: ny, bz: nz, r: k < 2 ? 3.2 : 2.4 + f * 0.6 });
+        px = nx; py = ny; pz = nz;
+      }
+      const c = v.chamber;
+      this.tubes.push({ ax: c.x - 2, ay: c.y, az: c.z - 1, bx: c.x + 2, by: c.y + 0.5, bz: c.z + 1, r: c.r });
+    }
+    if (this.tubes.length) {
+      const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      for (const c of this.tubes) {
+        b[0] = Math.min(b[0], c.ax - c.r, c.bx - c.r); b[3] = Math.max(b[3], c.ax + c.r, c.bx + c.r);
+        b[1] = Math.min(b[1], c.ay - c.r, c.by - c.r); b[4] = Math.max(b[4], c.ay + c.r, c.by + c.r);
+        b[2] = Math.min(b[2], c.az - c.r, c.bz - c.r); b[5] = Math.max(b[5], c.az + c.r, c.bz + c.r);
+      }
+      this.tubeBounds = [b[0] - 4, b[1] - 4, b[2] - 4, b[3] + 4, b[4] + 4, b[5] + 4];
+    }
+  }
+
+  /** The volcano whose cone covers the column, with the distance to its centre. */
+  volcanoAt(x: number, z: number): { v: Volcano; d: number } | null {
+    for (const v of this.volcanoes) {
+      const d = Math.hypot(x - v.x, z - v.z);
+      if (d < v.r) return { v, d };
+    }
+    return null;
+  }
+
   private placeIslands() {
     const rand = mulberry32(this.cfg.seed ^ 0x51a7);
     const top = this.size.y - 14;
@@ -281,7 +376,7 @@ export class WorldGenerator {
     for (let tries = 0; this.lakes.length < want && tries < 600; tries++) {
       const x = m + rand() * (this.size.x - 2 * m), z = m + rand() * (this.size.z - 2 * m);
       const b = this.biomeAt(x, z);
-      if (b === Biome.Desert || b === Biome.Rift || b === Biome.Ossuary) continue;
+      if (b === Biome.Desert || b === Biome.Rift || b === Biome.Ossuary || b === Biome.Volcano) continue;
       const r = 7 + rand() * 7;
       if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < r + 30) continue;
       if (this.lakes.some(l => Math.hypot(l.x - x, l.z - z) < l.r + r + 24)) continue;
@@ -531,6 +626,12 @@ export class WorldGenerator {
     if (x > eb[0] && x < eb[3] && y > eb[1] && y < eb[4] && z > eb[2] && z < eb[5])
       for (const c of this.entrance) tunnel = Math.min(tunnel, capsuleDist(x, y, z, c) - c.r);
     if (tunnel < 3) d = Math.min(d, tunnel - this.detail.noise3(x / 5, y / 5, z / 5) * 0.8);
+    const tb = this.tubeBounds;
+    if (x > tb[0] && x < tb[3] && y > tb[1] && y < tb[4] && z > tb[2] && z < tb[5]) {
+      let tube = Infinity;
+      for (const c of this.tubes) tube = Math.min(tube, capsuleDist(x, y, z, c) - c.r);
+      if (tube < 3) d = Math.min(d, tube - this.detail.noise3(x / 4, y / 4, z / 4) * 0.9);
+    }
     for (const isl of this.islands) d = Math.max(d, this.islandDensity(x, y, z, isl));
     const feat = this.featureAt(x, y, z);
     if (feat) d = Math.max(d, feat.d);
@@ -602,6 +703,17 @@ export class WorldGenerator {
     const h = this.height(x, z);
     const depth = h - y;
     if (y < 3 + this.detail.noise2(x / 5, z / 5) * 1.5) return Mat.Bedrock;
+    const vol = this.volcanoAt(x, z);
+    if (vol && y > EMBER_Y + 4 && depth > -12) { // (not the sky islands above)
+      const { v, d: vd } = vol;
+      const band = this.ore.noise3(x / 5 + 130, y / 5, z / 5);
+      // The crater and the magma chamber glow; tube walls are streaked with obsidian.
+      if (vd < v.rc * 1.25 && y > v.floor - 3) return band > 0.35 ? Mat.Obsidian : band < -0.2 ? Mat.Magmarock : Mat.Basalt;
+      if (Math.hypot(x - v.chamber.x, y - v.chamber.y, z - v.chamber.z) < v.chamber.r + 2.5) return band > 0.4 ? Mat.Obsidian : band < 0 ? Mat.Magmarock : Mat.Basalt;
+      if (depth < 1.8 && exposure < 1.5 && normalY > 0.6) return Mat.Ash;
+      if (band > 0.62) return Mat.Magmarock;
+      if (depth < 40) return Mat.Basalt;
+    }
     const feat = this.featureAt(x, y, z);
     if (feat && feat.d > -0.9) {
       // Moss creeps over the tops of the Rootwold's roots.

@@ -18,7 +18,7 @@ type Layer = ExtraLayer | number;
 /** Terrain-material layers usable by name in models (e.g. dirt blocks). */
 const TERRAIN_LAYERS: Record<string, Mat> = {
   dirt: Mat.Dirt, stone: Mat.Stone, sand: Mat.Sand, clay: Mat.Clay, snow: Mat.Snow, grass: Mat.Grass, deepstone: Mat.Deepstone,
-  sandstone: Mat.Sandstone, ice: Mat.Ice, blightstone: Mat.Riftstone, moss: Mat.Moss, rootwood: Mat.Rootwood, salt: Mat.Salt, fossil: Mat.Fossil, leaflitter: Mat.Leaflitter, emberstone: Mat.Emberstone, emberite: Mat.Emberite, aerite: Mat.Aerite, mud: Mat.Mud, mushgrass: Mat.Mushgrass,
+  sandstone: Mat.Sandstone, ice: Mat.Ice, blightstone: Mat.Riftstone, moss: Mat.Moss, rootwood: Mat.Rootwood, salt: Mat.Salt, fossil: Mat.Fossil, leaflitter: Mat.Leaflitter, basalt: Mat.Basalt, ash: Mat.Ash, obsidian: Mat.Obsidian, magmarock: Mat.Magmarock, emberstone: Mat.Emberstone, emberite: Mat.Emberite, aerite: Mat.Aerite, mud: Mat.Mud, mushgrass: Mat.Mushgrass,
 };
 
 function layerIndex(l: Layer | string): number {
@@ -301,21 +301,18 @@ function horn() {
 }
 
 /** A brute's club: a thick femur studded with iron. */
+/** Magma Maul: a basalt block with glowing cracks on a charred haft. */
 function club() {
-  const parts = [
-    box(0.07, 0.32, 0.07, 'cloth', { y: 0.06 }, 0x4a3024),
-    cyl(0.05, 0.045, 0.7, 6, 'bone', { y: 0.45 }),
-    ico(0.11, 'bone', { y: 0.86, sy: 1.25, jitter: 0.18, seed: 12 }),
-    ico(0.07, 'bone', { x: 0.06, y: 0.97, z: 0.03, jitter: 0.2, seed: 13 }),
-    ico(0.07, 'bone', { x: -0.06, y: 0.97, z: -0.02, jitter: 0.2, seed: 14 }),
-    octa(0.06, 'bone', { y: -0.13 }),
-    cyl(0.07, 0.07, 0.04, 7, 'iron', { y: 0.72 }),
-  ];
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    parts.push(cone(0.022, 0.1, 4, 'iron', { x: Math.cos(a) * 0.11, y: 0.82 + (i % 2) * 0.1, z: Math.sin(a) * 0.11, rz: -Math.cos(a) * 1.4, rx: Math.sin(a) * 1.4 }));
-  }
-  return merge(parts);
+  return merge([
+    box(0.07, 0.32, 0.07, 'cloth', { y: 0.06 }, 0x3a2420),
+    cyl(0.05, 0.045, 0.7, 6, 'bark', { y: 0.45 }, 0x4a3a34),
+    box(0.26, 0.2, 0.2, 'basalt', { y: 0.88 }),
+    box(0.2, 0.26, 0.16, 'basalt', { y: 0.88, ry: 0.3 }),
+    box(0.28, 0.03, 0.21, 'flame', { y: 0.84 }, 0xff7a2a),
+    box(0.03, 0.22, 0.21, 'flame', { x: 0.06, y: 0.88 }, 0xff9a3a),
+    octa(0.05, 'basalt', { y: -0.13 }),
+    cyl(0.07, 0.07, 0.04, 7, 'iron', { y: 0.74 }),
+  ]);
 }
 
 /** A curved fang on a cord. */
@@ -348,41 +345,44 @@ function plume() {
   ]);
 }
 
-/** Heartroot cage: petrified roots curling up from the rock and over the core. */
+/** Red crystal cluster: shards of crystallised life growing from a rock (the renderer spins the core). */
 export function lifeCrystalBase() {
-  const parts = [
+  return merge([
     ico(0.3, 'stone', { y: 0.08, sy: 0.5, jitter: 0.35, seed: 41 }),
     ico(0.15, 'stone', { x: 0.26, y: 0.06, jitter: 0.4, seed: 42 }),
-    ico(0.13, 'moss', { x: -0.22, y: 0.07, z: 0.12, jitter: 0.4, seed: 43 }),
-  ];
-  for (let k = 0; k < 5; k++) {
-    const a = (k / 5) * Math.PI * 2 + 0.3;
-    // Each root: three segments bending inward over the top.
-    const pts = [[0.34, 0.08], [0.4, 0.42], [0.3, 0.78], [0.08, 0.98]];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const [r0, y0] = pts[i], [r1, y1] = pts[i + 1];
-      const x0 = Math.cos(a + i * 0.25) * r0, z0 = Math.sin(a + i * 0.25) * r0, x1 = Math.cos(a + (i + 1) * 0.25) * r1, z1 = Math.sin(a + (i + 1) * 0.25) * r1;
-      const len = Math.hypot(x1 - x0, y1 - y0, z1 - z0);
-      const g = new THREE.CylinderGeometry(0.055 - i * 0.012, 0.08 - i * 0.014, len, 5);
-      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0).normalize()));
-      g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
-      parts.push(part(g, 'rootbark'));
-    }
-  }
-  return merge(parts);
+    ico(0.13, 'stone', { x: -0.22, y: 0.07, z: 0.12, jitter: 0.4, seed: 43 }),
+    octa(0.07, 'heart', { x: 0.2, y: 0.24, z: -0.08, sy: 2.4, rz: -0.35 }),
+    octa(0.06, 'heart', { x: -0.2, y: 0.21, z: 0.1, sy: 2.2, rz: 0.45 }),
+    octa(0.05, 'heart', { x: 0.02, y: 0.2, z: 0.22, sy: 2.2, rx: 0.4 }),
+  ]);
 }
 
-/** The glowing ember core the renderer spins inside the root cage. */
+/** The large essence crystal that floats and turns above the cluster. */
 export function lifeCrystalHeart() {
-  return merge(heartrootCore(1, 0.52));
+  return merge(essenceCrystal('heart', 1, 0.62));
 }
 
-function heartrootCore(s: number, y: number) {
+/** A faceted, double-pointed crystal with two small companions. */
+function essenceCrystal(layer: string, s: number, y: number) {
   return [
-    ico(0.15 * s, 'ember', { y, detail: 1, jitter: 0.1, seed: 44 }),
-    octa(0.1 * s, 'amber', { y, sy: 1.5 }),
-    ...[0, 1, 2].map(k => octa(0.03 * s, 'flame', { x: Math.cos(k * 2.1) * 0.2 * s, y: y + Math.sin(k * 1.3) * 0.08 * s, z: Math.sin(k * 2.1) * 0.2 * s }, 0xffe070)),
+    octa(0.16 * s, layer, { y, sy: 1.9 }),
+    octa(0.06 * s, layer, { x: 0.16 * s, y: y - 0.12 * s, sy: 1.8, rz: -0.4 }),
+    octa(0.05 * s, layer, { x: -0.15 * s, y: y - 0.1 * s, sy: 1.8, rz: 0.4 }),
+    octa(0.035 * s, 'plain', { x: -0.05 * s, y: y + 0.12 * s, z: 0.08 * s }, 0xffffff),
   ];
+}
+
+/** A round-bellied elixir flask. */
+function flask(liquid: string) {
+  const belly = new THREE.SphereGeometry(0.1, 8, 6);
+  const fill = new THREE.SphereGeometry(0.088, 8, 6, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65);
+  return merge([
+    part(place(belly, { y: 0.1 }), 'glass'),
+    part(place(fill, { y: 0.1 }), liquid),
+    cyl(0.03, 0.04, 0.09, 7, 'glass', { y: 0.22 }),
+    cyl(0.038, 0.034, 0.045, 7, 'planks', { y: 0.285 }, 0xc09060),
+    octa(0.025, 'plain', { x: -0.05, y: 0.15, z: 0.06 }, 0xffffff),
+  ]);
 }
 
 /** Amber: a drop of hardened resin with a spark caught inside. */
@@ -443,17 +443,6 @@ function maul() {
   ]);
 }
 
-/** A stoppered vial of liquid light. */
-function vessel(liquid: string, sparkle: number) {
-  return merge([
-    cyl(0.07, 0.1, 0.2, 7, 'glass', { y: 0.1 }),
-    cyl(0.06, 0.09, 0.15, 7, liquid, { y: 0.085 }),
-    cyl(0.03, 0.04, 0.06, 7, 'glass', { y: 0.23 }),
-    cyl(0.035, 0.03, 0.05, 6, 'rootbark', { y: 0.28 }),
-    octa(0.035, 'flame', { y: 0.1 }, sparkle),
-    octa(0.02, 'flame', { x: 0.04, y: 0.15, z: 0.03 }, sparkle),
-  ]);
-}
 
 /** A glowing blue mushroom (item icon). */
 function glowcapItem() {
@@ -670,7 +659,7 @@ function furniture(id: FurnitureId): THREE.BufferGeometry {
         cone(0.26, 0.14, 7, 'iron', { y: 1.35 }),
       ]);
     case 'life_crystal':
-      // Heartroot: an ember core caged in petrified roots.
+      // A red crystal cluster with its essence crystal floating above.
       return merge([lifeCrystalBase(), lifeCrystalHeart()]);
     case 'hearth':
       // A squat fieldstone hearth with a fire in its mouth and a copper hood.
@@ -752,10 +741,10 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'totem': g = totem(); break;
     case 'maul': g = maul(); break;
     case 'hammer': g = hammer(); break;
-    case 'heartroot': g = merge([lifeCrystalBase(), lifeCrystalHeart()]); break;
-    case 'glim_vessel': g = vessel('glim', 0xe0f8ff); break;
-    case 'glim_draught': g = bottle('glim'); break;
-    case 'mending_draught': g = bottle('ember'); break;
+    case 'red_essence': g = merge(essenceCrystal('heart', 1, 0.2)); break;
+    case 'blue_essence': g = merge(essenceCrystal('manaGem', 1, 0.2)); break;
+    case 'red_elixir': g = flask('red'); break;
+    case 'blue_elixir': g = flask('manaGem'); break;
     case 'arrow': g = arrow(); break;
     case 'bomb': g = bomb(); break;
     case 'potion': g = bottle('red'); break;

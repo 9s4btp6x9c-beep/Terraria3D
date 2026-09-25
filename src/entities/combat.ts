@@ -38,6 +38,8 @@ export interface CombatHooks {
   isNight(): boolean;
   /** Biome id at a column (0 forest, 1 desert, 2 snow, 3 blight). */
   biomeAt(x: number, z: number): number;
+  /** Is this point in lava? */
+  inLava?(x: number, y: number, z: number): boolean;
   /** Height below which the Ember Depths begin. */
   emberY: number;
   /** Surface height from the (exact, loaded) sky map at x,z. */
@@ -79,7 +81,7 @@ interface Projectile {
 const CAPS = { day: 4, night: 9, cave: 8, sky: 3 };
 /** Above this height the player is in the high sky (floating islands). */
 export const SKY_Y = 112;
-/** Raiders alive at once during the Hollow March. */
+/** Cinderbound alive at once during the Cinder Siege. */
 const RAID_CAP = 12;
 
 /** Weighted random pick. */
@@ -134,7 +136,7 @@ export class Combat {
     if (i >= 0) this.creatures.splice(i, 1);
   }
 
-  /** Raiders gather in a ring around the town and march in. */
+  /** The Cinderbound gather in a ring around your base and march in. */
   private spawnRaider(target: { x: number; z: number }, px: number, pz: number) {
     const h = this.hooks;
     if (this.creatures.filter(c => c.event === 'raid').length >= RAID_CAP) return;
@@ -244,7 +246,7 @@ export class Combat {
     c.knock(fromX, fromZ, knock);
     this.hooks.damageNumber(c.cx, c.y + c.def.height + 0.3, c.cz, String(dmg), crit ? '#ff9a3a' : '#ffffff');
     this.hooks.particles(c.cx, c.cy, c.cz, 0, 0.6, 0, c.def.color, 6, 3);
-    this.hooks.sound(c.def.id.includes('burrling') ? 'splat' : 'hit', c.cx, c.cy, c.cz);
+    this.hooks.sound(c.def.id.includes('blob') ? 'splat' : 'hit', c.cx, c.cy, c.cz);
     if (c.hp <= 0) this.kill(c);
     return dmg;
   }
@@ -369,7 +371,7 @@ export class Combat {
   }
 
   /** Explosion: damages everything around and carves the terrain. Enemy
-   *  bombs only hurt the player and leave the ground (and your town) intact. */
+   *  bombs only hurt the player and leave the ground (and your base) intact. */
   explode(x: number, y: number, z: number, r: number, damage: number, px: number, py: number, pz: number, hostile = false) {
     if (!hostile) this.hooks.blast(x, y, z, r);
     this.hooks.particles(x, y, z, 0, 1, 0, 0xffa040, 40, 9);
@@ -424,6 +426,12 @@ export class Combat {
         c.vy += 30 * dt;
         c.vy *= Math.pow(0.15, dt);
         c.vx *= Math.pow(0.35, dt); c.vz *= Math.pow(0.35, dt);
+      }
+      // Lava burns everything but the creatures born to it.
+      if (!c.def.fireproof && this.hooks.inLava?.(c.x, c.y + 0.3, c.z)) {
+        c.burn += dt;
+        c.vx *= Math.pow(0.2, dt); c.vz *= Math.pow(0.2, dt);
+        if (c.burn > 0.5) { c.burn = 0; this.applyHit(c, 14, 0, c.x, c.z); if (!c.alive) continue; }
       }
       if (c.y < -5 || c.idle > 12) { this.remove(c); continue; }
       // Contact damage.
