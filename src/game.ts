@@ -7,75 +7,75 @@ import { item } from './items/items';
 import { PlayerController } from './player/controller';
 import { Input } from './player/input';
 import { Interaction } from './player/interaction';
+import { Atmosphere } from './render/atmosphere';
 import { Particles } from './render/particles';
 import { PostFX } from './render/postfx';
-import { Sky } from './render/sky';
 import { StructureRenderer } from './render/structureRenderer';
-import { TerrainRenderer } from './render/terrainRenderer';
+import { TerrainSystem } from './render/terrainSystem';
 import { buildTextureArray } from './render/textures';
 import { VegetationRenderer } from './render/vegetationRenderer';
 import { Viewmodel } from './render/viewmodel';
 import { type WorldUniforms, createSkyTexture, createWorldMaterial, createWorldUniforms, updateSkyTexture } from './render/worldMaterial';
 import { Hud } from './ui/hud';
 import { Minimap } from './ui/minimap';
+import { type Quality, detectQuality } from './ui/quality';
 import { WorldCollision } from './world/collision';
 import { defaultConfig } from './world/config';
 import { WorldGenerator } from './world/generator';
-import { generateField } from './world/loader';
 import { EditLog, type SaveData, readSave, writeSave } from './world/persistence';
 import { SkyMap } from './world/skymap';
 import { TerrainField } from './world/terrain';
+import type { Tree } from './world/vegetation';
 import { Vegetation } from './world/vegetation';
-
-const SUN_DIR = new THREE.Vector3(0.45, 0.82, 0.3).normalize();
-const SKY_FOG = new THREE.Color(0xa9c6ee);
-const CAVE_FOG = new THREE.Color(0x0b0a12);
+import { TerrainWorkerPool } from './world/workerPool';
 
 export interface LoadCallbacks { progress(fraction: number, label: string): void }
 
 export class Game {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(78, 1, 0.05, 700);
+  readonly camera = new THREE.PerspectiveCamera(78, 1, 0.1, 1000);
   readonly input: Input;
+  readonly quality: Quality;
   field!: TerrainField;
   gen!: WorldGenerator;
   sky!: SkyMap;
   veg!: Vegetation;
   structures = new Structures();
   inventory = new Inventory();
-  log = new EditLog();
+  log!: EditLog;
   player!: PlayerController;
   interaction!: Interaction;
+  terrain!: TerrainSystem;
+  atmosphere!: Atmosphere;
+  private pool!: TerrainWorkerPool;
   private uniforms!: WorldUniforms;
   private skyTex!: THREE.DataTexture;
-  private terrainRenderer!: TerrainRenderer;
   private vegRenderer!: VegetationRenderer;
   private structureRenderer!: StructureRenderer;
   private particles!: Particles;
   private viewmodel!: Viewmodel;
   private post!: PostFX;
-  private skyDome!: Sky;
-  private sun!: THREE.DirectionalLight;
   private hud!: Hud;
   private minimap!: Minimap;
-  private water!: THREE.Mesh;
   private lastFrame = 0;
   /** When true the rAF loop stops simulating; tests drive `simulate()` instead. */
   manual = false;
   private time = 0;
-  private underground = 0;
   private autosave = 0;
   private skyDirty: [number, number, number, number] | null = null;
+  private skyTexDirty = false;
   private wobble = new Map<number, number>();
-  paused = true;
+  private dir = new THREE.Vector3();
   fps = 0;
+  private frameMs = 0;
 
   constructor(canvas: HTMLCanvasElement) {
+    this.quality = detectQuality();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality.pixelRatio));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = this.quality.shadowSize > 0;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.info.autoReset = false;
     this.input = new Input(canvas);
@@ -84,12 +84,14 @@ export class Game {
 
   async load(seed: number, save: SaveData | null, cb: LoadCallbacks) {
     const cfg = defaultConfig(save?.seed ?? seed);
+    cb.progress(0.02, 'Shaping the land');
+    await tick();
     this.gen = new WorldGenerator(cfg);
     this.field = new TerrainField(cfg);
-    await generateField(this.field, this.gen, f => cb.progress(f * 0.55, 'Generating terrain'));
-
+    this.field.fallback = (x, y, z) => this.gen.densityAt(x, y, z);
+    this.log = new EditLog(cfg);
     if (save) {
-      this.log.replay(this.field, save.edits);
+      this.log.load(save.edits);
       this.structures.load(save.pieces);
       this.inventory.load(save.inventory);
     } else {
@@ -97,14 +99,13 @@ export class Game {
       this.inventory.add('copper_axe', 1);
       this.inventory.add('wood', 30);
     }
-    this.field.dirty.clear();
 
-    cb.progress(0.56, 'Computing skylight');
+    cb.progress(0.06, 'Computing skylight');
     await tick();
-    this.sky = new SkyMap(this.field);
-    cb.progress(0.6, 'Growing forests');
+    this.sky = new SkyMap(this.field, (x, z) => this.gen.height(x, z));
+    cb.progress(0.1, 'Growing forests');
     await tick();
-    this.veg = new Vegetation(this.field, this.gen);
+    this.veg = new Vegetation(this.field, this.gen, this.sky);
     if (save) for (const id of save.treesRemoved) if (this.veg.trees[id]) this.veg.trees[id].alive = false;
 
     // Rendering resources.
@@ -114,29 +115,32 @@ export class Game {
     const worldMat = createWorldMaterial(this.uniforms);
     const plantMat = createWorldMaterial(this.uniforms, { vertexColors: true, side: THREE.DoubleSide });
 
-    this.terrainRenderer = new TerrainRenderer(this.field, worldMat);
-    await this.terrainRenderer.buildAll(f => cb.progress(0.62 + f * 0.33, 'Meshing terrain'));
-    this.scene.add(this.terrainRenderer.group);
+    this.pool = new TerrainWorkerPool(cfg, this.gen);
+    this.terrain = new TerrainSystem(this.field, this.log, this.pool, worldMat, this.quality.detail);
+    this.terrain.onColumnResident = (x0, z0) => {
+      this.markSky(x0, z0, x0 + 31, z0 + 31);
+      this.veg.invalidateTufts(x0 + 16, z0 + 16, 20);
+    };
+    this.scene.add(this.terrain.group);
 
     this.vegRenderer = new VegetationRenderer(this.veg, worldMat, plantMat);
-    for (const t of this.veg.trees) if (!t.alive) this.vegRenderer.removeTree(t.id);
     this.scene.add(this.vegRenderer.group);
     this.structureRenderer = new StructureRenderer(this.structures, worldMat);
     this.scene.add(this.structureRenderer.group);
 
-    this.setupLighting();
-    this.skyDome = new Sky(cfg.seed, new THREE.Vector3(this.field.sx / 2, 0, this.field.sz / 2));
-    this.scene.add(this.skyDome.group);
-    this.setupWater(cfg.seaLevel);
+    const center = new THREE.Vector3(this.field.sx / 2, 0, this.field.sz / 2);
+    this.atmosphere = new Atmosphere(this.scene, this.renderer, this.uniforms, center, cfg.seed, cfg.seaLevel, this.quality.shadowSize);
+    this.atmosphere.timeOfDay = (save?.extra?.timeOfDay as number | undefined) ?? 0.34;
 
     this.particles = new Particles((x, y, z) => this.field.sample(x, y, z) > 0);
     this.scene.add(this.particles.mesh);
     this.viewmodel = new Viewmodel(this.camera);
-    this.post = new PostFX(this.renderer, this.camera);
+    this.post = new PostFX(this.renderer, this.camera, this.quality.msaa);
 
     // Player.
     const collision = new WorldCollision(this.field, this.structures, this.veg);
     this.player = new PlayerController(collision);
+    this.player.bounds = { x: this.field.sx, z: this.field.sz };
     if (save) {
       this.player.teleport(save.player.x, save.player.y, save.player.z);
       this.player.yaw = save.player.yaw;
@@ -150,10 +154,14 @@ export class Game {
     }
 
     this.hud = new Hud(this.inventory);
-    this.minimap = new Minimap(document.querySelector('#minimap') as HTMLCanvasElement, this.field, this.sky, cfg.seaLevel);
+    this.minimap = new Minimap(document.querySelector('#minimap') as HTMLCanvasElement, this.field, this.sky, cfg.seaLevel,
+      (x, z, h) => {
+        const dh = Math.hypot(this.gen.height(x + 1, z) - this.gen.height(x - 1, z), this.gen.height(x, z + 1) - this.gen.height(x, z - 1)) / 2;
+        return this.gen.materialFor(x, h - 0.5, z, 0, 1 / Math.sqrt(1 + dh * dh));
+      });
     this.interaction = new Interaction(this.field, this.structures, this.veg, this.inventory, this.player, this.log, {
       terrainEdited: (x, y, z, r) => this.onTerrainEdited(x, y, z, r),
-      treeFelled: t => { this.vegRenderer.removeTree(t.id); this.wobble.delete(t.id); },
+      treeFelled: t => this.onTreeFelled(t),
       treeHit: t => this.wobble.set(t.id, 0),
       particles: (x, y, z, nx, ny, nz, c, n) => this.particles.burst(x, y, z, nx, ny, nz, c, n),
       message: (t, c) => this.hud.message(t, c),
@@ -165,44 +173,18 @@ export class Game {
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
+
+    // Stream in everything visible from the start position.
+    const focus = new THREE.Vector3(this.player.x, this.player.y, this.player.z);
+    while (!this.terrain.complete) {
+      this.terrain.update(focus, 6);
+      cb.progress(0.15 + this.terrain.progress() * 0.83, 'Building terrain');
+      await new Promise(r => setTimeout(r, 16));
+    }
+    this.flushSky();
+    // Pre-grow the grass around the start position.
+    for (let i = 0; i < 20; i++) this.vegRenderer.update(focus, 0.1);
     cb.progress(1, 'Ready');
-  }
-
-  private setupLighting() {
-    this.sun = new THREE.DirectionalLight(0xfff2dc, 2.8);
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
-    const s = this.sun.shadow.camera;
-    s.left = -70; s.right = 70; s.top = 70; s.bottom = -70; s.near = 1; s.far = 420;
-    this.sun.shadow.bias = -0.0006;
-    this.sun.shadow.normalBias = 0.06;
-    this.scene.add(this.sun, this.sun.target);
-    this.scene.fog = new THREE.Fog(SKY_FOG.clone(), 70, 330);
-  }
-
-  private setupWater(level: number) {
-    const geo = new THREE.PlaneGeometry(1400, 1400, 1, 1).rotateX(-Math.PI / 2);
-    const mat = new THREE.MeshLambertMaterial({ color: 0x2f73c8, transparent: true, opacity: 0.78, emissive: 0x0a2248 });
-    // The sea is one plane; hide it wherever the column is covered by land so
-    // it never shows up inside caves that dip below sea level.
-    mat.onBeforeCompile = shader => {
-      shader.uniforms.uSky = this.uniforms.uSky;
-      shader.uniforms.uSkySize = this.uniforms.uSkySize;
-      shader.uniforms.uSea = { value: level };
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vWaterWorld;')
-        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWaterWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform sampler2D uSky; uniform vec2 uSkySize; uniform float uSea; varying vec3 vWaterWorld;')
-        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-  vec2 suv = (vWaterWorld.xz + 0.5) / uSkySize;
-  if (suv.x > 0.0 && suv.y > 0.0 && suv.x < 1.0 && suv.y < 1.0 && texture2D(uSky, suv).r > uSea + 2.5) discard;`);
-    };
-    this.water = new THREE.Mesh(geo, mat);
-    this.water.position.set(this.field.sx / 2, level, this.field.sz / 2);
-    this.water.receiveShadow = true;
-    this.water.renderOrder = 5;
-    this.scene.add(this.water);
   }
 
   private refreshHeld() {
@@ -212,14 +194,45 @@ export class Game {
     this.hud.render();
   }
 
-  private onTerrainEdited(x: number, y: number, z: number, r: number) {
-    const pad = r + 1;
+  private markSky(x0: number, z0: number, x1: number, z1: number) {
     const d = this.skyDirty;
-    this.skyDirty = d ? [Math.min(d[0], x - pad), Math.min(d[1], z - pad), Math.max(d[2], x + pad), Math.max(d[3], z + pad)] : [x - pad, z - pad, x + pad, z + pad];
-    const tufts = this.veg.clearTufts(x, y, z, r + 0.6);
-    if (tufts.length) this.vegRenderer.removeTufts(tufts);
+    this.skyDirty = d ? [Math.min(d[0], x0), Math.min(d[1], z0), Math.max(d[2], x1), Math.max(d[3], z1)] : [x0, z0, x1, z1];
+  }
+
+  private flushSky() {
+    if (this.skyDirty) {
+      const [x0, z0, x1, z1] = this.skyDirty;
+      this.sky.update(x0, z0, x1, z1);
+      this.minimap.refresh(x0, z0, x1, z1);
+      this.skyDirty = null;
+      this.skyTexDirty = true;
+    }
+    if (this.skyTexDirty) {
+      updateSkyTexture(this.skyTex, this.sky);
+      this.skyTexDirty = false;
+    }
+  }
+
+  private onTerrainEdited(x: number, _y: number, z: number, r: number) {
+    const pad = r + 1;
+    this.markSky(x - pad, z - pad, x + pad, z + pad);
+    this.veg.invalidateTufts(x, z, r + 1);
+    for (const t of this.veg.unsupportedTrees(x, z, r)) {
+      // Undermined trees topple and drop their wood (like Terraria).
+      t.alive = false;
+      this.onTreeFelled(t);
+      const wood = Math.round(t.height / 2) + 2;
+      this.inventory.add('wood', wood);
+      this.hud.message(`+${wood} Wood (tree toppled)`, '#cfe8a0');
+      this.particles.burst(t.x, t.y + t.height * 0.8, t.z, 0, 1, 0, 0x3f9a55, 24);
+    }
     // Mesh edited chunks immediately for responsive feedback.
-    this.terrainRenderer.update(this.camera.position, 8);
+    this.terrain.remeshDirty(8);
+  }
+
+  private onTreeFelled(t: Tree) {
+    this.vegRenderer.removeTree();
+    this.wobble.delete(t.id);
   }
 
   resize() {
@@ -237,8 +250,10 @@ export class Game {
       const dt = Math.min((now - this.lastFrame) / 1000, 0.1);
       this.lastFrame = now;
       if (this.manual) return;
+      const t0 = performance.now();
       this.update(dt);
       this.render();
+      this.frameMs = this.frameMs * 0.9 + (performance.now() - t0) * 0.1;
     };
     requestAnimationFrame(loop);
   }
@@ -249,8 +264,8 @@ export class Game {
   }
 
   saveGame() {
-    writeSave(this.snapshot());
-    this.hud.message('World saved', '#9fd0ff');
+    const ok = writeSave(this.snapshot());
+    this.hud.message(ok ? 'World saved' : 'Could not save (storage unavailable)', ok ? '#9fd0ff' : '#ff9a7a');
   }
 
   snapshot(): SaveData {
@@ -263,6 +278,7 @@ export class Game {
       inventory: this.inventory.serialize(),
       player: { x: this.player.x, y: this.player.y, z: this.player.z, yaw: this.player.yaw, pitch: this.player.pitch },
       savedAt: Date.now(),
+      extra: { timeOfDay: this.atmosphere.timeOfDay },
     };
   }
 
@@ -301,7 +317,7 @@ export class Game {
       strafe: k('KeyD') - k('KeyA'),
       jump: !!k('Space'),
       sprint: !!(k('ShiftLeft') || k('ShiftRight')),
-      crouch: !!(k('KeyC') || k('ControlLeft')),
+      crouch: !!k('KeyC'),
     }, outdoorsHere ? this.field.cfg.seaLevel : null);
     if (this.player.y < -10) {
       const s = this.gen.spawn;
@@ -309,11 +325,10 @@ export class Game {
     }
 
     // Camera.
-    const eye = this.player.eyeHeight;
-    this.camera.position.set(this.player.x, this.player.y + eye, this.player.z);
+    this.camera.position.set(this.player.x, this.player.y + this.player.eyeHeight, this.player.z);
     this.camera.rotation.set(this.player.pitch, this.player.yaw, 0, 'YXZ');
     this.camera.updateMatrixWorld();
-    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const dir = this.dir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
 
     // Interaction.
     this.interaction.update(dt, this.camera.position, dir, active && inp.lmb, active && inp.consumeClick());
@@ -323,57 +338,38 @@ export class Game {
       if (label !== this.hud.modeLabel) { this.hud.modeLabel = label; this.hud.render(); }
     }
 
-    // World updates.
-    this.terrainRenderer.update(this.camera.position, 4);
+    // World streaming + updates.
+    this.terrain.update(this.camera.position, 3);
+    this.vegRenderer.update(this.camera.position, dt);
     this.structureRenderer.update();
-    if (this.skyDirty) {
-      const [x0, z0, x1, z1] = this.skyDirty;
-      this.sky.update(x0, z0, x1, z1);
-      updateSkyTexture(this.skyTex, this.sky);
-      this.minimap.refresh(x0, z0, x1, z1);
-      this.skyDirty = null;
-    }
+    this.flushSky();
     for (const [id, t] of this.wobble) {
       const nt = t + dt;
       this.vegRenderer.wobbleTree(id, nt);
       if (nt > 0.4) this.wobble.delete(id); else this.wobble.set(id, nt);
     }
 
-    // Atmosphere: blend towards cave lighting when underground.
-    const vis = this.sky.visibility(this.camera.position.x, this.camera.position.y, this.camera.position.z);
-    this.underground += ((1 - vis) - this.underground) * Math.min(1, dt * 3);
-    const fog = this.scene.fog as THREE.Fog;
-    fog.color.copy(SKY_FOG).lerp(CAVE_FOG, this.underground);
-    fog.near = 70 - this.underground * 62;
-    fog.far = 330 - this.underground * 250;
-    this.renderer.setClearColor(fog.color);
-    this.post.setUnderground(this.underground);
-    this.skyDome.group.visible = this.underground < 0.98;
-
-    // Sun + shadows follow the player (snapped to texels to avoid shimmer).
-    const snap = 140 / 2048;
-    const px = Math.round(this.player.x / snap) * snap, pz = Math.round(this.player.z / snap) * snap;
-    this.sun.target.position.set(px, this.player.y, pz);
-    this.sun.position.set(px + SUN_DIR.x * 200, this.player.y + SUN_DIR.y * 200, pz + SUN_DIR.z * 200);
-
-    // Player lantern (point light slot 0).
-    const lp = this.uniforms.uLightPos.value[0];
-    lp.set(this.camera.position.x + dir.x * 0.5, this.camera.position.y + 0.2, this.camera.position.z + dir.z * 0.5, 13);
-    this.uniforms.uLightColor.value[0].setRGB(1.0, 0.72, 0.42).multiplyScalar(0.35 + this.underground * 0.9);
-    this.uniforms.uTime.value = this.time;
-
-    this.skyDome.follow(this.camera);
-    this.skyDome.update(this.time);
+    // Atmosphere.
+    const cam = this.camera.position;
+    const vis = this.sky.visibility(cam.x, cam.y, cam.z);
+    this.atmosphere.update(dt, cam, vis, this.time, this.player.position, dir);
+    this.post.setUnderground(this.atmosphere.underground);
     const moving = Math.min(1, Math.hypot(this.player.vx, this.player.vz) / 5) * (this.player.grounded ? 1 : 0);
-    this.viewmodel.update(dt, moving, Math.max(vis, 0.35));
-    this.particles.update(dt, Math.max(vis, 0.3));
+    const ambient = this.atmosphere.ambientAt(vis);
+    this.viewmodel.update(dt, moving, ambient);
+    this.particles.update(dt, ambient);
 
     this.minimap.draw(this.player.x, this.player.z, this.player.yaw);
-    this.hud.setDebug(
-      `fps ${this.fps.toFixed(0)}\npos ${this.player.x.toFixed(1)} ${this.player.y.toFixed(1)} ${this.player.z.toFixed(1)}\n` +
-      `grounded ${this.player.grounded} sky ${vis.toFixed(2)}\ntris ${this.terrainRenderer.triangleCount} edits ${this.log.edits.length} pieces ${this.structures.pieces.size}\n` +
-      `calls ${this.renderer.info.render.calls}`,
-    );
+    if (this.hud.debugVisible) {
+      const st = this.terrain.stats, vc = this.vegRenderer.counts;
+      this.hud.setDebug(
+        `fps ${this.fps.toFixed(0)}  frame ${this.frameMs.toFixed(1)}ms\n` +
+        `pos ${this.player.x.toFixed(1)} ${this.player.y.toFixed(1)} ${this.player.z.toFixed(1)}  sky ${vis.toFixed(2)}\n` +
+        `terrain ${st.meshes} meshes ${(st.tris / 1000).toFixed(0)}k tris, ${st.resident} chunks, ${st.nodes} lod, ${st.pending} jobs\n` +
+        `trees ${vc.near}+${vc.far}  grass ${vc.grass}  draw calls ${this.renderer.info.render.calls}  tris ${(this.renderer.info.render.triangles / 1000).toFixed(0)}k\n` +
+        `time ${(this.atmosphere.timeOfDay * 24).toFixed(1)}h  edits ${this.log.edits.length}  pieces ${this.structures.pieces.size}`,
+      );
+    } else this.hud.setDebug('');
 
     this.autosave += dt;
     if (this.autosave > 60 && (this.log.edits.length || this.structures.pieces.size)) {

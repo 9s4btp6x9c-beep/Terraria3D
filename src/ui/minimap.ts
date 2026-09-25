@@ -11,7 +11,11 @@ export class Minimap {
   private baseCtx: CanvasRenderingContext2D;
   private img: ImageData;
 
-  constructor(private canvas: HTMLCanvasElement, private field: TerrainField, private sky: SkyMap, private seaLevel: number) {
+  /** `approxMat` gives a surface material for columns whose terrain is not loaded. */
+  constructor(
+    private canvas: HTMLCanvasElement, private field: TerrainField, private sky: SkyMap, private seaLevel: number,
+    private approxMat: (x: number, z: number, h: number) => number,
+  ) {
     this.ctx = canvas.getContext('2d')!;
     this.base = document.createElement('canvas');
     this.base.width = field.sx; this.base.height = field.sz;
@@ -33,7 +37,7 @@ export class Minimap {
           const deep = Math.min(1, (this.seaLevel - h) / 12);
           r = 60 - deep * 30; g = 120 - deep * 40; b = 200 - deep * 40;
         } else {
-          const m = f.materialNear(x, h - 0.3, z);
+          const m = f.isResident(x, h, z) ? f.materialNear(x, h - 0.3, z) : this.approxMat(x, z, h);
           const c = material(m === Mat.Air ? Mat.Stone : m).palette[0];
           const shade = 0.7 + Math.min(0.5, (h - this.seaLevel) / 120);
           const hx = this.sky.raw[Math.min(f.sx - 1, x + 1) + z * f.sx] - h;
@@ -48,7 +52,7 @@ export class Minimap {
   /** Draw the map centred on the player (zoomed view of the local area). */
   draw(px: number, pz: number, yaw: number, markers: { x: number; z: number; color: string }[] = []) {
     const c = this.ctx, W = this.canvas.width, H = this.canvas.height;
-    const view = 128; // metres across
+    const view = 160; // metres across
     const scale = W / view;
     c.imageSmoothingEnabled = false;
     c.fillStyle = '#1c3050';

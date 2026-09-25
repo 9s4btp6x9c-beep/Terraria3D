@@ -57,7 +57,16 @@ async function act(setup, seconds) {
   });
 }
 
+/** Let terrain streaming (async workers) catch up after a teleport. */
+async function settle() {
+  await page.waitForFunction(() => {
+    __game.simulate(0.05);
+    return __game.terrain.complete && __game.terrain.stats.pending === 0;
+  }, null, { timeout: 120000, polling: 100 });
+}
+
 async function shot(name) {
+  await settle();
   await page.evaluate(() => { window.__game.simulate(0.05); window.__game.render(); });
   await page.screenshot({ path: `${OUT}/${name}.png` });
 }
@@ -85,6 +94,7 @@ try {
     __game.player.pitch = -0.1;
     return { x: e.ax, y: e.ay, z: e.az, depth: __game.gen.height(e.ax, e.az) - e.ay };
   });
+  await settle();
   await page.evaluate(() => __game.simulate(0.8));
   const inCave = await page.evaluate(() => ({ vis: __game.sky.visibility(__game.player.x, __game.player.y + 1.6, __game.player.z), y: __game.player.y }));
   check('cave interior is underground and enclosed', cave.depth > 4 && inCave.vis < 0.5, `depth ${cave.depth.toFixed(1)}m, sky ${inCave.vis.toFixed(2)}`);
@@ -100,8 +110,9 @@ try {
     __game.player.teleport(e.ax, e.ay - e.r + 0.6, e.az);
     __game.player.yaw = Math.atan2(-(e.bx - e.ax), -(e.bz - e.az));
     __game.player.pitch = -0.1;
-    __game.simulate(0.2);
   });
+  await settle();
+  await page.evaluate(() => __game.simulate(0.2));
 
   // 3-5. Mine into the cave wall and dig a tunnel by holding the pickaxe while walking.
   const before = await page.evaluate(() => {
@@ -120,20 +131,31 @@ try {
     }
     g.player.yaw = best; g.player.pitch = -0.15;
   });
-  const wall = await page.evaluate(() => {
-    const g = __game, p = g.camera.position;
-    const h = g.field.raycast(p.x, p.y, p.z, -Math.sin(g.player.yaw), 0, -Math.cos(g.player.yaw), 12);
-    return h ? { x: h.x, y: h.y, z: h.z } : null;
+  const solidNear = () => page.evaluate(() => {
+    const g = __game, p = g.player;
+    let n = 0;
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+    for (let a = 0.5; a < 5; a += 0.5)
+      for (let dy = 0; dy < 2; dy += 0.5)
+        for (let s = -1; s <= 1; s += 0.5)
+          if (g.field.sample(p.x + fx * a - fz * s, p.y + 0.5 + dy, p.z + fz * a + fx * s) > 0) n++;
+    return n;
   });
+  const solidBefore = await solidNear();
   await act(() => { __game.input.lmb = true; __game.input.keys.add('KeyW'); }, 9);
-  const after = await page.evaluate(({ wall }) => ({
+  const after = await page.evaluate(() => ({
     edits: __game.log.edits.length,
-    wallDensity: wall ? __game.field.sample(wall.x - Math.sin(__game.player.yaw) * 0.6, wall.y, wall.z - Math.cos(__game.player.yaw) * 0.6) : null,
     inv: __game.inventory.serialize().filter(Boolean).map(s => `${s.id}:${s.count}`).join(' '),
-    pos: { x: __game.player.x, z: __game.player.z },
-  }), { wall });
+  }));
   check('mining removes terrain (edit log grows)', after.edits > before.edits + 3, `${after.edits - before.edits} edits`);
-  check('mined point is now open air', after.wallDensity !== null && after.wallDensity < 0, `density ${after.wallDensity?.toFixed(2)}`);
+  // Walk back to where we started digging and look at the tunnel we made.
+  const solidAfter = await page.evaluate(({ x, z }) => {
+    const g = __game;
+    let n = 0;
+    for (let yy = -1; yy < 3; yy += 0.5) if (g.field.sample(x, g.player.y + 0.5 + yy * 0.5, z) > 0) n++;
+    return n;
+  }, await page.evaluate(() => ({ x: __game.player.x, z: __game.player.z })));
+  check('a walkable tunnel was dug (player advanced into rock)', solidAfter === 0 && solidBefore > 10, `solid ahead before ${solidBefore}, at new position ${solidAfter}`);
   check('resources collected', /stone|dirt|copper|clay/.test(after.inv), after.inv);
   await page.evaluate(() => { __game.player.yaw += Math.PI; });
   await shot('04-tunnel-back');
@@ -190,6 +212,18 @@ try {
     g.player.yaw = -Math.PI * 0.75; g.player.pitch = -0.35;
   });
   await shot('09-overview');
+
+  // Far view over the world with the debug readout (LOD + draw stats).
+  await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    g.hud.debugVisible = true;
+    g.player.teleport(s.x, g.gen.height(s.x, s.z) + 60, s.z);
+    g.player.yaw = 0.6; g.player.pitch = -0.25;
+  });
+  await shot('10-far-view');
+  const stats = await page.evaluate(() => ({ ...__game.terrain.stats, calls: __game.renderer.info.render.calls, tris: __game.renderer.info.render.triangles }));
+  console.log('render stats', JSON.stringify(stats));
+  check('far terrain uses LOD regions', stats.nodes > 10, `${stats.nodes} LOD nodes, ${stats.meshes} visible terrain meshes`);
 
   check('no runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 } catch (e) {

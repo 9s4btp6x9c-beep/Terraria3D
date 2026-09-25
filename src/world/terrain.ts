@@ -1,13 +1,15 @@
 // TerrainField: the authoritative, editable representation of the world's
-// solid matter. A signed density per sample point (positive = solid, roughly
-// metres to the surface) plus a material id. Queries interpolate trilinearly,
-// so the field is continuous — collision, raycasts and the rendered mesh all
-// agree on the same smooth surface.
+// solid matter near the player. A signed density per sample point (positive =
+// solid, roughly metres to the surface) plus a material id, stored in 32³
+// chunks that stream in and out around the player. Queries interpolate
+// trilinearly so collision, raycasts and the rendered mesh agree on one
+// smooth surface. Non-resident space falls back to the pure generator.
 
 import { CHUNK, type WorldConfig, worldSize } from './config';
-import { Mat, material } from './materials';
+import { DENSITY_CLAMP, type TerrainEdit, editBounds, editSample } from './edits';
+import { Mat } from './materials';
 
-export const DENSITY_CLAMP = 8;
+export { DENSITY_CLAMP } from './edits';
 const CHUNK3 = CHUNK * CHUNK * CHUNK;
 
 export class Chunk {
@@ -16,6 +18,8 @@ export class Chunk {
   mat: Uint8Array | null = null;
   uniformDensity = -DENSITY_CLAMP;
   uniformMat = Mat.Air as number;
+  /** Data is loaded (generated + edits replayed). */
+  resident = false;
 
   constructor(readonly cx: number, readonly cy: number, readonly cz: number) {}
 
@@ -30,15 +34,17 @@ export class Chunk {
     const d = this.density, m = this.mat;
     if (!d || !m) return;
     const d0 = d[0], m0 = m[0];
-    const solid = d0 > 0;
-    for (let i = 1; i < CHUNK3; i++) {
-      if ((d[i] > 0) !== solid || m[i] !== m0) return;
-      if (Math.abs(d[i]) < DENSITY_CLAMP - 1e-3) return;
-    }
+    for (let i = 1; i < CHUNK3; i++) if (d[i] !== d0 || m[i] !== m0) return;
     this.uniformDensity = d0;
     this.uniformMat = m0;
     this.density = null;
     this.mat = null;
+  }
+
+  unload() {
+    this.density = null;
+    this.mat = null;
+    this.resident = false;
   }
 }
 
@@ -55,6 +61,8 @@ export interface EditResult {
   dirtyChunks: Set<number>;
 }
 
+export type DensityFallback = (x: number, y: number, z: number) => number;
+
 export class TerrainField {
   readonly sx: number;
   readonly sy: number;
@@ -62,6 +70,8 @@ export class TerrainField {
   readonly chunks: Chunk[] = [];
   /** Chunk indices whose meshes are stale. */
   readonly dirty = new Set<number>();
+  /** Density for space whose chunk is not resident (the pure generator). */
+  fallback: DensityFallback = () => -DENSITY_CLAMP;
 
   constructor(readonly cfg: WorldConfig) {
     const s = worldSize(cfg);
@@ -71,6 +81,10 @@ export class TerrainField {
         for (let cx = 0; cx < cfg.chunksX; cx++)
           this.chunks.push(new Chunk(cx, cy, cz));
   }
+
+  get x() { return this.sx; }
+  get y() { return this.sy; }
+  get z() { return this.sz; }
 
   chunkIndex(cx: number, cy: number, cz: number): number {
     return cx + this.cfg.chunksX * (cy + this.cfg.chunksY * cz);
@@ -85,10 +99,17 @@ export class TerrainField {
     return ix >= 0 && iy >= 0 && iz >= 0 && ix < this.sx && iy < this.sy && iz < this.sz;
   }
 
+  isResident(x: number, y: number, z: number) {
+    const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+    if (!this.inBounds(ix, iy, iz)) return true;
+    return this.chunks[this.chunkIndex(ix >> 5, iy >> 5, iz >> 5)].resident;
+  }
+
   /** Density at an integer sample; outside the world is air. */
   density(ix: number, iy: number, iz: number): number {
     if (!this.inBounds(ix, iy, iz)) return -DENSITY_CLAMP;
     const c = this.chunks[this.chunkIndex(ix >> 5, iy >> 5, iz >> 5)];
+    if (!c.resident) return this.fallback(ix, iy, iz);
     if (!c.density) return c.uniformDensity;
     return c.density[(ix & 31) + ((iy & 31) << 5) + ((iz & 31) << 10)];
   }
@@ -96,6 +117,7 @@ export class TerrainField {
   material(ix: number, iy: number, iz: number): number {
     if (!this.inBounds(ix, iy, iz)) return Mat.Air;
     const c = this.chunks[this.chunkIndex(ix >> 5, iy >> 5, iz >> 5)];
+    if (!c.resident) return Mat.Stone;
     if (!c.mat) return c.uniformMat;
     return c.mat[(ix & 31) + ((iy & 31) << 5) + ((iz & 31) << 10)];
   }
@@ -103,6 +125,7 @@ export class TerrainField {
   set(ix: number, iy: number, iz: number, d: number, m: number) {
     if (!this.inBounds(ix, iy, iz)) return;
     const c = this.chunks[this.chunkIndex(ix >> 5, iy >> 5, iz >> 5)];
+    if (!c.resident) return;
     c.materialize();
     const i = (ix & 31) + ((iy & 31) << 5) + ((iz & 31) << 10);
     c.density![i] = d;
@@ -150,12 +173,10 @@ export class TerrainField {
   /** March a ray through the field; returns the first surface crossing. */
   raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxDist: number, step = 0.2): RayHit | null {
     let prevT = 0;
-    let prev = this.sample(ox, oy, oz);
-    if (prev > 0) return null; // started inside solid
+    if (this.sample(ox, oy, oz) > 0) return null; // started inside solid
     for (let t = step; t <= maxDist; t += step) {
       const v = this.sample(ox + dx * t, oy + dy * t, oz + dz * t);
       if (v > 0) {
-        // Bisect for a precise crossing.
         let lo = prevT, hi = t;
         for (let i = 0; i < 8; i++) {
           const mid = (lo + hi) * 0.5;
@@ -167,7 +188,7 @@ export class TerrainField {
         const len = Math.sqrt(g[0] * g[0] + g[1] * g[1] + g[2] * g[2]) || 1;
         return { x, y, z, nx: -g[0] / len, ny: -g[1] / len, nz: -g[2] / len, distance: lo, material: this.materialNear(x, y, z) };
       }
-      prev = v; prevT = t;
+      prevT = t;
     }
     return null;
   }
@@ -186,40 +207,32 @@ export class TerrainField {
   }
 
   /**
-   * CSG sphere brush. mode 'sub' carves (mining), 'add' deposits material.
-   * `maxTier` protects materials the tool cannot break.
+   * Apply a CSG edit to resident chunks, optionally restricted to one chunk.
+   * Reports volume removed/added per material and the chunks needing remesh.
    */
-  sphere(cx: number, cy: number, cz: number, r: number, mode: 'sub' | 'add', addMat = Mat.Dirt as number, maxTier = 99): EditResult {
+  applyEdit(e: TerrainEdit, onlyChunk = -1): EditResult {
     const volumes = new Map<number, number>();
     const dirtyChunks = new Set<number>();
-    const pad = 1;
-    const minX = Math.max(1, Math.floor(cx - r - pad)), maxX = Math.min(this.sx - 2, Math.ceil(cx + r + pad));
-    const minY = Math.max(1, Math.floor(cy - r - pad)), maxY = Math.min(this.sy - 2, Math.ceil(cy + r + pad));
-    const minZ = Math.max(1, Math.floor(cz - r - pad)), maxZ = Math.min(this.sz - 2, Math.ceil(cz + r + pad));
-    for (let iz = minZ; iz <= maxZ; iz++)
-      for (let iy = minY; iy <= maxY; iy++)
-        for (let ix = minX; ix <= maxX; ix++) {
-          const dist = Math.sqrt((ix - cx) ** 2 + (iy - cy) ** 2 + (iz - cz) ** 2);
+    const b = editBounds(e, this);
+    const out: [number] = [0];
+    const sub = e[0] === 0;
+    for (let iz = b[2]; iz <= b[5]; iz++)
+      for (let iy = b[1]; iy <= b[4]; iy++)
+        for (let ix = b[0]; ix <= b[3]; ix++) {
+          const ci = this.chunkIndex(ix >> 5, iy >> 5, iz >> 5);
+          if (onlyChunk >= 0 && ci !== onlyChunk) continue;
+          if (!this.chunks[ci].resident) continue;
+          const dx = ix - e[1], dy = iy - e[2], dz = iz - e[3];
           const old = this.density(ix, iy, iz);
           const m = this.material(ix, iy, iz);
-          let nd: number, nm = m;
-          if (mode === 'sub') {
-            const def = material(m);
-            if (old > 0 && (def.tier < 0 || def.tier > maxTier)) continue;
-            nd = Math.min(old, dist - r);
-            if (nd >= old) continue;
-          } else {
-            nd = Math.max(old, r - dist);
-            if (nd <= old) continue;
-            if (old <= 0) nm = addMat;
-          }
-          nd = Math.max(-DENSITY_CLAMP, Math.min(DENSITY_CLAMP, nd));
+          const nd = editSample(old, m, Math.sqrt(dx * dx + dy * dy + dz * dz), e, out);
+          if (Number.isNaN(nd)) continue;
           const before = solidity(old), after = solidity(nd);
           if (before !== after) {
-            const key = mode === 'sub' ? m : nm;
+            const key = sub ? m : out[0];
             volumes.set(key, (volumes.get(key) ?? 0) + (before - after));
           }
-          this.set(ix, iy, iz, nd, nm);
+          this.set(ix, iy, iz, nd, out[0]);
           this.markDirtyAround(ix, iy, iz, dirtyChunks);
         }
     for (const i of dirtyChunks) this.dirty.add(i);
@@ -234,7 +247,8 @@ export class TerrainField {
     const ys = ly <= 1 ? [cy, cy - 1] : ly >= 30 ? [cy, cy + 1] : [cy];
     const zs = lz <= 1 ? [cz, cz - 1] : lz >= 30 ? [cz, cz + 1] : [cz];
     for (const x of xs) for (const y of ys) for (const z of zs) {
-      if (this.chunkAt(x, y, z)) out.add(this.chunkIndex(x, y, z));
+      const c = this.chunkAt(x, y, z);
+      if (c?.resident) out.add(this.chunkIndex(x, y, z));
     }
   }
 }

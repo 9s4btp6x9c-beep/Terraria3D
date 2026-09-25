@@ -15,7 +15,7 @@ export interface WorldConfig {
 }
 
 export function defaultConfig(seed = 1337): WorldConfig {
-  return { seed, chunksX: 8, chunksY: 5, chunksZ: 8, seaLevel: 62 };
+  return { seed, chunksX: 16, chunksY: 5, chunksZ: 16, seaLevel: 62 };
 }
 
 export function worldSize(cfg: WorldConfig) {

@@ -5,9 +5,10 @@
 // and ore noise.
 
 import { SimplexNoise, mulberry32 } from '../core/noise';
-import { CHUNK, type WorldConfig, worldSize } from './config';
+import { type WorldConfig, worldSize } from './config';
 import { Mat } from './materials';
-import { type Chunk, DENSITY_CLAMP, type TerrainField } from './terrain';
+import type { SampleGrid } from './edits';
+import { DENSITY_CLAMP } from './edits';
 
 interface Capsule { ax: number; ay: number; az: number; bx: number; by: number; bz: number; r: number }
 interface Island { x: number; y: number; z: number; r: number; depth: number }
@@ -103,8 +104,13 @@ export class WorldGenerator {
       const a = rand() * Math.PI * 2, d = rand() * 50;
       const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
       const h = this.height(x, z);
-      const slope = Math.abs(this.height(x + 2, z) - this.height(x - 2, z)) + Math.abs(this.height(x, z + 2) - this.height(x, z - 2));
-      const score = (h > this.cfg.seaLevel + 3 ? 0 : -100) - slope * 3 - d * 0.05 - Math.max(0, h - 90);
+      // Prefer open, gentle meadows: penalise the steepest slope within ~12 m.
+      let slope = 0;
+      for (let k = 0; k < 8; k++) {
+        const a2 = (k / 8) * Math.PI * 2;
+        for (const r of [3, 7, 12]) slope = Math.max(slope, Math.abs(this.height(x + Math.cos(a2) * r, z + Math.sin(a2) * r) - h) / r);
+      }
+      const score = (h > this.cfg.seaLevel + 3 ? 0 : -100) - slope * 40 - d * 0.05 - Math.max(0, h - 85);
       if (score > best.score) best = { x, z, score };
     }
     this.spawn = { x: best.x, y: this.height(best.x, best.z) + 2, z: best.z };
@@ -140,17 +146,19 @@ export class WorldGenerator {
   private placeIslands() {
     const rand = mulberry32(this.cfg.seed ^ 0x51a7);
     const top = this.size.y - 14;
-    for (let i = 0, tries = 0; i < 3 && tries < 200; tries++) {
-      const a = (i / 3) * Math.PI * 2 + rand() * 1.5;
-      const d = 50 + rand() * 40;
+    const want = Math.max(2, Math.round((this.size.x * this.size.z) / (256 * 256) * 2));
+    const half = Math.min(this.size.x, this.size.z) / 2;
+    for (let tries = 0; this.islands.length < want && tries < 400; tries++) {
+      const a = rand() * Math.PI * 2;
+      const d = half * (0.2 + rand() * 0.5);
       const x = this.size.x / 2 + Math.cos(a) * d, z = this.size.z / 2 + Math.sin(a) * d;
-      const r = 11 + rand() * 7;
-      // Keep islands clear of mountain tops so they read as floating.
-      let ground = 0;
-      for (let k = 0; k < 8; k++) ground = Math.max(ground, this.height(x + Math.cos(k) * r, z + Math.sin(k) * r), this.height(x, z));
+      const r = 11 + rand() * 8;
+      // Keep islands apart and clear of mountain tops so they read as floating.
+      if (this.islands.some(i => Math.hypot(i.x - x, i.z - z) < i.r + r + 30)) continue;
+      let ground = this.height(x, z);
+      for (let k = 0; k < 8; k++) ground = Math.max(ground, this.height(x + Math.cos(k) * r, z + Math.sin(k) * r));
       if (ground > 100) continue;
       this.islands.push({ x, z, y: top - rand() * 6, r, depth: 11 + rand() * 5 });
-      i++;
     }
   }
 
@@ -165,8 +173,10 @@ export class WorldGenerator {
     // Overhangs, spires and cliff breakup near the surface.
     if (Math.abs(d) < 14) {
       const mi = Math.floor(x) + Math.floor(z) * (W + 1);
-      const amp = 2.5 + this.mountainMask[mi] * 7;
-      d += this.warp.noise3(x / 22, y / 16, z / 22) * amp + this.warp.noise3(x / 7, y / 7, z / 7) * 0.8;
+      // Keep d(y) monotone-ish (vertical warp slope < 1) so the noise makes
+      // overhangs and spires but never loose floating rocks.
+      const amp = 2.5 + this.mountainMask[mi] * 6;
+      d += this.warp.noise3(x / 22, y / 26, z / 22) * amp + this.warp.noise3(x / 7, y / 9, z / 7) * 0.5;
     }
     if (y < 4) d = Math.max(d, 4 - y); // bedrock floor stays solid
     if (d > -2) d = Math.min(d, this.caves(x, y, z, h));
@@ -212,7 +222,7 @@ export class WorldGenerator {
 
   // ---------------------------------------------------------------- materials
 
-  private materialFor(x: number, y: number, z: number, exposure: number, normalY: number): number {
+  materialFor(x: number, y: number, z: number, exposure: number, normalY: number): number {
     const h = this.height(x, z);
     const depth = h - y;
     if (y < 3 + this.detail.noise2(x / 5, z / 5) * 1.5) return Mat.Bedrock;
@@ -220,8 +230,8 @@ export class WorldGenerator {
     if (nearSurface && exposure < 1.5) {
       if (normalY < 0.55) {
         // Cliff faces: stone with bands of dirt/clay strata.
-        const band = Math.sin(y * 0.9 + this.detail.noise2(x / 30, z / 30) * 3);
-        return band > 0.55 ? Mat.Dirt : band < -0.8 ? Mat.Clay : Mat.Stone;
+        const band = Math.sin(y * 0.7 + this.detail.noise2(x / 30, z / 30) * 3);
+        return band > 0.8 ? Mat.Dirt : band < -0.93 ? Mat.Clay : Mat.Stone;
       }
       if (y < this.cfg.seaLevel + 2.5 && y < this.size.y - 40) return Mat.Sand;
       if (y > 108 + this.detail.noise2(x / 20, z / 20) * 6 && y < this.size.y - 40) return Mat.Snow;
@@ -243,61 +253,90 @@ export class WorldGenerator {
 
   // ------------------------------------------------------------------ filling
 
-  fillChunk(chunk: Chunk) {
-    const ox = chunk.cx * CHUNK, oy = chunk.cy * CHUNK, oz = chunk.cz * CHUNK;
-    // Fast path: chunk entirely above everything.
+  /**
+   * Sample density + material on a regular grid: sample (i,j,k) is at world
+   * (ox + i*stride, oy + j*stride, oz + k*stride). Used for full-resolution
+   * chunks (stride 1) and coarse far-distance LOD regions (stride 2..16).
+   */
+  sampleRegion(g: SampleGrid): boolean {
+    const { nx, ny, nz, ox, oy, oz, stride: s, dens, mat } = g;
+    // Fast path: the whole region is above every surface.
     let maxH = -Infinity;
-    for (let z = oz; z <= oz + CHUNK; z += 4)
-      for (let x = ox; x <= ox + CHUNK; x += 4) maxH = Math.max(maxH, this.height(x, z));
-    const islandHere = this.islands.some(i => oy + CHUNK > i.y - i.depth - 6 && oy < i.y + 6);
+    const x1 = ox + (nx - 1) * s, z1 = oz + (nz - 1) * s;
+    for (let z = oz; z <= z1 + 3; z += 4)
+      for (let x = ox; x <= x1 + 3; x += 4) maxH = Math.max(maxH, this.height(Math.min(x, x1), Math.min(z, z1)));
+    const yTop = oy + (ny - 1) * s;
+    const islandHere = this.islands.some(i => yTop > i.y - i.depth - 6 && oy < i.y + 8 &&
+      i.x + i.r + 8 > ox && i.x - i.r - 8 < x1 && i.z + i.r + 8 > oz && i.z - i.r - 8 < z1);
     if (oy > maxH + 16 && !islandHere) {
-      chunk.uniformDensity = -DENSITY_CLAMP;
-      chunk.uniformMat = Mat.Air;
-      return;
+      dens.fill(-DENSITY_CLAMP);
+      mat.fill(Mat.Air);
+      return false;
     }
 
-    chunk.materialize();
-    const dens = chunk.density!, mats = chunk.mat!;
-    for (let lz = 0; lz < CHUNK; lz++)
-      for (let ly = 0; ly < CHUNK; ly++)
-        for (let lx = 0; lx < CHUNK; lx++)
-          dens[lx + (ly << 5) + (lz << 10)] = this.densityAt(ox + lx, oy + ly, oz + lz);
+    const idx = (i: number, j: number, k: number) => i + nx * (j + ny * k);
+    for (let k = 0; k < nz; k++)
+      for (let j = 0; j < ny; j++)
+        for (let i = 0; i < nx; i++)
+          dens[idx(i, j, k)] = this.densityAt(ox + i * s, oy + j * s, oz + k * s);
 
-    // Materials, top-down per column so we know how far each sample is below air.
-    const idx = (lx: number, ly: number, lz: number) => lx + (ly << 5) + (lz << 10);
-    const dAt = (lx: number, ly: number, lz: number) => {
-      if (lx < 0 || ly < 0 || lz < 0 || lx >= CHUNK || ly >= CHUNK || lz >= CHUNK) return this.densityAt(ox + lx, oy + ly, oz + lz);
-      return dens[idx(lx, ly, lz)];
+    const dAt = (i: number, j: number, k: number) => {
+      if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) return this.densityAt(ox + i * s, oy + j * s, oz + k * s);
+      return dens[idx(i, j, k)];
     };
-    for (let lz = 0; lz < CHUNK; lz++)
-      for (let lx = 0; lx < CHUNK; lx++) {
-        let exposure = 0;
-        for (let k = 4; k >= 1; k--) {
-          if (this.densityAt(ox + lx, oy + CHUNK - 1 + k, oz + lz) <= 0) { exposure = k - 1; break; }
-          exposure = 99;
+    // Materials, top-down per column so we know how much solid lies above.
+    const probe = Math.ceil(5 / s);
+    for (let k = 0; k < nz; k++)
+      for (let i = 0; i < nx; i++) {
+        // Solid metres directly above the region's top sample.
+        let above = 0;
+        for (let q = 1; q <= probe; q++) {
+          if (this.densityAt(ox + i * s, yTop + q * s, oz + k * s) <= 0) break;
+          above += s;
         }
-        if (exposure === 99) exposure = 5;
-        for (let ly = CHUNK - 1; ly >= 0; ly--) {
-          const i = idx(lx, ly, lz);
-          const d = dens[i];
-          if (d <= 0) { exposure = 0; mats[i] = Mat.Air; continue; }
-          exposure += 1;
-          let ny = 1;
-          if (exposure < 3) {
-            const gx = dAt(lx + 1, ly, lz) - dAt(lx - 1, ly, lz);
-            const gy = dAt(lx, ly + 1, lz) - dAt(lx, ly - 1, lz);
-            const gz = dAt(lx, ly, lz + 1) - dAt(lx, ly, lz - 1);
-            const len = Math.sqrt(gx * gx + gy * gy + gz * gz) || 1;
-            ny = -gy / len;
+        for (let j = ny - 1; j >= 0; j--) {
+          const id = idx(i, j, k);
+          if (dens[id] <= 0) { above = -s; mat[id] = Mat.Air; }
+          else {
+            let nY = 1;
+            if (above < 3) {
+              const gx = dAt(i + 1, j, k) - dAt(i - 1, j, k);
+              const gy = dAt(i, j + 1, k) - dAt(i, j - 1, k);
+              const gz = dAt(i, j, k + 1) - dAt(i, j, k - 1);
+              const len = Math.sqrt(gx * gx + gy * gy + gz * gz) || 1;
+              nY = -gy / len;
+            }
+            mat[id] = this.materialFor(ox + i * s, oy + j * s, oz + k * s, Math.max(0, above), nY);
           }
-          mats[i] = this.materialFor(ox + lx, oy + ly, oz + lz, exposure - 1, ny);
+          above += s;
         }
       }
-    chunk.compact();
+    return true;
   }
 
-  generate(field: TerrainField) {
-    for (const c of field.chunks) this.fillChunk(c);
+  /** Topmost surface point at (x,z) straight down, from the pure generator. */
+  surfaceAt(x: number, z: number): { y: number; ny: number; mat: number } | null {
+    let top = this.height(x, z) + 16;
+    for (const i of this.islands) if ((x - i.x) ** 2 + (z - i.z) ** 2 < (i.r + 6) ** 2) top = Math.max(top, i.y + 8);
+    top = Math.min(top, this.size.y - 2);
+    if (this.densityAt(x, top, z) > 0) return null;
+    for (let y = top - 0.8; y > 1; y -= 0.8) {
+      const v = this.densityAt(x, y, z);
+      if (v > 0) {
+        let lo = y + 0.8, hi = y;
+        for (let it = 0; it < 7; it++) {
+          const mid = (lo + hi) / 2;
+          if (this.densityAt(x, mid, z) > 0) hi = mid; else lo = mid;
+        }
+        const gy = this.densityAt(x, lo + 0.3, z) - this.densityAt(x, lo - 0.3, z);
+        const gx = this.densityAt(x + 0.3, lo, z) - this.densityAt(x - 0.3, lo, z);
+        const gz = this.densityAt(x, lo, z + 0.3) - this.densityAt(x, lo, z - 0.3);
+        const len = Math.sqrt(gx * gx + gy * gy + gz * gz) || 1;
+        const nY = -gy / len;
+        return { y: lo, ny: nY, mat: this.materialFor(x, lo - 0.5, z, 0, nY) };
+      }
+    }
+    return null;
   }
 }
 

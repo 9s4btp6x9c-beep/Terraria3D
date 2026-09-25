@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { mulberry32 } from '../core/noise';
-import { TREE_KINDS, TREE_VARIANTS, type Tree, type TreeKind, type Vegetation } from '../world/vegetation';
+import { TREE_KINDS, TREE_VARIANTS, TUFT_CELL, type Tree, type TreeKind, type Vegetation } from '../world/vegetation';
 import { mergeNonIndexed } from './sky';
 import { layerOf } from './textures';
 
@@ -13,11 +13,7 @@ import { layerOf } from './textures';
 export function tagLayer(g: THREE.BufferGeometry, layer: number): THREE.BufferGeometry {
   const geo = g.index ? g.toNonIndexed() : g;
   const n = geo.attributes.position.count;
-  const mats = new Float32Array(n * 3).fill(layer);
-  const bary = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) bary[i * 3] = 1;
-  geo.setAttribute('mats', new THREE.BufferAttribute(mats, 3));
-  geo.setAttribute('bary', new THREE.BufferAttribute(bary, 3));
+  geo.setAttribute('mats', new THREE.BufferAttribute(new Uint8Array(n * 3).fill(layer), 3));
   if (geo.attributes.uv) geo.deleteAttribute('uv');
   return geo;
 }
@@ -34,8 +30,8 @@ function jitter(g: THREE.BufferGeometry, rand: () => number, amt: number) {
   }
 }
 
-function blob(rand: () => number, sx: number, sy: number, sz: number, x: number, y: number, z: number) {
-  const g = new THREE.IcosahedronGeometry(1, 1);
+function blob(rand: () => number, sx: number, sy: number, sz: number, x: number, y: number, z: number, detail = 1) {
+  const g = new THREE.IcosahedronGeometry(1, detail);
   jitter(g, rand, 0.28);
   g.scale(sx, sy, sz);
   g.rotateY(rand() * Math.PI);
@@ -44,8 +40,8 @@ function blob(rand: () => number, sx: number, sy: number, sz: number, x: number,
   return tagLayer(g, layerOf('leaves'));
 }
 
-function trunk(r0: number, r1: number, h: number, x = 0, y = 0, z = 0, tiltX = 0, tiltZ = 0) {
-  const g = new THREE.CylinderGeometry(r1, r0, h, 6, 1, true);
+function trunk(r0: number, r1: number, h: number, x = 0, y = 0, z = 0, tiltX = 0, tiltZ = 0, sides = 6) {
+  const g = new THREE.CylinderGeometry(r1, r0, h, sides, 1, true);
   g.translate(0, h / 2, 0);
   g.rotateX(tiltX);
   g.rotateZ(tiltZ);
@@ -95,6 +91,29 @@ function buildTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
   return merged;
 }
 
+/** Cheap silhouette-preserving version for distant trees (~60 triangles). */
+function buildFarTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
+  const rand = mulberry32(variant * 7919 + kind.length * 31);
+  const parts: THREE.BufferGeometry[] = [];
+  if (kind === 'tall') {
+    parts.push(trunk(0.035, 0.02, 1, 0, 0, 0, 0, 0, 4));
+    parts.push(blob(rand, 0.19, 0.12, 0.19, 0, 0.95, 0, 0));
+    parts.push(blob(rand, 0.12, 0.06, 0.12, 0.05, 0.72, 0.03, 0));
+  } else if (kind === 'round') {
+    parts.push(trunk(0.07, 0.05, 0.7, 0, 0, 0, 0, 0, 4));
+    parts.push(blob(rand, 0.38, 0.28, 0.38, 0, 0.85, 0, 0));
+  } else {
+    parts.push(trunk(0.05, 0.02, 1, 0, 0, 0, 0, 0, 4));
+    const g = new THREE.ConeGeometry(0.36, 0.75, 6, 1);
+    g.translate(0, 0.62, 0);
+    g.computeVertexNormals();
+    parts.push(tagLayer(g, layerOf('leaves')));
+  }
+  const merged = mergeNonIndexed(parts);
+  merged.computeBoundingSphere();
+  return merged;
+}
+
 function buildTuft(flower: boolean): THREE.BufferGeometry {
   const pos: number[] = [], col: number[] = [];
   const dark = new THREE.Color(0x236a3c), light = new THREE.Color(0x6ccf6a);
@@ -133,17 +152,35 @@ function buildTuft(flower: boolean): THREE.BufferGeometry {
   return tagLayer(g, layerOf('plain'));
 }
 
+const NEAR_TREES = 110;
+const FAR_TREES = 520;
+const GRASS_RADIUS = 46;
+const MAX_TUFTS = 14000;
+/** Grass cell offsets within the radius, nearest first (fills in around the player first). */
+const CELL_OFFSETS: [number, number][] = (() => {
+  const r = Math.ceil(GRASS_RADIUS / TUFT_CELL), out: [number, number][] = [];
+  for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dz * dz <= r * r) out.push([dx, dz]);
+  return out.sort((a, b) => a[0] ** 2 + a[1] ** 2 - b[0] ** 2 - b[1] ** 2);
+})();
+
+interface TreeSet { near: THREE.InstancedMesh; far: THREE.InstancedMesh; trees: Tree[] }
+
 export class VegetationRenderer {
   readonly group = new THREE.Group();
-  private treeMeshes = new Map<string, THREE.InstancedMesh>();
-  private treeSlot = new Map<number, { key: string; index: number }>();
+  private sets = new Map<string, TreeSet>();
+  private nearSlot = new Map<number, { set: TreeSet; index: number }>();
   private grass: THREE.InstancedMesh;
   private flowers: THREE.InstancedMesh;
-  private tuftSlot: { mesh: THREE.InstancedMesh; index: number }[] = [];
+  private lastBucket = new THREE.Vector3(1e9, 0, 1e9);
+  private lastGrass = { cx: 1e9, cz: 1e9, version: -1, missing: false, retry: 0 };
+  private m = new THREE.Matrix4();
+  private q = new THREE.Quaternion();
+  private s = new THREE.Vector3();
+  private p = new THREE.Vector3();
+  private up = new THREE.Vector3(0, 1, 0);
+  treesDirty = true;
 
   constructor(private veg: Vegetation, treeMat: THREE.Material, grassMat: THREE.Material) {
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-    // Trees grouped by (kind, variant).
     const groups = new Map<string, Tree[]>();
     for (const t of veg.trees) {
       const key = `${t.kind}-${t.variant}`;
@@ -152,66 +189,112 @@ export class VegetationRenderer {
     for (const kind of TREE_KINDS)
       for (let v = 0; v < TREE_VARIANTS; v++) {
         const key = `${kind}-${v}`;
-        const list = groups.get(key);
-        if (!list) continue;
-        const mesh = new THREE.InstancedMesh(buildTree(kind, v), treeMat, list.length);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        list.forEach((t, i) => {
-          q.setFromAxisAngle(up, (t.id * 2.39996) % (Math.PI * 2));
-          s.setScalar(t.height);
-          p.set(t.x, t.y, t.z);
-          mesh.setMatrixAt(i, m.compose(p, q, s));
-          this.treeSlot.set(t.id, { key, index: i });
-        });
-        mesh.computeBoundingSphere();
-        this.treeMeshes.set(key, mesh);
-        this.group.add(mesh);
+        const trees = groups.get(key);
+        if (!trees) continue;
+        const near = new THREE.InstancedMesh(buildTree(kind, v), treeMat, trees.length);
+        const far = new THREE.InstancedMesh(buildFarTree(kind, v), treeMat, trees.length);
+        near.castShadow = true;
+        near.receiveShadow = far.receiveShadow = true;
+        near.count = far.count = 0;
+        // Instances span the world; skip per-mesh culling (cheap vertex work).
+        near.frustumCulled = far.frustumCulled = false;
+        this.sets.set(key, { near, far, trees });
+        this.group.add(near, far);
       }
 
-    const grassList = veg.tufts.filter(t => !t.flower), flowerList = veg.tufts.filter(t => t.flower);
-    this.grass = new THREE.InstancedMesh(buildTuft(false), grassMat, Math.max(1, grassList.length));
-    this.flowers = new THREE.InstancedMesh(buildTuft(true), grassMat, Math.max(1, flowerList.length));
-    let gi = 0, fi = 0;
-    veg.tufts.forEach(t => {
-      const mesh = t.flower ? this.flowers : this.grass;
-      const index = t.flower ? fi++ : gi++;
-      q.setFromAxisAngle(up, t.rot);
-      s.setScalar(t.scale);
-      p.set(t.x, t.y, t.z);
-      mesh.setMatrixAt(index, m.compose(p, q, s));
-      this.tuftSlot.push({ mesh, index });
-    });
+    this.grass = new THREE.InstancedMesh(buildTuft(false), grassMat, MAX_TUFTS);
+    this.flowers = new THREE.InstancedMesh(buildTuft(true), grassMat, 2000);
     for (const mesh of [this.grass, this.flowers]) {
       mesh.receiveShadow = true;
-      mesh.computeBoundingSphere();
+      mesh.count = 0;
+      mesh.frustumCulled = false;
       this.group.add(mesh);
     }
   }
 
-  private hide(mesh: THREE.InstancedMesh, index: number) {
-    const m = new THREE.Matrix4().makeScale(0, 0, 0);
-    mesh.setMatrixAt(index, m);
-    mesh.instanceMatrix.needsUpdate = true;
+  private treeMatrix(t: Tree, wobble = 0) {
+    this.q.setFromEuler(new THREE.Euler(wobble, (t.id * 2.39996) % (Math.PI * 2), 0));
+    return this.m.compose(this.p.set(t.x, t.y, t.z), this.q, this.s.setScalar(t.height));
   }
 
-  removeTree(id: number) {
-    const slot = this.treeSlot.get(id);
-    if (slot) this.hide(this.treeMeshes.get(slot.key)!, slot.index);
+  /** Assign trees to near/far instance sets by distance. */
+  private bucket(focus: THREE.Vector3) {
+    this.nearSlot.clear();
+    for (const set of this.sets.values()) {
+      let n = 0, f = 0;
+      for (const t of set.trees) {
+        if (!t.alive) continue;
+        const d = Math.hypot(t.x - focus.x, t.z - focus.z);
+        if (d < NEAR_TREES) {
+          set.near.setMatrixAt(n, this.treeMatrix(t));
+          this.nearSlot.set(t.id, { set, index: n });
+          n++;
+        } else if (d < FAR_TREES) {
+          set.far.setMatrixAt(f++, this.treeMatrix(t));
+        }
+      }
+      set.near.count = n; set.far.count = f;
+      set.near.instanceMatrix.needsUpdate = true;
+      set.far.instanceMatrix.needsUpdate = true;
+    }
   }
 
-  removeTufts(indices: number[]) {
-    for (const i of indices) this.hide(this.tuftSlot[i].mesh, this.tuftSlot[i].index);
+  private rebuildGrass(cx: number, cz: number) {
+    let gi = 0, fi = 0, generated = 0;
+    this.lastGrass.missing = false;
+    for (const [dx, dz] of CELL_OFFSETS) {
+      // Generate at most a few new cells per frame; the rest fill in next frames.
+      const before = this.veg.tuftVersion;
+      const list = generated < 10 ? this.veg.tufts(cx + dx, cz + dz) : this.veg.tuftsCached(cx + dx, cz + dz);
+      if (this.veg.tuftVersion !== before) generated++;
+      // Missing = terrain not loaded yet, or over this frame's generation budget.
+      if (!list) { this.lastGrass.missing = true; continue; }
+      for (const t of list) {
+        const mesh = t.flower ? this.flowers : this.grass;
+        const index = t.flower ? fi : gi;
+        if (index >= (t.flower ? 2000 : MAX_TUFTS)) continue;
+        this.q.setFromAxisAngle(this.up, t.rot);
+        mesh.setMatrixAt(index, this.m.compose(this.p.set(t.x, t.y, t.z), this.q, this.s.setScalar(t.scale)));
+        if (t.flower) fi++; else gi++;
+      }
+    }
+    this.grass.count = gi; this.flowers.count = fi;
+    this.grass.instanceMatrix.needsUpdate = true;
+    this.flowers.instanceMatrix.needsUpdate = true;
+    return generated;
   }
+
+  update(focus: THREE.Vector3, dt: number) {
+    if (this.treesDirty || Math.hypot(focus.x - this.lastBucket.x, focus.z - this.lastBucket.z) > 12) {
+      this.bucket(focus);
+      this.lastBucket.copy(focus);
+      this.treesDirty = false;
+    }
+    const cx = Math.floor(focus.x / TUFT_CELL), cz = Math.floor(focus.z / TUFT_CELL);
+    const g = this.lastGrass;
+    g.retry -= dt;
+    if (cx !== g.cx || cz !== g.cz || this.veg.tuftVersion !== g.version || (g.missing && g.retry <= 0)) {
+      this.rebuildGrass(cx, cz);
+      g.cx = cx; g.cz = cz; g.version = this.veg.tuftVersion;
+      g.retry = g.missing ? 0.05 : 0.5;
+    }
+    this.veg.trimTufts(focus.x, focus.z, GRASS_RADIUS + 40);
+  }
+
+  get counts() {
+    let near = 0, far = 0;
+    for (const s of this.sets.values()) { near += s.near.count; far += s.far.count; }
+    return { near, far, grass: this.grass.count };
+  }
+
+  removeTree() { this.treesDirty = true; }
 
   /** Shake a tree when it is hit. */
   wobbleTree(id: number, t: number) {
-    const slot = this.treeSlot.get(id);
+    const slot = this.nearSlot.get(id);
     const tree = this.veg.trees[id];
     if (!slot || !tree.alive) return;
-    const mesh = this.treeMeshes.get(slot.key)!;
-    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(t * 40) * 0.03 * Math.max(0, 1 - t * 3), (tree.id * 2.39996) % (Math.PI * 2), 0));
-    mesh.setMatrixAt(slot.index, new THREE.Matrix4().compose(new THREE.Vector3(tree.x, tree.y, tree.z), q, new THREE.Vector3().setScalar(tree.height)));
-    mesh.instanceMatrix.needsUpdate = true;
+    slot.set.near.setMatrixAt(slot.index, this.treeMatrix(tree, Math.sin(t * 40) * 0.03 * Math.max(0, 1 - t * 3)));
+    slot.set.near.instanceMatrix.needsUpdate = true;
   }
 }

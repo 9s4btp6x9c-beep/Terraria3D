@@ -8,6 +8,7 @@ export class Sky {
   private dome: THREE.Mesh;
   private clouds: THREE.InstancedMesh;
   private cloudData: { x: number; y: number; z: number; s: number; r: number }[] = [];
+  private cloudMat: THREE.MeshLambertMaterial;
   readonly uniforms = {
     uTop: { value: new THREE.Color(0x3f63c8) },
     uHorizon: { value: new THREE.Color(0xa9c6ee) },
@@ -47,11 +48,11 @@ export class Sky {
     }
     const cloudGeo = mergeNonIndexed(parts);
     cloudGeo.computeVertexNormals();
-    const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x8090b0, flatShading: true, fog: false });
-    const count = 48;
-    this.clouds = new THREE.InstancedMesh(cloudGeo, cloudMat, count);
+    this.cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x8090b0, flatShading: true, fog: false });
+    const count = 90;
+    this.clouds = new THREE.InstancedMesh(cloudGeo, this.cloudMat, count);
     for (let i = 0; i < count; i++) {
-      const a = rand() * Math.PI * 2, d = 120 + rand() * 480;
+      const a = rand() * Math.PI * 2, d = 120 + rand() * 780;
       this.cloudData.push({ x: Math.cos(a) * d, y: 170 + rand() * 90, z: Math.sin(a) * d, s: 6 + rand() * 10, r: rand() * Math.PI });
     }
     this.clouds.frustumCulled = false;
@@ -63,7 +64,7 @@ export class Sky {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
     this.cloudData.forEach((c, i) => {
       let x = c.x + time * 1.5;
-      x = ((x + 600) % 1200 + 1200) % 1200 - 600;
+      x = ((x + 900) % 1800 + 1800) % 1800 - 900;
       p.set(this.center.x + x, c.y, this.center.z + c.z);
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), c.r);
       s.setScalar(c.s);
@@ -73,27 +74,40 @@ export class Sky {
     this.clouds.instanceMatrix.needsUpdate = true;
   }
 
-  follow(camera: THREE.Camera) {
-    this.dome.position.copy(camera.position);
+  follow(pos: THREE.Vector3) {
+    this.dome.position.copy(pos);
+  }
+
+  /** Dim/tint clouds for night and dusk. */
+  setBrightness(b: number, horizon: THREE.Color) {
+    this.cloudMat.color.setScalar(b).lerp(horizon, 0.25);
+    this.cloudMat.emissive.setRGB(0.5 * b, 0.56 * b, 0.69 * b);
   }
 }
 
-/** Merge geometries into one non-indexed geometry (position + normal + any shared attributes). */
+/** Merge geometries into one non-indexed geometry (attributes shared by all inputs). */
 export function mergeNonIndexed(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const list = geos.map(g => (g.index ? g.toNonIndexed() : g));
   const names = Object.keys(list[0].attributes).filter(n => list.every(g => g.attributes[n]));
   const out = new THREE.BufferGeometry();
   for (const name of names) {
-    const itemSize = list[0].attributes[name].itemSize;
+    const first = list[0].attributes[name] as THREE.BufferAttribute;
+    const itemSize = first.itemSize;
     const total = list.reduce((n, g) => n + g.attributes[name].count * itemSize, 0);
-    const arr = new Float32Array(total);
+    const Ctor = first.array.constructor as new (n: number) => THREE.TypedArray;
+    const arr = new Ctor(total);
     let o = 0;
     for (const g of list) {
-      const a = g.attributes[name];
-      for (let i = 0; i < a.count; i++)
-        for (let k = 0; k < itemSize; k++) arr[o++] = a.getComponent(i, k);
+      const a = g.attributes[name] as THREE.BufferAttribute;
+      if (a.array.constructor === Ctor && !(a as unknown as { isInterleavedBufferAttribute?: boolean }).isInterleavedBufferAttribute) {
+        arr.set(a.array as ArrayLike<number>, o);
+        o += a.count * itemSize;
+      } else {
+        for (let i = 0; i < a.count; i++)
+          for (let k = 0; k < itemSize; k++) arr[o++] = a.getComponent(i, k);
+      }
     }
-    out.setAttribute(name, new THREE.BufferAttribute(arr, itemSize));
+    out.setAttribute(name, new THREE.BufferAttribute(arr, itemSize, first.normalized));
   }
   return out;
 }

@@ -69,7 +69,6 @@ export function createWorldMaterial(u: WorldUniforms, opts: { vertexColors?: boo
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
 attribute vec3 mats;
-attribute vec3 bary;
 flat varying vec3 vMats;
 varying vec3 vBary;
 varying vec3 vWorld;
@@ -86,7 +85,9 @@ varying vec3 vWorldNormal;`)
   vWorld = wp.xyz;
   vWorldNormal = normalize(mat3(modelMatrix) * wn);
   vMats = mats;
-  vBary = bary;
+  // Geometry is non-indexed: the corner index gives the barycentric weights.
+  int corner = gl_VertexID % 3;
+  vBary = vec3(corner == 0, corner == 1, corner == 2);
 }`);
 
     shader.fragmentShader = shader.fragmentShader

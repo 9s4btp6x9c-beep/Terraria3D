@@ -4,6 +4,7 @@ import { defaultConfig } from '../src/world/config';
 import { WorldGenerator } from '../src/world/generator';
 import { EditLog } from '../src/world/persistence';
 import { TerrainField } from '../src/world/terrain';
+import { fillChunk } from '../src/world/terrainJobs';
 
 describe('building pieces', () => {
   it('floor SDF is negative inside and positive above', () => {
@@ -41,21 +42,21 @@ describe('building pieces', () => {
 
 describe('persistence', () => {
   it('replaying the edit log reproduces the edited field exactly', () => {
-    const cfg = defaultConfig(99);
+    const cfg = { ...defaultConfig(99), chunksX: 8, chunksZ: 8 };
     const gen = new WorldGenerator(cfg);
     const make = () => {
       const f = new TerrainField(cfg);
-      for (const c of f.chunks) if (c.cx >= 3 && c.cx <= 4 && c.cz >= 3 && c.cz <= 4) gen.fillChunk(c);
+      for (const c of f.chunks) if (c.cx >= 3 && c.cx <= 4 && c.cz >= 3 && c.cz <= 4) fillChunk(gen, c);
       return f;
     };
     const a = make();
-    const log = new EditLog();
+    const log = new EditLog(cfg);
     const y = gen.height(128, 128);
     for (let i = 0; i < 6; i++) log.commit(a, 'sub', 128.123 + i * 0.7, y - 2.456, 128.3, 1.35, 0, 0);
     log.commit(a, 'add', 130, y + 1, 130, 1.1, 3, 99);
 
     const b = make();
-    new EditLog().replay(b, JSON.parse(JSON.stringify(log.edits)));
+    for (const e of JSON.parse(JSON.stringify(log.edits))) b.applyEdit(e);
     for (let x = 120; x < 140; x++)
       for (let yy = Math.floor(y) - 6; yy < y + 4; yy++)
         for (let z = 120; z < 140; z++) {

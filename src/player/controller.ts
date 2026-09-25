@@ -25,6 +25,8 @@ export class PlayerController {
   grounded = false;
   crouching = false;
   inWater = false;
+  /** World extents; the player is kept inside [margin, size - margin]. */
+  bounds: { x: number; z: number } | null = null;
   /** Seconds since last grounded (coyote time). */
   private airTime = 0;
   private jumpHeld = false;
@@ -39,6 +41,8 @@ export class PlayerController {
   constructor(private world: WorldCollision) {}
 
   get eyeHeight() { return this.crouching ? 1.1 : 1.62; }
+
+  get position() { return { x: this.x, y: this.y, z: this.z }; }
 
   teleport(x: number, y: number, z: number) {
     this.x = x; this.y = y; this.z = z;
@@ -89,6 +93,15 @@ export class PlayerController {
     for (let s = 0; s < steps; s++) {
       this.x += this.vx * h; this.y += this.vy * h; this.z += this.vz * h;
       this.resolve();
+    }
+
+    // Invisible walls at the world edge (the ocean ring hides them).
+    if (this.bounds) {
+      const m = 2;
+      if (this.x < m) { this.x = m; this.vx = Math.max(0, this.vx); }
+      if (this.z < m) { this.z = m; this.vz = Math.max(0, this.vz); }
+      if (this.x > this.bounds.x - m) { this.x = this.bounds.x - m; this.vx = Math.min(0, this.vx); }
+      if (this.z > this.bounds.z - m) { this.z = this.bounds.z - m; this.vz = Math.min(0, this.vz); }
     }
 
     // Stick to the ground when walking down slopes.

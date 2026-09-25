@@ -17,12 +17,18 @@ export class SkyMap {
   /** Incremented whenever `blurred` changes (renderer re-uploads). */
   version = 0;
 
-  constructor(private field: TerrainField) {
+  /**
+   * `approxTop` seeds every column (e.g. the generator's landform height);
+   * exact values are computed from the field as chunk columns stream in.
+   */
+  constructor(private field: TerrainField, approxTop: (x: number, z: number) => number) {
     this.w = field.sx; this.d = field.sz;
     this.raw = new Float32Array(this.w * this.d);
     this.blurred = new Float32Array(this.w * this.d);
     this.tmp = new Float32Array(this.w * this.d);
-    this.update(0, 0, this.w - 1, this.d - 1);
+    for (let z = 0; z < this.d; z++)
+      for (let x = 0; x < this.w; x++) this.raw[x + z * this.w] = approxTop(x, z);
+    this.reblur(0, 0, this.w - 1, this.d - 1);
   }
 
   private columnTop(x: number, z: number): number {
@@ -47,13 +53,23 @@ export class SkyMap {
     return 0;
   }
 
-  /** Recompute columns in [x0,x1]x[z0,z1] (inclusive) and re-blur around them. */
+  /** Recompute resident columns in [x0,x1]x[z0,z1] (inclusive) and re-blur around them. */
   update(x0: number, z0: number, x1: number, z1: number) {
     const w = this.w, d = this.d;
     x0 = Math.max(0, Math.floor(x0)); z0 = Math.max(0, Math.floor(z0));
     x1 = Math.min(w - 1, Math.ceil(x1)); z1 = Math.min(d - 1, Math.ceil(z1));
+    const f = this.field;
     for (let z = z0; z <= z1; z++)
-      for (let x = x0; x <= x1; x++) this.raw[x + z * w] = this.columnTop(x, z);
+      for (let x = x0; x <= x1; x++) {
+        let loaded = true;
+        for (let y = 0; y < f.sy && loaded; y += 32) loaded = f.isResident(x, y, z);
+        if (loaded) this.raw[x + z * w] = this.columnTop(x, z);
+      }
+    this.reblur(x0, z0, x1, z1);
+  }
+
+  private reblur(x0: number, z0: number, x1: number, z1: number) {
+    const w = this.w, d = this.d;
     // Separable box blur over the affected region (+ blur radius).
     const bx0 = Math.max(0, x0 - BLUR), bx1 = Math.min(w - 1, x1 + BLUR);
     const bz0 = Math.max(0, z0 - BLUR), bz1 = Math.min(d - 1, z1 + BLUR);

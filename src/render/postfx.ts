@@ -69,13 +69,13 @@ export class PostFX {
   private cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private mat: THREE.ShaderMaterial;
 
-  constructor(private renderer: THREE.WebGLRenderer, private camera: THREE.PerspectiveCamera) {
+  constructor(private renderer: THREE.WebGLRenderer, private camera: THREE.PerspectiveCamera, msaa = 4) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     const depthTexture = new THREE.DepthTexture(size.x, size.y);
     depthTexture.type = THREE.UnsignedIntType;
     this.target = new THREE.WebGLRenderTarget(size.x, size.y, {
       depthTexture,
-      samples: 4,
+      samples: msaa,
       type: THREE.HalfFloatType,
     });
     this.target.texture.colorSpace = THREE.LinearSRGBColorSpace;
