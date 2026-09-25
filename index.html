@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Terraria3D Prototype</title>
+<style>
+  :root {
+    --gold: #d9a441;
+    --gold-dark: #7a5a1c;
+    --panel: rgba(18, 16, 30, 0.72);
+    --text: #f4ecd8;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; color: var(--text); user-select: none; }
+  canvas#game { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%); }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #e8453c; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); }
+  #crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
+  #crosshair::after { left: 0; top: 6px; width: 14px; height: 2px; }
+  #minimap { position: absolute; right: 16px; top: 16px; width: 176px; height: 176px; border: 3px solid var(--gold); box-shadow: 0 0 0 2px var(--gold-dark), 0 4px 12px rgba(0,0,0,0.5); image-rendering: pixelated; background: #234; }
+  #hotbar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 4px; }
+  .slot { position: relative; width: 48px; height: 48px; background: var(--panel); border: 2px solid rgba(255,255,255,0.15); border-radius: 4px; }
+  .slot.sel { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-dark); }
+  .slot .icon { position: absolute; inset: 9px; border-radius: 3px; box-shadow: inset -4px -4px 0 rgba(0,0,0,0.3), inset 3px 3px 0 rgba(255,255,255,0.25); }
+  .slot .icon.tool { inset: 8px 18px; transform: rotate(35deg); }
+  .slot .count { position: absolute; right: 3px; bottom: 1px; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; }
+  .slot .key { position: absolute; left: 3px; top: 1px; font-size: 10px; opacity: 0.6; }
+  #itemname { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 15px; text-shadow: 1px 1px 0 #000, 0 0 6px #000; text-align: center; }
+  #itemname small { display: block; opacity: 0.8; font-size: 12px; }
+  #messages { position: absolute; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; text-shadow: 1px 1px 0 #000; }
+  #messages div { transition: opacity 0.5s; }
+  #debug { position: absolute; left: 16px; top: 16px; font: 12px monospace; background: rgba(0,0,0,0.45); padding: 6px 8px; white-space: pre; display: none; }
+  #inventory { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 3px solid var(--gold); padding: 14px; display: none; pointer-events: auto; }
+  #inventory h2 { margin: 0 0 10px; font-size: 16px; color: var(--gold); }
+  #inventory .grid { display: grid; grid-template-columns: repeat(9, 48px); gap: 4px; }
+  #inventory .slot { cursor: pointer; }
+  #inventory .hint { margin-top: 10px; font-size: 12px; opacity: 0.75; }
+  #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(40,60,110,0.85), rgba(10,10,20,0.95)); z-index: 10; }
+  #overlay h1 { font-size: 46px; margin: 0 0 6px; letter-spacing: 2px; color: var(--gold); text-shadow: 3px 3px 0 #3a2410; }
+  #overlay p { margin: 4px 0; opacity: 0.85; }
+  #overlay .bar { width: 320px; height: 14px; border: 2px solid var(--gold); margin: 18px 0 6px; background: #111; }
+  #overlay .bar div { height: 100%; width: 0; background: linear-gradient(#7fd67a, #3f9a55); }
+  #overlay button { font: inherit; font-size: 18px; margin: 6px; padding: 8px 22px; background: #3f2a18; color: var(--text); border: 2px solid var(--gold); cursor: pointer; }
+  #overlay button:hover { background: #5a3c22; }
+  #overlay .controls { margin-top: 16px; font-size: 13px; line-height: 1.6; opacity: 0.8; text-align: center; }
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud">
+  <div id="crosshair"></div>
+  <canvas id="minimap" width="176" height="176"></canvas>
+  <div id="itemname"></div>
+  <div id="hotbar"></div>
+  <div id="messages"></div>
+  <div id="debug"></div>
+  <div id="inventory"><h2>Inventory</h2><div class="grid"></div><div class="hint">Click two slots to swap. Tab / E to close.</div></div>
+</div>
+<div id="overlay">
+  <h1>TERRARIA 3D</h1>
+  <p>Non-voxel sandbox prototype</p>
+  <div class="bar"><div></div></div>
+  <p id="status">Loading…</p>
+  <div id="buttons"></div>
+  <div class="controls">
+    WASD move · Shift sprint · Space jump · Ctrl/C crouch · Mouse look<br/>
+    LMB use tool / place · 1–9 / wheel select · Q cycle build shape<br/>
+    Tab/E inventory · F5 save · F9 load · F3 debug · Esc pause
+  </div>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
