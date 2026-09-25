@@ -6,17 +6,46 @@ import { material } from './materials';
 
 export const DENSITY_CLAMP = 8;
 
-/** [mode(0=sub,1=add), x, y, z, radius, material, maxTier] */
+/**
+ * [mode, x, y, z, radius, material, maxTier]. Modes: 0 = subtract a sphere,
+ * 1 = add a sphere, 2 = level: within a vertical cylinder of `radius` around
+ * (x, z), blend the ground toward a flat surface at height y.
+ */
 export type TerrainEdit = [number, number, number, number, number, number, number];
 
+/** Levelling reaches this far above and below its target height. */
+export const LEVEL_BAND = 4;
+
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
 /**
- * Apply one edit to a sample. Returns the new density, or NaN when the sample
- * is unchanged. `outMat[0]` receives the new material.
+ * Apply one edit to a sample at offset (dx, dy, dz) from the edit centre.
+ * Returns the new density, or NaN when the sample is unchanged. `outMat[0]`
+ * receives the new material.
  */
-export function editSample(old: number, mat: number, dist: number, e: TerrainEdit, outMat: [number]): number {
+export function editSample(old: number, mat: number, dx: number, dy: number, dz: number, e: TerrainEdit, outMat: [number]): number {
   const r = e[4];
   let nd: number;
   outMat[0] = mat;
+  if (e[0] === 2) {
+    // Level ground: pull the surface toward the plane y = e[2], fading out
+    // at the rim and toward the top and bottom of the band.
+    const hd = Math.sqrt(dx * dx + dz * dz);
+    const w = smooth(r, r - 0.7, hd) * smooth(LEVEL_BAND, LEVEL_BAND - 1.5, Math.abs(dy));
+    if (w <= 0) return NaN;
+    nd = old + (-dy - old) * w;
+    if (Math.abs(nd - old) < 1e-4) return NaN;
+    if (nd < old && old > 0) {
+      const tier = material(mat).tier;
+      if (tier < 0 || tier > e[6]) return NaN;
+    }
+    if (old <= 0 && nd > 0) outMat[0] = e[5];
+    return Math.max(-DENSITY_CLAMP, Math.min(DENSITY_CLAMP, nd));
+  }
+  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
   if (e[0] === 0) {
     if (old > 0) {
       const tier = material(mat).tier;
@@ -39,10 +68,10 @@ export interface WorldDims { x: number; y: number; z: number }
  * are never edited, which keeps the world closed.
  */
 export function editBounds(e: TerrainEdit, size: WorldDims): [number, number, number, number, number, number] {
-  const p = e[4] + 1;
+  const p = e[4] + 1, py = e[0] === 2 ? LEVEL_BAND + 1 : p;
   return [
-    Math.max(1, Math.floor(e[1] - p)), Math.max(1, Math.floor(e[2] - p)), Math.max(1, Math.floor(e[3] - p)),
-    Math.min(size.x - 2, Math.ceil(e[1] + p)), Math.min(size.y - 2, Math.ceil(e[2] + p)), Math.min(size.z - 2, Math.ceil(e[3] + p)),
+    Math.max(1, Math.floor(e[1] - p)), Math.max(1, Math.floor(e[2] - py)), Math.max(1, Math.floor(e[3] - p)),
+    Math.min(size.x - 2, Math.ceil(e[1] + p)), Math.min(size.y - 2, Math.ceil(e[2] + py)), Math.min(size.z - 2, Math.ceil(e[3] + p)),
   ];
 }
 
@@ -70,7 +99,7 @@ export function applyEditsToGrid(g: SampleGrid, edits: TerrainEdit[], size: Worl
           const x = g.ox + i * s, y = g.oy + j * s, z = g.oz + k * s;
           const dx = x - e[1], dy = y - e[2], dz = z - e[3];
           const idx = i + g.nx * (j + g.ny * k);
-          const nd = editSample(g.dens[idx], g.mat[idx], Math.sqrt(dx * dx + dy * dy + dz * dz), e, out);
+          const nd = editSample(g.dens[idx], g.mat[idx], dx, dy, dz, e, out);
           if (Number.isNaN(nd)) continue;
           g.dens[idx] = nd;
           g.mat[idx] = out[0];

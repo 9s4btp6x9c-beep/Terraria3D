@@ -3,8 +3,10 @@
 // pixel outline like hand-drawn sprites.
 
 import * as THREE from 'three';
+import { PIECES, SHAPES } from '../building/structures';
 import { ITEMS, type ItemDef } from '../items/items';
 import { itemModel } from './models';
+import { pieceGeometry } from './structureRenderer';
 
 const SIZE = 44;
 
@@ -28,12 +30,25 @@ export class IconAtlas {
     const prevAlpha = renderer.getClearAlpha();
     renderer.setClearColor(0x000000, 0);
 
+    const jobs: { key: string; mesh: THREE.Mesh }[] = [];
     for (const def of ITEMS.values()) {
       const mesh = new THREE.Mesh(itemModel(def), material);
       // Long items (tools, weapons) are shown diagonally, like classic sprites.
       if (def.kind === 'tool' || (def.kind === 'weapon' && def.weapon?.type !== 'thrown') || def.model.type === 'arrow') mesh.rotation.z = -Math.PI / 4;
       else if (def.model.type === 'furniture') mesh.rotation.y = -0.5;
       else mesh.rotation.y = -0.6;
+      jobs.push({ key: def.id, mesh });
+    }
+    // Building pieces for the build menu, turned to show their shape.
+    for (const shape of SHAPES) {
+      const geo = pieceGeometry({ shape, texture: 'planks', x: 0, y: 0, z: 0, rot: 0, ext: shape === 'foundation' ? 0.75 : 0 });
+      // The icon material tints by vertex colour; pieces are untinted.
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3).fill(1), 3));
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.rotation.y = PIECES[shape].slot === 'edge' ? -0.45 : PIECES[shape].category === 'roof' || shape === 'stairs' ? 2.4 : -0.6;
+      jobs.push({ key: `piece:${shape}`, mesh });
+    }
+    for (const { key, mesh } of jobs) {
       scene.add(mesh);
       mesh.updateMatrixWorld();
       const bb = new THREE.Box3().setFromObject(mesh);
@@ -47,7 +62,7 @@ export class IconAtlas {
       renderer.render(scene, cam);
       renderer.readRenderTargetPixels(target, 0, 0, SIZE, SIZE, pixels);
       scene.remove(mesh);
-      this.urls.set(def.id, outline(pixels, ctx, canvas));
+      this.urls.set(key, outline(pixels, ctx, canvas));
     }
     renderer.setRenderTarget(prevTarget);
     renderer.setClearColor(prevClear, prevAlpha);
@@ -55,6 +70,11 @@ export class IconAtlas {
   }
 
   url(id: string) { return this.urls.get(id) ?? ''; }
+
+  /** <img> markup for a building piece. */
+  piece(shape: string, cls = 'icon') {
+    return `<img class="${cls}" src="${this.url(`piece:${shape}`)}" alt="" draggable="false">`;
+  }
 
   /** <img> markup for an item icon. */
   img(def: ItemDef, cls = 'icon') {

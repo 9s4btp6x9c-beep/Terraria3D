@@ -104,6 +104,22 @@ try {
     picked.push(await page.evaluate(() => __game.inventory.selected));
   }
   check('tapping any hotbar slot selects it', picked.join() === '0,3,5,8', picked.join());
+  // The hammer: the shape button opens the build menu (fits the phone), a rotate button appears.
+  const hammerSlot = await page.evaluate(() => __game.inventory.slots.findIndex(q => q && q.id === 'builder_hammer'));
+  const hs = await page.locator(`#hotbar .slot[data-hot="${hammerSlot}"]`).boundingBox();
+  await page.touchscreen.tap(hs.x + hs.width / 2, hs.y + hs.height / 2);
+  await page.evaluate(() => { __game.simulate(0.05); });
+  const rot = await page.evaluate(() => getComputedStyle(document.querySelector('#touch [data-b="rot"]')).display);
+  await page.tap('#touch [data-b="mode"]');
+  await page.evaluate(() => { __game.simulate(0.05); __game.render(); });
+  const bm = await page.evaluate(() => {
+    const r = document.querySelector('#buildmenu').getBoundingClientRect();
+    return { open: __game.buildMenu.open, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight };
+  });
+  await page.screenshot({ path: `${OUT}/m3-build-menu.png` });
+  await page.tap('#buildmenu [data-piece="doorway"]');
+  const chosen = await page.evaluate(() => ({ shape: __game.interaction.build.shape, open: __game.buildMenu.open, touch: getComputedStyle(document.querySelector('#touch')).display }));
+  check('with the hammer, the build button opens a menu that fits and a rotate button shows', rot !== 'none' && bm.open && bm.fits && chosen.shape === 'doorway' && !chosen.open, JSON.stringify({ rot, ...bm, ...chosen }));
   await page.screenshot({ path: `${OUT}/m1-touch.png` });
   check('no runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 } catch (e) {

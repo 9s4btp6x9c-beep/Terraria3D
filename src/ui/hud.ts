@@ -124,6 +124,26 @@ export class Hud {
     this.biomeTimer = window.setTimeout(() => el.classList.remove('show'), 3200);
   }
 
+  private restKey = '';
+  /**
+   * The Rested buff under the vitals: time left and comfort, or a filling
+   * bar while resting by a Hearth (`progress` 0..1).
+   */
+  setRest(seconds: number, comfort: number, progress: number | null) {
+    const el = document.querySelector<HTMLElement>('#buffs');
+    if (!el) return;
+    const key = progress !== null ? `p${Math.round(progress * 20)}${comfort}` : seconds > 0 ? `r${Math.ceil(seconds)}${comfort}` : '';
+    if (key === this.restKey) return;
+    this.restKey = key;
+    if (!key) { el.innerHTML = ''; return; }
+    if (progress !== null) {
+      el.innerHTML = `<div class="buff resting">${icon('flame')}<span>Resting · comfort ${comfort}</span><i style="width:${Math.round(progress * 100)}%"></i></div>`;
+      return;
+    }
+    const m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
+    el.innerHTML = `<div class="buff">${icon('flame')}<span>Rested · comfort ${comfort}</span><b>${m}:${String(s).padStart(2, '0')}</b></div>`;
+  }
+
   setFlight(f: number | null) {
     const v = f === null ? -1 : Math.round(f * 40) / 40;
     if (v === this.flightShown) return;

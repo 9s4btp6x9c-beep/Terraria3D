@@ -16,6 +16,7 @@ const R = (out: string, count: number, station: StationId | null, ...ing: [strin
 export const RECIPES: Recipe[] = [
   // by hand
   R('workbench', 1, null, ['wood', 10]),
+  R('builder_hammer', 1, null, ['wood', 8], ['stone', 4]),
   R('torch', 3, null, ['wood', 1], ['gel', 1]),
   // workbench
   R('chair', 1, 'workbench', ['wood', 4]),

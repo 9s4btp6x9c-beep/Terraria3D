@@ -22,6 +22,8 @@ export interface MenuHooks {
 const TIPS = [
   ['Mining', 'Copper and iron yield to your first pickaxe. Deepstone and glowing lumite need iron.'],
   ['Hearth and home', 'An enclosed room with a door, a lit Hearth and a bed or chair is a home. Settlers move into homes.'],
+  ['Building', 'Hold the Builder\'s Hammer and press Q to pick a piece. Start on foundations: they stay level on any slope.'],
+  ['Resting', 'Stand by a lit Hearth under a roof to become Rested. The more comfortable the room, the longer it lasts.'],
   ['Heartroots', 'Root cages with an ember core grow on cave floors. Break one and use it to raise your Vigor.'],
   ['Starseeds', 'On clear nights seeds of light drift down from the stars. Catch five to seal a Glim Vessel.'],
   ['The Sporefall', 'Some nights glowing spores rain from a green sky and fungal horrors walk. Their Sporeglass makes fine gear.'],
@@ -39,12 +41,13 @@ const TIPS = [
 const DESKTOP_CONTROLS: [string, string[]][] = [
   ['Move', ['W', 'A', 'S', 'D']], ['Look', ['Mouse']], ['Jump / swim up', ['Space']], ['Sprint', ['Shift']],
   ['Crouch', ['C']], ['Use, attack, place', ['LMB']], ['Interact, talk', ['RMB']], ['Hotbar', ['1-9', 'Wheel']],
-  ['Inventory & crafting', ['Tab', 'E']], ['Build shape', ['Q']], ['Grappling hook', ['F']], ['Check housing', ['H']],
+  ['Inventory & crafting', ['Tab', 'E']], ['Build menu (hammer)', ['Q']], ['Rotate piece', ['R']], ['Free placement', ['Hold Shift']],
+  ['Take a piece down (hammer)', ['RMB']], ['Grappling hook', ['F']], ['Check housing', ['H']],
   ['Save world', ['F5']], ['Pause', ['Esc']], ['Fly (with wings)', ['Hold Space']], ['Debug readout', ['F3']],
 ];
 const TOUCH_CONTROLS: [string, IconName | string][] = [
   ['Move (push fully to sprint)', 'Left stick'], ['Look', 'Drag right side'], ['Use, attack, place', 'pick'], ['Jump / swim up', 'jump'],
-  ['Crouch', 'crouch'], ['Interact, talk', 'hand'], ['Grappling hook', 'hook'], ['Build shape', 'cycle'], ['Inventory & crafting', 'bag'], ['Pause', 'menu'],
+  ['Crouch', 'crouch'], ['Interact, talk', 'hand'], ['Grappling hook', 'hook'], ['Build menu (hammer)', 'hammer'], ['Rotate piece', 'cycle'], ['Inventory & crafting', 'bag'], ['Pause', 'menu'],
 ];
 
 export class Menu {

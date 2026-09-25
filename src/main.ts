@@ -4,6 +4,7 @@ import '@fontsource/pixelify-sans/latin-500.css';
 import '@fontsource/pixelify-sans/latin-600.css';
 import '@fontsource/pixelify-sans/latin-700.css';
 import './ui/styles.css';
+import { pieceSDF } from './building/structures';
 import { Game, savedGame } from './game';
 import { Menu } from './ui/menu';
 import { isTouchDevice } from './ui/quality';
@@ -16,6 +17,8 @@ const isTouch = isTouchDevice() || params.has('touch');
 const settings = loadSettings();
 const game = new Game(document.querySelector('#game') as HTMLCanvasElement);
 (window as unknown as { __game: Game }).__game = game;
+// Test hook: signed distance to a building piece (e2e checks gable orientation).
+(window as unknown as { __pieceSDF: typeof pieceSDF }).__pieceSDF = pieceSDF;
 
 let touch: TouchControls | null = null;
 let playing = false;
@@ -95,6 +98,8 @@ async function boot() {
     touch.setVisible(false);
     game.applySettings(settings);
     game.onFrame = () => touch?.update();
+    game.onHeldChange = hammer => touch?.setHammer(hammer);
+    touch.setHammer(game.holdingHammer);
   }
   game.input.onFreeLook(active => { if (!active) pause(); });
   document.addEventListener('pointerlockchange', () => {

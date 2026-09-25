@@ -55,8 +55,8 @@ export class EditLog {
   }
 
   /** Record and apply an edit. Values are rounded first so replay is exact. */
-  commit(field: TerrainField, mode: 'sub' | 'add', x: number, y: number, z: number, r: number, mat: number, maxTier: number) {
-    const e: TerrainEdit = [mode === 'sub' ? 0 : 1, r2(x), r2(y), r2(z), r2(r), mat, maxTier];
+  commit(field: TerrainField, mode: 'sub' | 'add' | 'level', x: number, y: number, z: number, r: number, mat: number, maxTier: number) {
+    const e: TerrainEdit = [mode === 'sub' ? 0 : mode === 'add' ? 1 : 2, r2(x), r2(y), r2(z), r2(r), mat, maxTier];
     this.index(e, this.edits.length);
     this.edits.push(e);
     return field.applyEdit(e);

@@ -42,6 +42,7 @@ export class TouchControls {
         <button data-b="mode" style="grid-area:mode" aria-label="Build shape">${icon('cycle')}</button>
         <button data-b="inv" style="grid-area:inv" aria-label="Inventory">${icon('bag')}</button>
         <button data-b="crouch" style="grid-area:crouch" aria-label="Crouch">${icon('crouch')}</button>
+        <button data-b="rot" style="grid-area:rot" aria-label="Rotate piece">${icon('cycle')}</button>
       </div>`;
     document.body.appendChild(this.root);
     this.stick = this.root.querySelector('.stick')!;
@@ -98,6 +99,7 @@ export class TouchControls {
           case 'act': this.input.interact(); break;
           case 'hook': this.input.tap('KeyF'); break;
           case 'mode': actions.cycleMode(); break;
+          case 'rot': this.input.tap('KeyR'); break;
           case 'inv': actions.inventory(); break;
           case 'menu': actions.pause(); break;
         }
@@ -142,6 +144,13 @@ export class TouchControls {
     this.input.axisForward = -dy / max;
     // Full push = sprint.
     if (d > max * 0.95) this.input.press('ShiftLeft'); else this.input.release('ShiftLeft');
+  }
+
+  /** Holding the Builder's Hammer: the shape button opens the build menu and a rotate button appears. */
+  setHammer(on: boolean) {
+    this.root.classList.toggle('hammer', on);
+    const mode = this.root.querySelector<HTMLButtonElement>('[data-b="mode"]');
+    if (mode) { mode.innerHTML = icon(on ? 'hammer' : 'cycle'); mode.setAttribute('aria-label', on ? 'Build menu' : 'Build shape'); }
   }
 
   setVisible(v: boolean) {

@@ -4,7 +4,6 @@
 
 import { Mat } from '../world/materials';
 
-export type PieceShape = 'floor' | 'wall' | 'pillar' | 'stairs' | 'roof';
 export type StationId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'hearth';
 export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed' | 'life_crystal' | 'glowcap_lamp' | 'hearth' | 'salt_lamp' | 'amber_lantern';
 export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal' | 'emberMetal' | 'bone' | 'bloodMetal' | 'aeriteMetal' | 'sporeMetal' | 'rootbark';
@@ -62,7 +61,7 @@ export type ModelSpec =
   | { type: 'pickaxe' | 'axe' | 'sword' | 'bow' | 'staff' | 'hook'; head: MetalLayer }
   | { type: 'ore' | 'bar' | 'crystal' | 'nugget'; layer: string; tint?: number }
   | { type: 'block'; layer: string }
-  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' | 'starseed' | 'glim_vessel' | 'glim_draught' | 'mending_draught' | 'glowcap' | 'bucket' | 'water_bucket' | 'amber' | 'sap' | 'totem' | 'maul' | 'heartroot' }
+  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' | 'starseed' | 'glim_vessel' | 'glim_draught' | 'mending_draught' | 'glowcap' | 'bucket' | 'water_bucket' | 'amber' | 'sap' | 'totem' | 'maul' | 'heartroot' | 'hammer' }
   | { type: 'armor'; slot: ArmorDef['slot']; layer: MetalLayer }
   | { type: 'boots' | 'jar' | 'charm' | 'band'; layer: string }
   | { type: 'furniture'; id: FurnitureId };
@@ -81,8 +80,8 @@ export interface ItemDef {
   accessory?: AccessoryDef;
   /** Terrain material deposited when placed as a terrain blob. */
   terrain?: Mat;
-  /** Building piece texture when used for building. */
-  build?: 'planks' | 'bricks';
+  /** The Builder's Hammer: places building pieces chosen in the build menu. */
+  hammer?: boolean;
   furniture?: FurnitureId;
   heal?: number;
   /** Glim restored when used. */
@@ -109,6 +108,8 @@ const list: ItemDef[] = [
   T('iron_axe', 'Iron Axe', 'iron', 'axe', 1, 1.6, 0.34, 8, '#d6d0ca', 'Chops faster.'),
   T('titanbone_pickaxe', 'Titanbone Pickaxe', 'bone', 'pickaxe', 1, 1.9, 0.25, 8, '#e0d4b4', 'Carved from a giant\'s rib. Bites deep and fast.'),
   T('lumite_pickaxe', 'Lumite Pickaxe', 'lumiteMetal', 'pickaxe', 2, 2.2, 0.22, 10, '#6ae6ff', 'Hums with light. Digs anything.'),
+
+  { id: 'builder_hammer', name: "Builder's Hammer", kind: 'tool', maxStack: 1, color: '#c8a070', model: { type: 'hammer' }, hammer: true, description: 'Builds bases from wood, stone and more. [Q] build menu, [R] rotate, hold [Shift] to place freely, [RMB] take a piece down.' },
 
   // ---- weapons
   { id: 'wooden_sword', name: 'Wooden Sword', kind: 'weapon', maxStack: 1, color: '#a8744a', model: { type: 'sword', head: 'planks' }, weapon: { type: 'melee', damage: 8, speed: 0.45, knockback: 5, reach: 2.6 } },
@@ -158,7 +159,7 @@ const list: ItemDef[] = [
 
   // ---- materials
   { id: 'dirt', name: 'Dirt', kind: 'material', maxStack: 999, color: '#8a5a3c', model: { type: 'block', layer: 'dirt' }, terrain: Mat.Dirt },
-  { id: 'stone', name: 'Stone', kind: 'material', maxStack: 999, color: '#a4a2ac', model: { type: 'block', layer: 'stone' }, terrain: Mat.Stone, build: 'bricks' },
+  { id: 'stone', name: 'Stone', kind: 'material', maxStack: 999, color: '#a4a2ac', model: { type: 'block', layer: 'stone' }, terrain: Mat.Stone },
   { id: 'sand', name: 'Sand', kind: 'material', maxStack: 999, color: '#dcc88c', model: { type: 'block', layer: 'sand' }, terrain: Mat.Sand },
   { id: 'clay', name: 'Clay', kind: 'material', maxStack: 999, color: '#a0604a', model: { type: 'block', layer: 'clay' }, terrain: Mat.Clay },
   { id: 'snow', name: 'Snow', kind: 'material', maxStack: 999, color: '#eaf2f8', model: { type: 'block', layer: 'snow' }, terrain: Mat.Snow },
@@ -182,7 +183,7 @@ const list: ItemDef[] = [
   { id: 'blood_shard', name: 'Sporeglass', kind: 'material', maxStack: 999, color: '#5ad8b0', rarity: 1, model: { type: 'crystal', layer: 'spore' }, description: 'Spores gone hard as glass. Shed by creatures of the Sporefall.' },
   { id: 'hollow_horn', name: 'Hollow War Horn', kind: 'consumable', maxStack: 20, color: '#e6dcc0', rarity: 2, model: { type: 'horn' }, description: 'Sounds a challenge to the Hollowfolk. Use near your town.' },
   { id: 'wyrm_bait', name: 'Tremor Totem', kind: 'consumable', maxStack: 20, color: '#6ae6ff', rarity: 1, model: { type: 'totem' }, description: 'Drive it into the ground to call the Deepwyrm. Use at night or underground.' },
-  { id: 'wood', name: 'Wood', kind: 'material', maxStack: 999, color: '#a8744a', model: { type: 'log' }, build: 'planks' },
+  { id: 'wood', name: 'Wood', kind: 'material', maxStack: 999, color: '#a8744a', model: { type: 'log' } },
   { id: 'copper_ore', name: 'Copper Ore', kind: 'material', maxStack: 999, color: '#e0874a', model: { type: 'ore', layer: 'copper' } },
   { id: 'iron_ore', name: 'Iron Ore', kind: 'material', maxStack: 999, color: '#c8b4a6', model: { type: 'ore', layer: 'iron' } },
   { id: 'lumite', name: 'Lumite Shard', kind: 'material', maxStack: 999, color: '#46e0ff', model: { type: 'crystal', layer: 'lumiteMetal' } },

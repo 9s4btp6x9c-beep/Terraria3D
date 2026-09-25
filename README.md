@@ -17,6 +17,7 @@ npm run dev          # http://localhost:5173
 npm test             # unit tests (world generation, meshing, editing)
 npm run build        # typecheck + production build
 npm run e2e          # headless-browser test of the full game loop (needs a build)
+npm run e2e:build    # builds a two-room house with the hammer like a player would (needs a build)
 node scripts/e2e-mobile.mjs   # phone-sized touch smoke test (needs a build)
 npx tsx scripts/biome-map.ts 1337   # top-down biome map + biome shares for a seed
 node scripts/biome-shots.mjs        # a screenshot of every biome (needs a build)
@@ -46,7 +47,9 @@ menu screen for review.
 | Space (hold, in the air) | Fly with wings, then glide |
 | H | Check whether the room you stand in is a valid home |
 | 1–9, mouse wheel | Select hotbar slot |
-| Q | Cycle build shape for the held material (terrain fill, floor, wall, pillar, stairs, roof) |
+| Q | With the Builder's Hammer: open the build menu (pieces and material) |
+| R · hold Shift | Rotate / flip the piece · place without snapping to other pieces |
+| RMB with the hammer | Take a piece down (full refund) |
 | Tab / E | Inventory and crafting |
 | Esc | Pause menu (resume, settings, save, quit to title) |
 | F5 / F9 | Save / reload the saved world |
@@ -59,8 +62,28 @@ Touch devices start on the low quality preset.
 
 ## What is in the game
 
-- **Mining and building:** every surface can be dug, filled and built on.
-  Modular pieces (floors, walls, pillars, stairs, roofs) sit on a 2 m grid.
+- **Mining and building:** every surface can be dug and filled (hold stone,
+  dirt or sand to fill terrain), and bases are built with the **Builder's
+  Hammer** (in your starting kit, or craft it from 8 wood and 4 stone):
+  - **Build menu** ([Q] or the build button on touch): foundations, floors,
+    walls, doorways, glazed windows, half walls, fences, posts, beams,
+    stairs, steep and low roofs, gables, plus a **Level Ground** tool that
+    flattens terrain to your feet. Build in wood, stone, Petrified Root,
+    salt brick or Titan Bone.
+  - **Snapping to what you've built:** walls stand on floor tops and stack
+    exactly on other walls (aim anywhere on the wall), floors lie level with
+    their neighbours or rest on wall tops for an upper storey, and roof
+    panels sit on wall tops and continue each other's slope. Hold Shift to
+    place freely; [R] rotates or flips (gables, stairs, roofs).
+  - **Foundations** stay level on a hillside: their footing reaches down into
+    the ground automatically.
+  - **Support:** a piece must touch the ground or another piece.
+  - **Doors** drop straight into doorways. Aim the hammer at a piece and
+    press RMB to take it down for a full refund.
+  - **Resting:** stand under a roof near a lit Hearth to become **Rested**
+    (faster Vigor and Glim regeneration). Beds, chairs, tables, chests and
+    lamps nearby raise the room's comfort, and higher comfort makes the rest
+    last longer.
 - **Crafting:** recipes by hand and at stations (workbench, Hearth, furnace,
   anvil, Lumite Forge). Copper and iron tool tiers gate harder rock.
   Draughts are brewed over a Hearth.
@@ -193,8 +216,12 @@ scripts/      e2e browser tests (desktop and mobile)
 | ![](docs/screenshots/sporefall.jpg) | ![](docs/screenshots/hollow-raid.jpg) |
 | **The Tempest Roc** | **Gale Swifts over a sky island** |
 | ![](docs/screenshots/tempest-roc.jpg) | ![](docs/screenshots/gale-swifts.jpg) |
-| **Mushroom cavern** | **Heartroot** |
-| ![](docs/screenshots/mushroom-cavern.jpg) | ![](docs/screenshots/heartroot.jpg) |
+| **A house built with the hammer** | **Inside: Hearth, bed and a settler** |
+| ![](docs/screenshots/house-built.jpg) | ![](docs/screenshots/house-inside.jpg) |
+| **The build menu** | **Mushroom cavern** |
+| ![](docs/screenshots/build-menu.jpg) | ![](docs/screenshots/mushroom-cavern.jpg) |
+| **Heartroot** | |
+| ![](docs/screenshots/heartroot.jpg) | |
 | **The Rootwold** | **Ossuary Flats** |
 | ![](docs/screenshots/rootwold.jpg) | ![](docs/screenshots/ossuary.jpg) |
 | **Amberwood** | **The Riftlands** |

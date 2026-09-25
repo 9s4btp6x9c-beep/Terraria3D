@@ -170,13 +170,14 @@ try {
     const g = __game, s = g.gen.spawn;
     g.player.teleport(s.x, s.y, s.z);
     g.player.pitch = -0.7;
-    const wood = g.inventory.slots.findIndex(x => x && x.id === 'wood');
-    g.inventory.swap(wood, 2);
+    const hammer = g.inventory.slots.findIndex(x => x && x.id === 'builder_hammer');
+    g.inventory.swap(hammer, 2);
     g.inventory.select(2);
+    g.interaction.build = { shape: 'foundation', texture: 'planks' };
     return g.structures.pieces.size;
   });
   await act(() => { __game.input.lmb = true; }, 0.4);
-  await page.evaluate(() => { __game.interaction.cycleMode(); __game.player.pitch = -0.35; });
+  await page.evaluate(() => { __game.interaction.build = { shape: 'wall', texture: 'planks' }; __game.player.pitch = -0.35; });
   await act(() => { __game.input.lmb = true; }, 0.3);
   await page.evaluate(() => { __game.player.yaw += 1.6; });
   await act(() => { __game.input.lmb = true; }, 0.3);

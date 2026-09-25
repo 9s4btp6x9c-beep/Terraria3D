@@ -11,6 +11,8 @@ export class PlayerVitals {
   mana = 40;
   defense = 0;
   regenBonus = 0;
+  /** Multiplier on Glim regeneration (Rested). */
+  manaRegenMul = 1;
   invuln = 0;
   dead = false;
   respawnTimer = 0;
@@ -28,7 +30,7 @@ export class PlayerVitals {
     // Regen ramps up the longer you avoid damage.
     const regen = (this.sinceHit > 3 ? 0.5 + Math.min(4, (this.sinceHit - 3) * 0.3) : 0.2) + this.regenBonus;
     this.hp = Math.min(this.maxHp, this.hp + regen * dt);
-    this.mana = Math.min(this.maxMana, this.mana + (4 + this.maxMana * 0.06) * dt);
+    this.mana = Math.min(this.maxMana, this.mana + (4 + this.maxMana * 0.06) * this.manaRegenMul * dt);
   }
 
   /** Returns damage actually dealt (0 if invulnerable). */

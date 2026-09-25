@@ -33,6 +33,8 @@ import { VegetationRenderer } from './render/vegetationRenderer';
 import { Viewmodel } from './render/viewmodel';
 import { type WorldUniforms, createSkyTexture, createWorldMaterial, createWorldUniforms, updateSkyTexture } from './render/worldMaterial';
 import { Hud } from './ui/hud';
+import { BuildMenu } from './ui/buildMenu';
+import { COMFORT_RANGE, REST_TIME, comfortAt, restDuration } from './building/comfort';
 import { DialogueUI } from './ui/dialogue';
 import { InventoryUI } from './ui/inventoryUI';
 import { Minimap } from './ui/minimap';
@@ -107,6 +109,7 @@ export class Game {
   private skyTex!: THREE.DataTexture;
   private vegRenderer!: VegetationRenderer;
   private structureRenderer!: StructureRenderer;
+  buildMenu!: BuildMenu;
   private furnitureRenderer!: FurnitureRenderer;
   private particles!: Particles;
   private viewmodel!: Viewmodel;
@@ -182,6 +185,8 @@ export class Game {
       if (typeof ex.maxHp === 'number') this.vitals.maxHp = ex.maxHp;
       if (typeof ex.maxMana === 'number') this.vitals.maxMana = this.vitals.mana = ex.maxMana;
       if (typeof ex.hp === 'number') this.vitals.hp = Math.max(1, Math.min(this.vitals.maxHp, ex.hp));
+      // Worlds from before the Builder's Hammer get one.
+      if (!ex.build && this.inventory.count('builder_hammer') === 0) this.inventory.add('builder_hammer', 1);
     } else {
       // Generated cabins and sky shrines, built from regular pieces/furniture.
       const plan = planStructures(this.gen);
@@ -191,11 +196,12 @@ export class Game {
       this.inventory.add('copper_pickaxe', 1);
       this.inventory.add('copper_axe', 1);
       this.inventory.add('wooden_sword', 1);
+      this.inventory.add('builder_hammer', 1);
       this.inventory.add('torch', 12);
-      this.inventory.add('wood', 20);
+      this.inventory.add('wood', 30);
       this.inventory.add('healing_potion', 2);
-      this.inventory.swap(4, HOTBAR);
-      this.inventory.swap(5, HOTBAR + 1);
+      this.inventory.swap(5, HOTBAR);
+      this.inventory.swap(6, HOTBAR + 1);
     }
 
     cb.progress(0.06, 'Computing skylight');
@@ -333,6 +339,13 @@ export class Game {
         if (ok) this.audio.play('craft');
       },
       () => { if (!this.invUI.open) this.input.lock(); });
+    this.buildMenu = new BuildMenu($('#hud'), this.inventory, this.icons, () => this.interaction.build, c => {
+      this.interaction.build = c;
+      this.refreshHeld();
+    });
+    this.buildMenu.onClose = () => { if (!this.menuOpen) this.input.lock(); };
+    if (typeof save?.extra?.rested === 'number') this.rested = save.extra.rested;
+    if (save?.extra?.build) this.interaction.build = { ...this.interaction.build, ...(save.extra.build as object) };
     if (save?.extra?.town) this.town.load(save.extra.town as never);
     if (save?.extra?.progress) Object.assign(this.progress, save.extra.progress);
     if (save?.extra?.events) this.events.load(save.extra.events as never);
@@ -432,7 +445,7 @@ export class Game {
       },
       message: (t, c) => this.hud.message(t, c),
       swing: () => { this.viewmodel.triggerSwing(); this.audio.play('swing'); },
-      ghost: (m, p, v, r) => this.structureRenderer.showGhost(m, p, v, r),
+      ghost: (m, p, v, r, t) => this.structureRenderer.showGhost(m, p, v, r, t),
       furnitureGhost: (t, p, v) => this.furnitureRenderer.showGhost(t, p, v),
       give: (id, n, x, y, z) => this.pickups.spawn(id, n, x, y, z),
       openChest: f => this.openChest(f),
@@ -727,6 +740,46 @@ export class Game {
     }
   }
 
+  /** Seconds of Rested left, progress toward resting, and the comfort level. */
+  rested = 0;
+  private restProgress = 0;
+  comfort = 1;
+  private comfortTimer = 0;
+  private nearHearth = false;
+
+  /**
+   * Resting: under a roof (or underground) within reach of a lit Hearth, the
+   * player becomes Rested after a few seconds; the rest lasts longer the more
+   * comfortable the room is (see building/comfort.ts).
+   */
+  private updateRest(dt: number) {
+    const p = this.player;
+    this.rested = Math.max(0, this.rested - dt);
+    this.comfortTimer -= dt;
+    if (this.comfortTimer <= 0) {
+      this.comfortTimer = 0.5;
+      const info = comfortAt(this.furniture.near(p.x, p.y, p.z, COMFORT_RANGE), p.x, p.y + 0.5, p.z);
+      const roof = this.structures.raycast(p.x, p.y + 1.7, p.z, 0, 1, 0, 8) !== null || this.sky.visibility(p.x, p.y + 1.7, p.z) < 0.35;
+      this.nearHearth = info.hearth && roof && !this.vitals.dead;
+      this.comfort = info.comfort;
+    }
+    if (!this.nearHearth) { this.restProgress = 0; this.hud.setRest(this.rested, this.comfort, null); return; }
+    const full = restDuration(this.comfort);
+    if (this.rested > 0) {
+      // Already rested: sitting by the fire keeps it topped up.
+      this.rested = Math.max(this.rested, full);
+    } else {
+      this.restProgress += dt;
+      if (this.restProgress >= REST_TIME) {
+        this.rested = full;
+        this.restProgress = 0;
+        this.hud.message(`You feel rested (comfort ${this.comfort})`, '#ffc890');
+        this.audio.play('craft');
+      }
+    }
+    this.hud.setRest(this.rested, this.comfort, this.rested > 0 ? null : this.restProgress / REST_TIME);
+  }
+
   /** Announce a biome once the player has spent a moment in it, out under the sky. */
   private updateBiomeTitle(dt: number) {
     const p = this.player;
@@ -842,9 +895,14 @@ export class Game {
   private refreshHeld() {
     const held = this.inventory.held;
     this.viewmodel.setItem(held?.id ?? null);
-    this.hud.modeLabel = held && item(held.id).kind !== 'tool' ? this.interaction.modeLabel() : '';
+    this.hud.modeLabel = held && (item(held.id).kind !== 'tool' || item(held.id).hammer) ? this.interaction.modeLabel() : '';
     this.hud.render();
+    if (!this.holdingHammer && this.buildMenu?.open) this.toggleBuildMenu(false);
+    this.onHeldChange?.(this.holdingHammer);
   }
+
+  /** Called when what the player holds changes (touch controls show the rotate button). */
+  onHeldChange: ((hammer: boolean) => void) | null = null;
 
   private markSky(x0: number, z0: number, x1: number, z1: number) {
     const d = this.skyDirty;
@@ -937,6 +995,8 @@ export class Game {
       savedAt: Date.now(),
       extra: {
         chunks: this.field.cfg.chunksX,
+        build: this.interaction.build,
+        rested: this.rested,
         timeOfDay: this.atmosphere.timeOfDay,
         furniture: this.furniture.serialize(),
         equipment: this.equipment.serialize(),
@@ -954,7 +1014,9 @@ export class Game {
 
   get inventoryOpen() { return this.invUI.open; }
   /** Any menu that needs the mouse cursor (inventory, dialogue). */
-  get menuOpen() { return this.invUI.open || this.dialogue.open; }
+  get menuOpen() { return this.invUI.open || this.dialogue.open || this.buildMenu.open; }
+  /** Holding the Builder's Hammer. */
+  get holdingHammer() { const h = this.inventory.held; return !!h && !!item(h.id).hammer; }
 
   npcContext(): NpcContext {
     return {
@@ -987,9 +1049,16 @@ export class Game {
     if (open) this.input.unlock(); else this.input.lock();
   }
 
+  /** [Q] / the touch build button: with the Builder's Hammer, open or close the build menu. */
   cycleBuildMode() {
-    this.interaction.cycleMode();
-    this.refreshHeld();
+    if (!this.holdingHammer && !this.buildMenu.open) return;
+    this.toggleBuildMenu();
+  }
+
+  toggleBuildMenu(open = !this.buildMenu.open) {
+    if (open && this.invUI.open) this.toggleInventory(false);
+    this.buildMenu.setOpen(open);
+    if (open) this.input.unlock(); else if (!this.menuOpen) this.input.lock();
   }
 
   /** Enter or leave the title screen (the world keeps drawing behind it). */
@@ -999,6 +1068,7 @@ export class Game {
     if (on) {
       this.combat.clear();
       if (this.invUI.open) this.invUI.setOpen(false);
+      if (this.buildMenu.open) this.buildMenu.setOpen(false);
       if (this.dialogue.open) this.dialogue.close();
       this.menuT = Math.random() * 100;
     } else {
@@ -1057,9 +1127,12 @@ export class Game {
     for (let i = 0; i < HOTBAR; i++) if (inp.wasPressed(`Digit${i + 1}`)) this.inventory.select(i);
     if (inp.wheel && !this.invUI.open) this.inventory.select(this.inventory.selected + inp.wheel);
     if (inp.wasPressed('KeyQ')) this.cycleBuildMode();
+    if (inp.wasPressed('KeyR') && this.holdingHammer) { this.interaction.rotate(); this.refreshHeld(); }
+    this.interaction.free = this.holdingHammer && !this.input.touchMode && !!(inp.keys.has('ShiftLeft') || inp.keys.has('ShiftRight'));
     if (inp.wasPressed('F3')) this.hud.debugVisible = !this.hud.debugVisible;
     if (inp.wasPressed('F5')) this.saveGame();
     if (inp.wasPressed('F9')) location.href = `${location.pathname}?continue=1`;
+    if (this.buildMenu.open && (inp.wasPressed('Escape') || inp.wasPressed('Tab'))) { this.toggleBuildMenu(false); return; }
     if (inp.wasPressed('Tab') || inp.wasPressed('KeyE')) { if (this.dialogue.open) this.dialogue.close(); this.toggleInventory(); }
     if (inp.wasPressed('KeyH')) this.town.tryRegister(this.player.x, this.player.y, this.player.z, true);
   }
@@ -1082,7 +1155,9 @@ export class Game {
     this.player.extraJumps = st.extraJumps;
     this.player.flightTime = st.flight;
     this.vitals.defense = st.defense;
-    this.vitals.regenBonus = st.regen;
+    this.updateRest(dt);
+    this.vitals.regenBonus = st.regen + (this.rested > 0 ? 2 : 0);
+    this.vitals.manaRegenMul = this.rested > 0 ? 1.5 : 1;
 
     // Look.
     if (active) {
@@ -1202,7 +1277,7 @@ export class Game {
     if (this.dialogue.open && this.dialogue.npc && Math.hypot(this.dialogue.npc.body.x - this.player.x, this.dialogue.npc.body.z - this.player.z) > 7) this.dialogue.close();
     this.interaction.update(dt, this.camera.position, dir, active && inp.lmb, active && inp.consumeClick(), alt);
     const held = this.inventory.held;
-    if (held && item(held.id).kind !== 'tool') {
+    if (held && (item(held.id).kind !== 'tool' || item(held.id).hammer)) {
       const label = this.interaction.modeLabel();
       if (label !== this.hud.modeLabel) { this.hud.modeLabel = label; this.hud.render(); }
     }

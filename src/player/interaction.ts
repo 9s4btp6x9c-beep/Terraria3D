@@ -5,16 +5,23 @@
 
 import * as THREE from 'three';
 import { FURNITURE, type FurnitureHit, FurnitureSet, type Placed, bounds } from '../building/furniture';
-import { PIECES, SHAPES, type PieceHit, Structures } from '../building/structures';
+import { type BuildTexture, PIECES, type PieceHit, type PieceShape, type Placement, Structures, buildMaterial, pieceSamplePoints } from '../building/structures';
 import type { Inventory } from '../items/inventory';
-import { type FurnitureId, type ItemDef, type PieceShape, item } from '../items/items';
+import { type FurnitureId, type ItemDef, item } from '../items/items';
+import { LEVEL_BAND } from '../world/edits';
 import type { EditLog } from '../world/persistence';
 import { Mat, material } from '../world/materials';
 import type { RayHit, TerrainField } from '../world/terrain';
 import type { Tree, Vegetation } from '../world/vegetation';
 import type { PlayerController } from './controller';
 
-export type BuildMode = PieceShape | 'blob';
+export type BuildMode = PieceShape | 'blob' | 'level';
+
+/** What the Builder's Hammer is set to build (chosen in the build menu). */
+export interface BuildChoice { shape: PieceShape | 'level'; texture: BuildTexture }
+
+/** Radius of the Builder's Hammer's level-ground tool. */
+export const LEVEL_RADIUS = 2.6;
 
 export interface InteractionHooks {
   terrainEdited(x: number, y: number, z: number, r: number): void;
@@ -23,7 +30,7 @@ export interface InteractionHooks {
   particles(x: number, y: number, z: number, nx: number, ny: number, nz: number, color: number, count: number): void;
   message(text: string, color?: string): void;
   swing(): void;
-  ghost(mode: BuildMode | null, pos: { x: number; y: number; z: number; rot: number } | null, valid: boolean, radius?: number): void;
+  ghost(mode: BuildMode | null, pos: { x: number; y: number; z: number; rot: number; ext?: number } | null, valid: boolean, radius?: number, texture?: BuildTexture): void;
   furnitureGhost(type: FurnitureId | null, pos: { x: number; y: number; z: number; rot: number; wall?: [number, number, number] } | null, valid: boolean): void;
   /** Give items to the player (spawns a pickup at the source position). */
   give(id: string, count: number, x: number, y: number, z: number): void;
@@ -54,7 +61,6 @@ export class Interaction {
   private cooldown = 0;
   private dig = { x: 0, y: 0, z: 0, mat: -1, work: 0 };
   private pendingVolume = new Map<string, number>();
-  private modeIndex = new Map<string, number>();
   private lastWarn = 0;
   aim: Aim | null = null;
 
@@ -69,34 +75,38 @@ export class Interaction {
     private hooks: InteractionHooks,
   ) {}
 
+  /** Builder's Hammer: the piece and material it places, its rotation, and free placement. */
+  build: BuildChoice = { shape: 'foundation', texture: 'planks' };
+  turn = 0;
+  /** Hold to place without snapping to other pieces (grid and aim height only). */
+  free = false;
+  /** Why the current placement is not allowed (shown under the held item). */
+  private buildProblem = '';
+
   modesFor(def: ItemDef): BuildMode[] {
-    const modes: BuildMode[] = [];
-    if (def.terrain !== undefined) modes.push('blob');
-    if (def.build) modes.push(...SHAPES);
-    return modes;
+    if (def.hammer) return [this.build.shape];
+    if (def.terrain !== undefined) return ['blob'];
+    return [];
   }
 
   currentMode(): BuildMode | null {
     const held = this.inv.held;
     if (!held) return null;
-    const modes = this.modesFor(item(held.id));
-    if (modes.length === 0) return null;
-    return modes[(this.modeIndex.get(held.id) ?? 0) % modes.length];
+    return this.modesFor(item(held.id))[0] ?? null;
   }
 
-  cycleMode() {
-    const held = this.inv.held;
-    if (!held) return;
-    const n = this.modesFor(item(held.id)).length;
-    if (n > 1) this.modeIndex.set(held.id, ((this.modeIndex.get(held.id) ?? 0) + 1) % n);
-  }
+  /** Rotate the piece being placed a quarter turn (edge pieces flip). */
+  rotate() { this.turn = (this.turn + 1) % 4; }
 
   modeLabel(): string {
     const m = this.currentMode();
     if (!m) return '';
-    const cost = m === 'blob' ? 1 : PIECES[m].cost;
-    const name = m === 'blob' ? 'Terrain fill' : PIECES[m].name;
-    return `${name} · cost ${cost} · [Q] cycle`;
+    if (m === 'blob') return 'Terrain fill · 1 each';
+    if (m === 'level') return `Level ground to your feet${this.buildProblem ? ` · ${this.buildProblem}` : ''}`;
+    const mat = buildMaterial(this.build.texture);
+    const cost = PIECES[m].cost, have = this.inv.count(mat.item);
+    const tag = this.buildProblem ? ` · ${this.buildProblem}` : this.free ? ' · free placement' : '';
+    return `${PIECES[m].name} · ${cost} ${mat.name} (${have})${tag}`;
   }
 
   private computeAim(o: THREE.Vector3, d: THREE.Vector3, reach: number): Aim | null {
@@ -128,6 +138,7 @@ export class Interaction {
     const reach = def?.tool ? def.tool.reach : BUILD_REACH;
     this.aim = this.computeAim(eye, dir, reach);
 
+    if (alt && def?.hammer && this.deconstruct()) return;
     if (alt && this.interact()) return;
     if (!mode) this.hooks.ghost(null, null, false);
     if (!def?.furniture) this.hooks.furnitureGhost(null, null, false);
@@ -245,11 +256,11 @@ export class Interaction {
   private hitPiece(hit: PieceHit) {
     const p = hit.piece;
     p.hp--;
-    const color = p.texture === 'planks' ? 0xa8744a : 0x9a98a4;
+    const color = p.texture === 'planks' || p.texture === 'rootplanks' ? 0xa8744a : 0x9a98a4;
     this.hooks.particles(hit.x, hit.y, hit.z, hit.nx, hit.ny, hit.nz, color, 6);
     if (p.hp > 0) return;
     this.structures.remove(p.id);
-    this.hooks.give(p.texture === 'planks' ? 'wood' : 'stone', PIECES[p.shape].cost, hit.x, hit.y, hit.z);
+    this.hooks.give(buildMaterial(p.texture).item, PIECES[p.shape].cost, hit.x, hit.y, hit.z);
   }
 
   private hitFurniture(hit: FurnitureHit) {
@@ -271,10 +282,22 @@ export class Interaction {
     if (!aim || aim.kind === 'tree') { this.hooks.furnitureGhost(null, null, false); return; }
     const h = aim.hit;
     const pos = FurnitureSet.snap(type, h.x, h.y, h.z, h.nx, h.ny, h.nz, this.player.yaw);
+    // Doors drop straight into the nearest doorway.
+    let doorway = false;
+    if (fd.placement === 'wallslot') {
+      let best = 2.2;
+      for (const p of this.structures.near(h.x, h.y, h.z, 2.5)) {
+        const d = Math.hypot(p.x - h.x, p.z - h.z);
+        if (p.shape === 'doorway' && d < best && h.y > p.y - 0.5 && h.y < p.y + 3) {
+          best = d; doorway = true;
+          pos.x = p.x; pos.y = p.y; pos.z = p.z; pos.rot = p.rot % 2;
+        }
+      }
+    }
     const cand: Placed = { uid: -1, type, ...pos, hp: 1 };
     let valid = true;
     if (fd.placement === 'floor' && h.ny < 0.65) valid = false;
-    if (fd.placement === 'wallslot' && (this.structures.occupied('wall', pos.x, pos.y, pos.z, pos.rot) ||
+    if (fd.placement === 'wallslot' && ((!doorway && this.structures.occupied('wall', pos.x, pos.y, pos.z, pos.rot)) ||
       [...this.furniture.items.values()].some(o => o.type === 'door' && Math.abs(o.x - pos.x) < 0.1 && Math.abs(o.z - pos.z) < 0.1 && Math.abs(o.y - pos.y) < 1))) valid = false;
     // No overlap with other furniture (except torches, which are tiny).
     const b = bounds(cand);
@@ -303,11 +326,12 @@ export class Interaction {
 
   private updateBuild(def: ItemDef, mode: BuildMode, useHeld: boolean, clicked: boolean) {
     const aim = this.aim;
+    this.buildProblem = '';
     if (!aim || aim.kind === 'tree' || aim.kind === 'furniture') { this.hooks.ghost(null, null, false); return; }
     const hp = aim.hit;
-    const have = this.inv.count(def.id);
 
     if (mode === 'blob') {
+      const have = this.inv.count(def.id);
       const r = 1.1;
       const x = hp.x + hp.nx * 0.5, y = hp.y + hp.ny * 0.5, z = hp.z + hp.nz * 0.5;
       const valid = have >= 1 && !this.player.overlaps(x, y, z, r);
@@ -323,25 +347,82 @@ export class Interaction {
       return;
     }
 
-    const pos = Structures.snap(mode, hp.x, hp.y, hp.z, hp.nx, hp.ny, hp.nz, this.player.yaw);
-    const cost = PIECES[mode].cost;
-    const candidate = { id: -1, shape: mode, texture: def.build!, ...pos, hp: 1 };
-    let valid = have >= cost && !this.structures.occupied(mode, pos.x, pos.y, pos.z, pos.rot);
-    // Not overlapping the player.
-    if (valid) {
-      for (const off of [0.4, 0.95, 1.45]) {
-        if (Structures.distance([candidate], this.player.x, this.player.y + off, this.player.z) < 0.38) { valid = false; break; }
+    if (mode === 'level') {
+      // Level ground: flatten a disc around the aimed point to the height of your feet.
+      const ty = Math.round(this.player.y / 0.25) * 0.25;
+      let valid = Math.abs(hp.y - ty) < LEVEL_BAND - 0.5 && aim.kind === 'terrain';
+      if (!valid) this.buildProblem = aim.kind !== 'terrain' ? 'Aim at the ground' : 'Too far above or below you';
+      this.hooks.ghost('level', { x: hp.x, y: ty, z: hp.z, rot: 0 }, valid, LEVEL_RADIUS);
+      if (valid && clicked) {
+        this.cooldown = 0.5;
+        this.log.commit(this.field, 'level', hp.x, ty, hp.z, LEVEL_RADIUS, Mat.Dirt, 0);
+        this.hooks.terrainEdited(hp.x, ty, hp.z, LEVEL_RADIUS + LEVEL_BAND);
+        this.hooks.swing();
+        this.hooks.particles(hp.x, ty + 0.3, hp.z, 0, 1, 0, material(Mat.Dirt).particle, 16);
       }
+      return;
     }
-    // Not buried in terrain.
-    if (valid && this.field.sample(pos.x, pos.y + PIECES[mode].lift, pos.z) > 1.2) valid = false;
-    this.hooks.ghost(mode, pos, valid);
+
+    const texture = this.build.texture;
+    const mat = buildMaterial(texture);
+    const pos = this.structures.place(mode, hp.x, hp.y, hp.z, hp.nx, hp.ny, hp.nz, this.player.yaw, {
+      turn: this.turn, free: this.free, ground: (x, z, nearY) => this.groundAt(x, z, nearY),
+    });
+    const check = this.canPlace(mode, pos, this.inv.count(mat.item));
+    this.buildProblem = check;
+    const valid = check === '';
+    this.hooks.ghost(mode, pos, valid, 1, texture);
     if (valid && (clicked || (useHeld && this.cooldown <= 0))) {
       this.cooldown = 0.25;
-      this.inv.remove(def.id, cost);
-      this.structures.add({ shape: mode, texture: def.build!, ...pos });
+      this.inv.remove(mat.item, PIECES[mode].cost);
+      this.structures.add({ shape: mode, texture, x: pos.x, y: pos.y, z: pos.z, rot: pos.rot, ...(pos.ext ? { ext: pos.ext } : {}) });
       this.hooks.swing();
+      this.hooks.particles(pos.x, pos.y + 0.3, pos.z, 0, 1, 0, texture === 'planks' || texture === 'rootplanks' ? 0xc8a070 : 0xd8d4cc, 8);
     }
+  }
+
+  /** Empty string if the piece can go here, otherwise the reason it can't. */
+  canPlace(shape: PieceShape, pos: Placement, have: number): string {
+    const def = PIECES[shape];
+    const cand = { shape, texture: this.build.texture, x: pos.x, y: pos.y, z: pos.z, rot: pos.rot, ext: pos.ext };
+    if (have < def.cost) return `Needs ${def.cost} ${buildMaterial(this.build.texture).name}`;
+    if (this.structures.occupied(shape, pos.x, pos.y, pos.z, pos.rot)) return 'Already built here';
+    if ((pos.ext ?? 0) > 8) return 'Too high above the ground';
+    const piece = { id: -1, hp: 1, ...cand };
+    for (const off of [0.4, 0.95, 1.45])
+      if (Structures.distance([piece], this.player.x, this.player.y + off, this.player.z) < 0.38) return 'You are in the way';
+    if (shape !== 'foundation' && this.field.sample(pos.x, pos.y + def.top / 2, pos.z) > 1.2) return 'Blocked by the ground';
+    // Support: it must touch the ground or something already built.
+    const pts = pieceSamplePoints(cand);
+    const neighbours = this.structures.near(pos.x, pos.y, pos.z, 3);
+    const supported = shape === 'foundation' ? (pos.ext ?? 0) > 0 || pts.some(p => this.field.sample(p[0], p[1] - 0.1, p[2]) > -0.3)
+      : pts.some(p => this.field.sample(p[0], p[1], p[2]) > -0.3 || (neighbours.length > 0 && Structures.distance(neighbours, p[0], p[1], p[2]) < 0.15));
+    if (!supported) return 'Needs support';
+    return '';
+  }
+
+  /** Terrain surface height at (x, z) near `nearY` (searching a few metres up and down). */
+  private groundAt(x: number, z: number, nearY: number): number | null {
+    let prev = this.field.sample(x, nearY + 4, z);
+    for (let y = nearY + 3.5; y > nearY - 10; y -= 0.5) {
+      const d = this.field.sample(x, y, z);
+      if (d > 0 && prev <= 0) return y + 0.5 * (d / Math.max(1e-3, d - prev));
+      prev = d;
+    }
+    return null;
+  }
+
+  /** Builder's Hammer + interact on a piece: take it down for a full refund. */
+  private deconstruct(): boolean {
+    const aim = this.aim;
+    if (!aim || aim.kind !== 'piece' || aim.distance > BUILD_REACH) return false;
+    const p = aim.hit.piece;
+    this.structures.remove(p.id);
+    const mat = buildMaterial(p.texture);
+    this.hooks.give(mat.item, PIECES[p.shape].cost, aim.hit.x, aim.hit.y, aim.hit.z);
+    this.hooks.particles(aim.hit.x, aim.hit.y, aim.hit.z, aim.hit.nx, aim.hit.ny, aim.hit.nz, 0xc8a070, 10);
+    this.hooks.interacted?.('deconstruct');
+    return true;
   }
 }
 

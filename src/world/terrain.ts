@@ -215,7 +215,7 @@ export class TerrainField {
     const dirtyChunks = new Set<number>();
     const b = editBounds(e, this);
     const out: [number] = [0];
-    const sub = e[0] === 0;
+    const sub = e[0] !== 1;
     for (let iz = b[2]; iz <= b[5]; iz++)
       for (let iy = b[1]; iy <= b[4]; iy++)
         for (let ix = b[0]; ix <= b[3]; ix++) {
@@ -225,7 +225,7 @@ export class TerrainField {
           const dx = ix - e[1], dy = iy - e[2], dz = iz - e[3];
           const old = this.density(ix, iy, iz);
           const m = this.material(ix, iy, iz);
-          const nd = editSample(old, m, Math.sqrt(dx * dx + dy * dy + dz * dz), e, out);
+          const nd = editSample(old, m, dx, dy, dz, e, out);
           if (Number.isNaN(nd)) continue;
           const before = solidity(old), after = solidity(nd);
           if (before !== after) {

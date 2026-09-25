@@ -419,6 +419,19 @@ function totem() {
   ]);
 }
 
+/** Builder's Hammer: a squat iron head (claw on one side) on a wrapped haft. */
+function hammer() {
+  return merge([
+    box(0.055, 0.66, 0.055, 'planks', { y: 0.28 }, 0xd8b890),
+    box(0.07, 0.12, 0.07, 'cloth', { y: 0.02 }, 0x6a4a3a),
+    box(0.07, 0.08, 0.07, 'cloth', { y: 0.46 }, 0x6a4a3a),
+    box(0.16, 0.13, 0.13, 'iron', { x: 0.07, y: 0.62 }),
+    box(0.06, 0.15, 0.15, 'iron', { x: 0.16, y: 0.62 }, 0xe8e2dc),
+    ...[-0.03, 0.03].map(z => taper(0.16, 0.05, 0.035, 1, 1, 'iron', { x: -0.08, y: 0.66, z, rz: 0.5 })),
+    box(0.1, 0.1, 0.1, 'iron', { x: -0.02, y: 0.62 }),
+  ]);
+}
+
 /** Bramble Maul: a gnarled petrified root with a mossy, knotted head. */
 function maul() {
   return merge([
@@ -738,6 +751,7 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'starseed': g = starseed(); break;
     case 'totem': g = totem(); break;
     case 'maul': g = maul(); break;
+    case 'hammer': g = hammer(); break;
     case 'heartroot': g = merge([lifeCrystalBase(), lifeCrystalHeart()]); break;
     case 'glim_vessel': g = vessel('glim', 0xe0f8ff); break;
     case 'glim_draught': g = bottle('glim'); break;

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e": "node scripts/e2e.mjs"
+    "e2e": "node scripts/e2e.mjs",
+    "e2e:build": "node scripts/e2e-build.mjs"
   },
   "dependencies": {
     "@fontsource/jersey-10": "^5.3.0",
