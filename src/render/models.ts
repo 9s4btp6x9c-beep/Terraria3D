@@ -263,6 +263,56 @@ function wing() {
   return merge(parts);
 }
 
+/** A curved war horn: tapering bone segments bound with iron bands. */
+function horn() {
+  const parts: THREE.BufferGeometry[] = [];
+  const segs = 7;
+  for (let i = 0; i < segs; i++) {
+    const t = i / (segs - 1);
+    const a = t * 1.9;
+    const r = 0.075 * (1 - t * 0.75) + 0.012;
+    const x = Math.sin(a) * 0.22 - 0.1, y = 0.08 + (1 - Math.cos(a)) * 0.2 + t * 0.06;
+    parts.push(cyl(r * 0.85, r, 0.075, 7, 'bone', { x, y, rz: -a }));
+  }
+  // Bell, mouthpiece and bands.
+  parts.push(cyl(0.1, 0.07, 0.06, 8, 'bone', { x: -0.1, y: 0.05 }, 0xfff0d8));
+  parts.push(cyl(0.065, 0.065, 0.02, 8, 'metal', { x: -0.1, y: 0.02 }, 0x1a1418));
+  parts.push(cyl(0.083, 0.083, 0.025, 8, 'iron', { x: -0.07, y: 0.13, rz: -0.35 }));
+  parts.push(cyl(0.05, 0.05, 0.025, 8, 'iron', { x: 0.1, y: 0.33, rz: -1.3 }));
+  parts.push(cyl(0.014, 0.018, 0.05, 6, 'gold', { x: 0.16, y: 0.4, rz: -1.8 }));
+  parts.push(box(0.012, 0.12, 0.012, 'cloth', { x: 0.02, y: 0.19, rz: 0.4 }, 0x6a3a2a));
+  return merge(parts);
+}
+
+/** A brute's club: a thick femur studded with iron. */
+function club() {
+  const parts = [
+    box(0.07, 0.32, 0.07, 'cloth', { y: 0.06 }, 0x4a3024),
+    cyl(0.05, 0.045, 0.7, 6, 'bone', { y: 0.45 }),
+    ico(0.11, 'bone', { y: 0.86, sy: 1.25, jitter: 0.18, seed: 12 }),
+    ico(0.07, 'bone', { x: 0.06, y: 0.97, z: 0.03, jitter: 0.2, seed: 13 }),
+    ico(0.07, 'bone', { x: -0.06, y: 0.97, z: -0.02, jitter: 0.2, seed: 14 }),
+    octa(0.06, 'bone', { y: -0.13 }),
+    cyl(0.07, 0.07, 0.04, 7, 'iron', { y: 0.72 }),
+  ];
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    parts.push(cone(0.022, 0.1, 4, 'iron', { x: Math.cos(a) * 0.11, y: 0.82 + (i % 2) * 0.1, z: Math.sin(a) * 0.11, rz: -Math.cos(a) * 1.4, rx: Math.sin(a) * 1.4 }));
+  }
+  return merge(parts);
+}
+
+/** A curved fang on a cord. */
+function fang() {
+  const parts = [box(0.012, 0.18, 0.012, 'cloth', { y: 0.24 }, 0x5a2a24), box(0.06, 0.03, 0.03, 'gold', { y: 0.155 })];
+  for (let i = 0; i < 4; i++) {
+    const t = i / 3;
+    parts.push(cone(0.035 * (1 - t * 0.6) + 0.008, 0.06, 5, 'bone', { x: t * t * 0.05, y: 0.12 - t * 0.055, rz: 0.2 + t * 0.6, rx: Math.PI }, 0xfff8e8));
+  }
+  parts.push(octa(0.02, 'bloodMetal', { y: 0.16, z: 0.02 }));
+  return merge(parts);
+}
+
 // ------------------------------------------------------------ armour, trinkets
 
 function armor(slot: 'head' | 'body' | 'legs', layer: MetalLayer) {
@@ -473,6 +523,9 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'wing': g = wing(); break;
     case 'scale': g = merge([taper(0.26, 0.04, 0.3, 0.3, 1, 'scale', { y: 0.03, rx: -0.2 }), taper(0.2, 0.04, 0.24, 0.3, 1, 'scale', { y: 0.06, z: -0.05, rx: -0.2 }, 0xd8e8b0)]); break;
     case 'bait': g = merge([ico(0.1, 'red', { y: 0.1, detail: 1, jitter: 0.2, seed: 4 }), ico(0.07, 'gel', { x: 0.08, y: 0.07, jitter: 0.3, seed: 5 }), octa(0.04, 'lumiteMetal', { x: -0.06, y: 0.16 }), box(0.012, 0.15, 0.012, 'cloth', { y: 0.24 }, 0xd0c090)]); break;
+    case 'horn': g = horn(); break;
+    case 'club': g = club(); break;
+    case 'fang': g = fang(); break;
     case 'armor': g = armor(spec.slot, spec.layer); break;
     case 'boots': g = boots(spec.layer); break;
     case 'jar': g = jar(spec.layer); break;

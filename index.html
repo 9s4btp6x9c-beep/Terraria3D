@@ -79,10 +79,16 @@
   #cursor-stack img.icon { width: 40px; height: 40px; image-rendering: pixelated; }
   #cursor-stack .count { position: absolute; right: 0; bottom: 0; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; }
 
-  #bossbar { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); width: min(460px, 60vw); display: none; text-align: center; }
+  #topbars { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); width: min(460px, 60vw); display: flex; flex-direction: column; gap: 10px; }
+  #bossbar, #eventbar { display: none; text-align: center; }
   #bossbar .name { font-size: 16px; color: #e8d0ff; text-shadow: 2px 2px 0 #000; margin-bottom: 4px; letter-spacing: 1px; }
   #bossbar .bar { height: 14px; border: 2px solid #c89aff; background: #1a1024; box-shadow: 0 0 0 2px #3a2050; }
   #bossbar .bar div { height: 100%; background: linear-gradient(#e05a8a, #8a1a4a); transition: width 0.15s; }
+  #eventbar .name { font-size: 15px; text-shadow: 2px 2px 0 #000; letter-spacing: 1px; }
+  #eventbar .sub { font-size: 12px; color: var(--dim); text-shadow: 1px 1px 0 #000; margin-top: 1px; }
+  #eventbar .bar { height: 10px; margin: 4px auto 0; width: 70%; border: 2px solid var(--gold); background: #1a1410; box-shadow: 0 0 0 2px var(--gold-dark); }
+  #eventbar .bar div { height: 100%; background: linear-gradient(#f0e0b0, #a08050); transition: width 0.2s; }
+  body.touch #topbars { top: 58px; width: min(360px, 46vw); }
   #dialogue { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); background: var(--panel); border: 3px solid var(--gold); box-shadow: 0 0 0 2px var(--gold-dark); padding: 12px 14px; pointer-events: auto; font-size: 14px; }
   #dialogue .who { color: var(--gold); font-size: 16px; margin-bottom: 6px; } #dialogue .who span { color: var(--dim); font-size: 13px; }
   #dialogue .say { line-height: 1.5; min-height: 40px; }
@@ -159,7 +165,7 @@
   <canvas id="minimap" width="176" height="176"></canvas>
   <div id="clock"></div>
   <div id="prompt"></div>
-  <div id="bossbar"></div>
+  <div id="topbars"><div id="bossbar"></div><div id="eventbar"></div></div>
   <div id="itemname"></div>
   <div id="hotbar"></div>
   <div id="messages"></div>

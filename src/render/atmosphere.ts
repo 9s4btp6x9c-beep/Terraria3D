@@ -15,6 +15,8 @@ const C = (hex: number) => new THREE.Color(hex);
 // Keyframes over time of day (0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset).
 const SKY_TOP = [[0, C(0x070a1c)], [0.2, C(0x0d1430)], [0.27, C(0x4a62b0)], [0.35, C(0x3f63c8)], [0.65, C(0x3f63c8)], [0.73, C(0x5a4e9a)], [0.8, C(0x0d1430)], [1, C(0x070a1c)]] as const;
 const SKY_HORIZON = [[0, C(0x10183a)], [0.2, C(0x1c2448)], [0.26, C(0xf0a070)], [0.33, C(0xa9c6ee)], [0.67, C(0xa9c6ee)], [0.74, C(0xf08a5a)], [0.8, C(0x1c2448)], [1, C(0x10183a)]] as const;
+const BLOOD_TOP = C(0x2a0508);
+const BLOOD_HORIZON = C(0x6a1212);
 const CAVE_FOG = C(0x0b0a12);
 const EMBER_FOG = C(0x2a0c08);
 const CAVE_AMBIENT = C(0x1a1726);
@@ -79,10 +81,16 @@ export class Atmosphere {
   daylight = 1;
   /** 0 outdoors .. 1 deep underground (smoothed). */
   underground = 0;
+  /** Blood Moon strength (smoothed toward `bloodTarget`). */
+  blood = 0;
+  bloodTarget = 0;
+  /** Blood Moon tint as currently visible (0 by day). */
+  bloodVisible = 0;
   cycle = true;
   private tmp = new THREE.Color();
   private horizon = new THREE.Color();
   private sunDir = new THREE.Vector3();
+  private tmpDir = new THREE.Vector3();
 
   constructor(scene: THREE.Scene, private renderer: THREE.WebGLRenderer, private u: WorldUniforms,
     center: THREE.Vector3, seed: number, seaLevel: number, shadowSize: number) {
@@ -169,6 +177,10 @@ export class Atmosphere {
 
     this.underground += ((1 - visibility) - this.underground) * Math.min(1, dt * 3);
     const ug = this.underground;
+    this.blood += (this.bloodTarget - this.blood) * Math.min(1, dt * 0.5);
+    // The red tint only shows at night (it fades out as the sun rises).
+    const bl = this.blood * (1 - THREE.MathUtils.smoothstep(sunUp, -0.1, 0.1));
+    this.bloodVisible = bl;
 
     // Light colours.
     const dusk = 1 - Math.min(1, Math.abs(sunUp) * 4);
@@ -176,16 +188,16 @@ export class Atmosphere {
       this.sun.color.setRGB(1, 0.95 - dusk * 0.25, 0.86 - dusk * 0.45);
       this.sun.intensity = 2.8 * THREE.MathUtils.smoothstep(sunUp, -0.05, 0.2);
     } else {
-      this.sun.color.setRGB(0.5, 0.6, 1.0);
-      this.sun.intensity = 0.32 * THREE.MathUtils.smoothstep(-sunUp, 0.0, 0.25);
+      this.sun.color.setRGB(0.5 + bl * 0.5, 0.6 - bl * 0.35, 1.0 - bl * 0.72);
+      this.sun.intensity = (0.32 + bl * 0.2) * THREE.MathUtils.smoothstep(-sunUp, 0.0, 0.25);
     }
     const d = this.daylight;
-    this.u.uHemiSky.value.setRGB(0.64 * d + 0.05, 0.76 * d + 0.07, 0.96 * d + 0.15);
+    this.u.uHemiSky.value.setRGB(0.64 * d + 0.05 + bl * 0.1, 0.76 * d + 0.07 - bl * 0.03, 0.96 * d + 0.15 - bl * 0.1);
     this.u.uHemiGround.value.setRGB(0.44 * d + 0.03, 0.37 * d + 0.03, 0.3 * d + 0.06);
 
     // Sky + fog.
-    sampleKeys(SKY_TOP, t, this.sky.uniforms.uTop.value);
-    sampleKeys(SKY_HORIZON, t, this.horizon);
+    sampleKeys(SKY_TOP, t, this.sky.uniforms.uTop.value).lerp(BLOOD_TOP, bl);
+    sampleKeys(SKY_HORIZON, t, this.horizon).lerp(BLOOD_HORIZON, bl * 0.85);
     this.sky.uniforms.uHorizon.value.copy(this.horizon);
     this.sky.uniforms.uBottom.value.copy(this.horizon).multiplyScalar(0.8);
     this.tmp.copy(CAVE_FOG).lerp(EMBER_FOG, ember);
@@ -194,13 +206,17 @@ export class Atmosphere {
     this.fog.near = 90 - ug * 82;
     this.fog.far = 560 - ug * 480;
     this.renderer.setClearColor(this.fog.color);
-    (this.stars.material as THREE.PointsMaterial).opacity = (1 - d) * (1 - ug);
+    (this.stars.material as THREE.PointsMaterial).opacity = (1 - d) * (1 - ug) * (1 - bl * 0.6);
     this.stars.visible = d < 0.95 && ug < 0.95;
     this.stars.position.copy(cam);
     this.stars.rotation.y = t * Math.PI * 2;
     this.sky.group.visible = ug < 0.98;
     this.sky.setBrightness(0.25 + 0.75 * d, this.tmp.copy(this.horizon));
     this.sky.follow(cam);
+    // The visible disc follows the true arc (the light direction is clamped
+    // above the horizon to keep shadows sane).
+    const vis = isDay ? this.tmpDir.set(Math.cos(ang), sunUp, 0.35) : this.tmpDir.set(-Math.cos(ang), -sunUp, 0.35);
+    this.sky.setCelestial(cam, vis.normalize(), isDay, isDay ? THREE.MathUtils.smoothstep(sunUp, -0.05, 0.1) : THREE.MathUtils.smoothstep(-sunUp, -0.05, 0.1), bl);
     this.sky.update(time);
 
     // Shadow camera follows the player (snapped to texels to avoid shimmer).

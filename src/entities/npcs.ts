@@ -23,7 +23,10 @@ export interface NpcContext {
   inv: Inventory;
   kills: number;
   bossDefeated: boolean;
+  raidDefeated: boolean;
   isNight: boolean;
+  /** Name of the running world event, if any. */
+  event: string | null;
   hasStation(id: string): boolean;
 }
 
@@ -43,8 +46,12 @@ export const NPCS: NpcDef[] = [
       t.push('Those floating islands up high? Someone built shrines up there. Maybe a grappling hook would help.');
       t.push('Hollow Miners in the deep caves sometimes carry a barbed hook. With iron bars, that makes a grappling hook (press F).');
       if (ctx.isNight) t.push('Shamblers roam the surface at night. A house with a door keeps the worst of them away.');
+      if (ctx.event === 'Blood Moon') t.push('The moon is bleeding! Stay indoors — or go out and collect the shards those horrors drop.');
+      else t.push('Some nights the moon turns red and every horror in the land comes out. Their shards make fine trinkets at an anvil.');
       if (!ctx.bossDefeated) t.push('Something enormous burrows beneath us. Wyrm Bait from the anvil will call it — if you dare, and at night.');
       else t.push('You beat the Deepwyrm! Its scales can be forged into gear that bites through the Ember Depths.');
+      if (ctx.bossDefeated && !ctx.raidDefeated) t.push('The Hollowfolk will have heard the Deepwyrm fall. Expect them to march on this town — or call them yourself with a war horn.');
+      if (ctx.event === 'The Hollow Raid') t.push('Raiders! Hold the line — they\'ll give up once enough of them fall.');
       return t;
     },
   },
@@ -66,6 +73,25 @@ export const NPCS: NpcDef[] = [
       { item: 'red_cap', count: 1, price: 4 },
       { item: 'gel', count: 5, price: 5 },
       { item: 'grappling_hook', count: 1, price: 150 },
+    ],
+  },
+  {
+    id: 'tinkerer', name: 'Wren', title: 'the Tinkerer',
+    canArrive: ctx => ctx.raidDefeated,
+    colors: { shirt: 0xc07a2a, pants: 0x4a4a58, hair: 0xa84a2a },
+    lines: ctx => [
+      'I followed the raiders here to see who could beat them. Turns out it was you!',
+      'Boots, jars, charms — I fix up whatever the Hollowfolk drop. For a price.',
+      'A Delver\'s Band and Burrowing Claws together? You\'d dig faster than the Deepwyrm.',
+      ctx.isNight ? 'Night work is the best work. Fewer interruptions — mostly.' : 'Have you tried jumping twice? No? Then you need an Updraft Jar.',
+    ],
+    shop: [
+      { item: 'swift_boots', count: 1, price: 220 },
+      { item: 'updraft_jar', count: 1, price: 280 },
+      { item: 'feather_charm', count: 1, price: 180 },
+      { item: 'miners_band', count: 1, price: 320 },
+      { item: 'hollow_horn', count: 1, price: 90 },
+      { item: 'bomb', count: 5, price: 20 },
     ],
   },
 ];

@@ -3,8 +3,9 @@
 // field as the player (terrain + pieces + furniture).
 
 import type { WorldCollision } from '../world/collision';
+import type { EventKind } from './events';
 
-export type AIKind = 'hopper' | 'walker' | 'flyer' | 'thrower' | 'crawler';
+export type AIKind = 'hopper' | 'walker' | 'flyer' | 'thrower' | 'crawler' | 'pouncer';
 export type SpawnEnv = 'surface' | 'cave' | 'deep' | 'depths';
 
 export interface Drop { item: string; min: number; max: number; chance: number }
@@ -27,11 +28,17 @@ export interface CreatureDef {
   tint?: number;
   /** Model to use when this is a variant of another creature. */
   model?: string;
+  /** Texture layer override for the model's main surface (e.g. red gel). */
+  skin?: string;
   /** Particle / blood colour. */
   color: number;
-  /** Ranged attack (throwers). */
-  ranged?: { damage: number; interval: number; speed: number; range: number };
+  /** Ranged attack (throwers). Bombs explode on a fuse instead of on impact. */
+  ranged?: { damage: number; interval: number; speed: number; range: number; projectile?: 'rock' | 'bomb' };
   boss?: boolean;
+  /** Only spawns during this world event (replaces `spawn`). */
+  event?: { kind: EventKind; weight: number };
+  /** Distance at which it notices the player (default 38 m). */
+  aggro?: number;
 }
 
 export const CREATURES: Record<string, CreatureDef> = {
@@ -108,6 +115,49 @@ export const CREATURES: Record<string, CreatureDef> = {
   },
 };
 
+const EVENT_DROPS: Drop[] = [{ item: 'blood_shard', min: 1, max: 2, chance: 0.45 }];
+
+// ---- world-event creatures (see entities/events.ts)
+Object.assign(CREATURES, {
+  blood_glob: {
+    id: 'blood_glob', name: 'Blood Glob', hp: 40, damage: 15, defense: 4, speed: 6, ai: 'hopper', radius: 0.62, height: 0.9, kbResist: 0.15, model: 'glob', skin: 'bloodgel',
+    drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'coin', min: 2, max: 4, chance: 1 }, ...EVENT_DROPS],
+    spawn: null, event: { kind: 'blood_moon', weight: 5 }, aggro: 55, color: 0xc02030,
+  },
+  gorehound: {
+    id: 'gorehound', name: 'Gorehound', hp: 60, damage: 18, defense: 6, speed: 7.5, ai: 'pouncer', radius: 0.5, height: 1.0, kbResist: 0.3,
+    drops: [{ item: 'coin', min: 3, max: 6, chance: 1 }, { item: 'houndfang_charm', min: 1, max: 1, chance: 0.04 }, ...EVENT_DROPS],
+    spawn: null, event: { kind: 'blood_moon', weight: 4 }, aggro: 60, color: 0x9a2020,
+  },
+  vein_shambler: {
+    id: 'vein_shambler', name: 'Vein Shambler', hp: 80, damage: 17, defense: 8, speed: 3.2, ai: 'walker', radius: 0.42, height: 1.85, kbResist: 0.5, model: 'shambler', tint: 0xff8a8a,
+    drops: [{ item: 'coin', min: 3, max: 7, chance: 1 }, { item: 'red_cap', min: 1, max: 2, chance: 0.4 }, ...EVENT_DROPS],
+    spawn: null, event: { kind: 'blood_moon', weight: 5 }, aggro: 55, color: 0x8a1a1a,
+  },
+  bloodwisp: {
+    id: 'bloodwisp', name: 'Bloodwisp', hp: 45, damage: 16, defense: 4, speed: 6.5, ai: 'flyer', radius: 0.5, height: 1, kbResist: 0.2, model: 'gloomwisp', tint: 0xff7070,
+    drops: [{ item: 'coin', min: 2, max: 5, chance: 1 }, ...EVENT_DROPS],
+    spawn: null, event: { kind: 'blood_moon', weight: 3 }, aggro: 60, color: 0xd02030,
+  },
+  raid_miner: {
+    id: 'raid_miner', name: 'Hollow Raider', hp: 90, damage: 20, defense: 10, speed: 2.8, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.3, model: 'hollow_miner',
+    drops: [{ item: 'coin', min: 4, max: 9, chance: 1 }, { item: 'iron_ore', min: 2, max: 4, chance: 0.5 }, { item: 'barbed_hook', min: 1, max: 1, chance: 0.05 }],
+    spawn: null, event: { kind: 'raid', weight: 6 }, aggro: 120, color: 0xe6dcc0,
+    ranged: { damage: 16, interval: 2.2, speed: 17, range: 16 },
+  },
+  hollow_sapper: {
+    id: 'hollow_sapper', name: 'Hollow Sapper', hp: 70, damage: 16, defense: 6, speed: 3, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.2,
+    drops: [{ item: 'bomb', min: 1, max: 3, chance: 0.6 }, { item: 'coin', min: 4, max: 8, chance: 1 }],
+    spawn: null, event: { kind: 'raid', weight: 3 }, aggro: 120, color: 0xe6dcc0,
+    ranged: { damage: 26, interval: 3.4, speed: 13, range: 18, projectile: 'bomb' },
+  },
+  hollow_brute: {
+    id: 'hollow_brute', name: 'Hollow Brute', hp: 220, damage: 32, defense: 14, speed: 2.4, ai: 'walker', radius: 0.62, height: 2.7, kbResist: 0.85,
+    drops: [{ item: 'coin', min: 10, max: 20, chance: 1 }, { item: 'iron_bar', min: 1, max: 3, chance: 0.6 }, { item: 'bonebreaker', min: 1, max: 1, chance: 0.1 }],
+    spawn: null, event: { kind: 'raid', weight: 2 }, aggro: 120, color: 0xe6dcc0,
+  },
+} satisfies Record<string, CreatureDef>);
+
 export class Creature {
   x: number; y: number; z: number;
   vx = 0; vy = 0; vz = 0;
@@ -125,6 +175,10 @@ export class Creature {
   idle = 0;
   /** Boss-specific state. */
   phase = 0;
+  /** Seconds left of the attack animation (set when it lands a hit). */
+  attack = 0;
+  /** Spawned by a world event (counts toward its progress). */
+  event: EventKind | null = null;
   readonly uid: number;
   private static next = 1;
   private n: [number, number, number] = [0, 0, 0];
@@ -211,8 +265,9 @@ export function think(c: Creature, ctx: AIContext) {
   c.hitFlash = Math.max(0, c.hitFlash - dt * 6);
   const dx = ctx.px - c.x, dz = ctx.pz - c.z, dy = ctx.py + 0.9 - c.cy;
   const dist = Math.hypot(dx, dz);
-  const aggro = dist < 38;
   const d = c.def;
+  const aggro = dist < (d.aggro ?? 38);
+  c.attack = Math.max(0, c.attack - dt);
 
   switch (d.ai) {
     case 'hopper': {
@@ -233,7 +288,8 @@ export function think(c: Creature, ctx: AIContext) {
     }
     case 'walker':
     case 'crawler':
-    case 'thrower': {
+    case 'thrower':
+    case 'pouncer': {
       let tx = dx, tz = dz;
       let want = aggro ? d.speed : d.speed * 0.35;
       if (!aggro) { c.wander += (Math.random() - 0.5) * dt; tx = Math.sin(c.wander); tz = Math.cos(c.wander); }
@@ -246,9 +302,16 @@ export function think(c: Creature, ctx: AIContext) {
           c.cooldown = d.ranged.interval * (0.8 + Math.random() * 0.4);
         }
       }
+      // Pouncers close in, then leap at the player.
+      if (d.ai === 'pouncer' && aggro && c.grounded && c.cooldown <= 0 && dist < 9 && dist > 2 && Math.abs(dy) < 4) {
+        const l0 = dist || 1;
+        c.vx = (dx / l0) * 12; c.vz = (dz / l0) * 12; c.vy = 6.5 + Math.max(0, dy) * 1.2;
+        c.cooldown = 2.2 + Math.random();
+        c.attack = 0.5;
+      }
       const l = Math.hypot(tx, tz) || 1;
       const targetVx = (tx / l) * want, targetVz = (tz / l) * want;
-      if (c.grounded) {
+      if (c.grounded && !(d.ai === 'pouncer' && c.attack > 0.2)) {
         c.vx += (targetVx - c.vx) * Math.min(1, dt * 8);
         c.vz += (targetVz - c.vz) * Math.min(1, dt * 8);
       }
@@ -279,5 +342,5 @@ export function think(c: Creature, ctx: AIContext) {
       break;
     }
   }
-  c.idle = dist > 70 ? c.idle + dt : 0;
+  c.idle = dist > Math.max(70, (d.aggro ?? 0) + 10) ? c.idle + dt : 0;
 }

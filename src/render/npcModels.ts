@@ -45,6 +45,23 @@ export function buildNpcVisual(n: Npc, mat: THREE.Material): NpcVisual {
   ];
   if (c.hat) headParts.push(box(0.46, 0.04, 0.44, 'fabric', { y: 0.38 }, c.hat), box(0.3, 0.2, 0.3, 'fabric', { y: 0.49 }, c.hat), box(0.31, 0.04, 0.31, 'gold', { y: 0.42 }));
   if (n.def.id === 'merchant') headParts.push(box(0.26, 0.16, 0.06, 'fur', { y: 0.02, z: 0.16 }, c.hair));
+  if (n.def.id === 'tinkerer') {
+    // Brass goggles pushed up on the forehead.
+    headParts.push(
+      box(0.35, 0.05, 0.33, 'metal', { y: 0.3 }, 0x3a2a20),
+      parts.cyl(0.055, 0.055, 0.05, 7, 'gold', { x: 0.075, y: 0.31, z: 0.16, rx: Math.PI / 2 }),
+      parts.cyl(0.055, 0.055, 0.05, 7, 'gold', { x: -0.075, y: 0.31, z: 0.16, rx: Math.PI / 2 }),
+      parts.cyl(0.035, 0.035, 0.052, 7, 'glass', { x: 0.075, y: 0.31, z: 0.165, rx: Math.PI / 2 }),
+      parts.cyl(0.035, 0.035, 0.052, 7, 'glass', { x: -0.075, y: 0.31, z: 0.165, rx: Math.PI / 2 }),
+    );
+    // Leather apron and a tool belt with a wrench.
+    add(merge([
+      box(0.4, 0.5, 0.03, 'fabric', { y: 0.2, z: 0.145 }, 0x7a5236),
+      box(0.12, 0.1, 0.06, 'fabric', { x: 0.2, y: -0.02, z: 0.13 }, 0x5a3a24),
+      box(0.03, 0.18, 0.02, 'iron', { x: -0.16, y: -0.02, z: 0.16, rz: 0.3 }),
+      box(0.07, 0.04, 0.02, 'iron', { x: -0.19, y: 0.07, z: 0.16, rz: 0.3 }),
+    ]), torso);
+  }
   add(merge(headParts), head);
   const shL = pivot(torso, 0.3, 0.56, 0), shR = pivot(torso, -0.3, 0.56, 0);
   for (const s of [shL, shR]) add(merge([box(0.13, 0.5, 0.15, 'fabric', { y: -0.25 }, c.shirt), box(0.11, 0.12, 0.12, 'plain', { y: -0.56 }, skin)]), s);

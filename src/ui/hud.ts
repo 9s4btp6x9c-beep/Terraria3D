@@ -17,6 +17,8 @@ export class Hud {
   private flash = $('#flash');
   private bossbar = $('#bossbar');
   private bossKey = '';
+  private eventbar = $('#eventbar');
+  private eventKey = '';
   debugVisible = false;
   modeLabel = '';
   private lastVitals = '';
@@ -76,6 +78,18 @@ export class Hud {
     this.bossKey = key;
     this.bossbar.style.display = name ? 'block' : 'none';
     if (name) this.bossbar.innerHTML = `<div class="name">${name}</div><div class="bar"><div style="width:${Math.max(0, (hp / max) * 100).toFixed(1)}%"></div></div>`;
+  }
+
+  /** World event banner; `goal` > 0 shows a progress bar. */
+  setEvent(ev: { name: string; color: string; subtitle: string } | null, progress = 0, goal = 0) {
+    const key = ev ? `${ev.name}${progress}/${goal}` : '';
+    if (key === this.eventKey) return;
+    this.eventKey = key;
+    this.eventbar.style.display = ev ? 'block' : 'none';
+    if (!ev) return;
+    const bar = goal > 0 ? `<div class="bar"><div style="width:${Math.min(100, (progress / goal) * 100).toFixed(1)}%"></div></div>` : '';
+    this.eventbar.innerHTML = `<div class="name" style="color:${ev.color}">${ev.name}</div>` +
+      `<div class="sub">${goal > 0 ? `${ev.subtitle} · ${progress} / ${goal}` : ev.subtitle}</div>${bar}`;
   }
 
   damageFlash(strength = 1) {

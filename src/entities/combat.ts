@@ -11,6 +11,7 @@ import type { WorldCollision } from '../world/collision';
 import type { TerrainField } from '../world/terrain';
 import { Deepwyrm } from './boss';
 import { CREATURES, Creature, type CreatureDef, type SpawnEnv, think } from './creatures';
+import type { EventKind } from './events';
 
 export interface CombatHooks {
   /** Material factory: a fresh object-space world material per creature (own hit flash). */
@@ -42,6 +43,10 @@ export interface CombatHooks {
   isLoaded(x: number, z: number): boolean;
   /** Suppress spawns near safe zones (houses / NPC homes). */
   safeZone(x: number, y: number, z: number): boolean;
+  /** The running world event, if any (raids march on `target`). */
+  activeEvent(): { kind: EventKind; target: { x: number; z: number } | null } | null;
+  /** A creature spawned by a world event died. */
+  eventKill(c: Creature): void;
 }
 
 type ProjKind = 'arrow' | 'bolt' | 'bomb' | 'rock' | 'drill';
@@ -65,6 +70,15 @@ interface Projectile {
 }
 
 const CAPS = { day: 5, night: 10, cave: 8 };
+/** Raiders alive at once during the Hollow Raid. */
+const RAID_CAP = 12;
+
+/** Weighted random pick. */
+function pick<T>(options: T[], weight: (o: T) => number): T {
+  const total = options.reduce((s, o) => s + weight(o), 0);
+  let r = Math.random() * total;
+  return options.find(o => (r -= weight(o)) <= 0) ?? options[0];
+}
 
 export class Combat {
   readonly group = new THREE.Group();
@@ -91,7 +105,7 @@ export class Combat {
   spawn(def: CreatureDef, x: number, y: number, z: number): Creature {
     const c = new Creature(def, x, y, z);
     const mat = this.hooks.creatureMaterial();
-    const v = buildCreatureVisual(def.model ?? def.id, mat, def.tint);
+    const v = buildCreatureVisual(def.model ?? def.id, mat, def.tint, def.skin);
     this.group.add(v.root);
     this.visuals.set(c.uid, { v, mat });
     this.creatures.push(c);
@@ -105,12 +119,34 @@ export class Combat {
     if (i >= 0) this.creatures.splice(i, 1);
   }
 
+  /** Raiders gather in a ring around the town and march in. */
+  private spawnRaider(target: { x: number; z: number }, px: number, pz: number) {
+    const h = this.hooks;
+    if (this.creatures.filter(c => c.event === 'raid').length >= RAID_CAP) return;
+    if (Math.hypot(px - target.x, pz - target.z) > 140) return;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const a = Math.random() * Math.PI * 2, d = 34 + Math.random() * 16;
+      const x = target.x + Math.cos(a) * d, z = target.z + Math.sin(a) * d;
+      if (x < 4 || z < 4 || x > this.field.sx - 4 || z > this.field.sz - 4 || !h.isLoaded(x, z)) continue;
+      if (Math.hypot(x - px, z - pz) < 18) continue;
+      const y = h.surfaceTop(x, z) + 0.4;
+      if (y < h.seaLevel + 0.5 || h.skyVisibility(x, y + 1, z) < 0.7) continue;
+      const def = pick(Object.values(CREATURES).filter(c => c.event?.kind === 'raid'), c => c.event!.weight);
+      const c = this.spawn(def, x, y, z);
+      c.event = 'raid';
+      this.hooks.particles(x, y + 1, z, 0, 1, 0, 0x8a7a6a, 14, 4);
+      return;
+    }
+  }
+
   private trySpawn(px: number, py: number, pz: number) {
     const h = this.hooks;
+    const ev = h.activeEvent();
+    if (ev?.kind === 'raid' && ev.target) this.spawnRaider(ev.target, px, pz);
     const night = h.isNight();
     const vis = h.skyVisibility(px, py + 1.5, pz);
     const underground = vis < 0.4;
-    const regular = this.creatures.filter(c => !c.def.boss).length;
+    const regular = this.creatures.filter(c => !c.def.boss && c.event !== 'raid').length;
     const cap = (underground ? CAPS.cave : night ? CAPS.night : CAPS.day) * this.spawnBoost;
     if (regular >= cap) return;
 
@@ -133,14 +169,19 @@ export class Combat {
         env = y < h.emberY + 6 ? 'depths' : y < 45 ? 'deep' : 'cave';
       }
       if (h.safeZone(x, y, z)) continue;
+      // Blood Moon: most surface spawns come from the event's own roster.
+      if (ev?.kind === 'blood_moon' && env === 'surface' && Math.random() < 0.7) {
+        const def = pick(Object.values(CREATURES).filter(c => c.event?.kind === 'blood_moon'), c => c.event!.weight);
+        const c = this.spawn(def, x, y + (def.ai === 'flyer' ? 2.5 : 0), z);
+        c.event = 'blood_moon';
+        return;
+      }
       const biome = h.biomeAt(x, z);
       const options = Object.values(CREATURES).filter(c => c.spawn && (c.spawn.env === env || (env === 'deep' && c.spawn.env === 'cave')) &&
         (c.spawn.time === 'any' || (c.spawn.time === 'night') === night) &&
         (!c.spawn.biomes || env !== 'surface' || c.spawn.biomes.includes(biome)));
       if (!options.length) return;
-      const total = options.reduce((s, c) => s + c.spawn!.weight, 0);
-      let r = Math.random() * total;
-      const def = options.find(c => (r -= c.spawn!.weight) <= 0) ?? options[0];
+      const def = pick(options, c => c.spawn!.weight);
       const flyer = def.ai === 'flyer';
       this.spawn(def, x, y + (flyer ? 2.5 : 0), z);
       return;
@@ -149,7 +190,7 @@ export class Combat {
 
   // -------------------------------------------------------------------- combat
 
-  private applyHit(c: Creature, raw: number, knock: number, fromX: number, fromZ: number) {
+  private applyHit(c: Creature, raw: number, knock: number, fromX: number, fromZ: number): number {
     const crit = Math.random() < 0.04;
     const dmg = Math.max(1, Math.round((raw * (0.9 + Math.random() * 0.2) - c.def.defense * 0.5) * (crit ? 2 : 1)));
     c.hp -= dmg;
@@ -159,6 +200,7 @@ export class Combat {
     this.hooks.particles(c.cx, c.cy, c.cz, 0, 0.6, 0, c.def.color, 6, 3);
     this.hooks.sound(c.def.id.includes('glob') ? 'splat' : 'hit', c.cx, c.cy, c.cz);
     if (c.hp <= 0) this.kill(c);
+    return dmg;
   }
 
   summonBoss(x: number, y: number, z: number) {
@@ -168,9 +210,9 @@ export class Combat {
     return this.boss;
   }
 
-  private hitBoss(raw: number, x: number, y: number, z: number) {
+  private hitBoss(raw: number, x: number, y: number, z: number): number {
     const b = this.boss;
-    if (!b || !b.alive) return;
+    if (!b || !b.alive) return 0;
     const crit = Math.random() < 0.04;
     const dmg = Math.max(1, Math.round((raw * (0.9 + Math.random() * 0.2) - b.defense * 0.5) * (crit ? 2 : 1)));
     b.hp -= dmg;
@@ -192,6 +234,7 @@ export class Combat {
       this.group.remove(b.group);
       this.boss = null;
     }
+    return dmg;
   }
 
   private kill(c: Creature) {
@@ -206,7 +249,17 @@ export class Combat {
       if (n > 0) this.hooks.drop(d.item, n, c.cx, c.cy, c.cz);
     }
     this.hooks.killed(c);
+    if (c.event) this.hooks.eventKill(c);
     this.remove(c);
+  }
+
+  /** Event creatures leave (raid over): they vanish in a puff of dust. */
+  dismiss(kind: EventKind) {
+    for (const c of [...this.creatures]) {
+      if (c.event !== kind) continue;
+      this.hooks.particles(c.cx, c.cy, c.cz, 0, 1, 0, 0x8a7a6a, 16, 3);
+      this.remove(c);
+    }
   }
 
   /** Line of sight through terrain between two points. */
@@ -216,9 +269,9 @@ export class Combat {
     return !hit;
   }
 
-  /** Melee arc in front of the camera. Returns number of creatures hit. */
+  /** Melee arc in front of the camera. Returns the total damage dealt. */
   melee(eye: THREE.Vector3, dir: THREE.Vector3, reach: number, damage: number, knockback: number, arcCos = 0.55): number {
-    let hits = 0;
+    let dealt = 0;
     for (const c of [...this.creatures]) {
       const tx = c.cx - eye.x, ty = c.cy - eye.y, tz = c.cz - eye.z;
       const d = Math.hypot(tx, ty, tz);
@@ -226,17 +279,13 @@ export class Combat {
       const cos = (tx * dir.x + ty * dir.y + tz * dir.z) / (d || 1);
       if (cos < arcCos && d > c.def.radius + 0.6) continue;
       if (!this.visible(eye.x, eye.y, eye.z, c.cx, c.cy, c.cz)) continue;
-      this.applyHit(c, damage, knockback, eye.x, eye.z);
-      hits++;
+      dealt += this.applyHit(c, damage, knockback, eye.x, eye.z);
     }
     if (this.boss) {
       const t = this.boss.rayHit(eye, dir, reach + 1);
-      if (t !== null) {
-        this.hitBoss(damage, eye.x + dir.x * t, eye.y + dir.y * t, eye.z + dir.z * t);
-        hits++;
-      }
+      if (t !== null) dealt += this.hitBoss(damage, eye.x + dir.x * t, eye.y + dir.y * t, eye.z + dir.z * t);
     }
-    return hits;
+    return dealt;
   }
 
   /** Distance to the first creature along a ray, or null. */
@@ -255,7 +304,7 @@ export class Combat {
     return best;
   }
 
-  fire(kind: ProjKind, x: number, y: number, z: number, dx: number, dy: number, dz: number, speed: number, damage: number, knockback: number, blast = 0) {
+  fire(kind: ProjKind, x: number, y: number, z: number, dx: number, dy: number, dz: number, speed: number, damage: number, knockback: number, blast = 0, enemy = kind === 'rock') {
     let mesh: THREE.Object3D;
     if (kind === 'arrow') mesh = new THREE.Mesh(itemModel(item('wooden_arrow')), this.hooks.projectileMaterial);
     else if (kind === 'bomb') mesh = new THREE.Mesh(itemModel(item('bomb')), this.hooks.projectileMaterial);
@@ -267,24 +316,27 @@ export class Combat {
     const g = kind === 'arrow' ? 9 : kind === 'bomb' ? 20 : kind === 'rock' ? 12 : 0;
     this.projectiles.push({
       kind, x, y, z, vx: dx * speed, vy: dy * speed + (kind === 'bomb' ? 3 : 0), vz: dz * speed, gravity: g, damage, knockback,
-      enemy: kind === 'rock', life: kind === 'bomb' ? 10 : kind === 'drill' ? 1.4 : 5, stuck: false, fuse: 2.2, blast, mesh, hit: new Set(), bossCd: 0,
+      enemy, life: kind === 'bomb' ? 10 : kind === 'drill' ? 1.4 : 5, stuck: false, fuse: enemy ? 1.8 : 2.2, blast, mesh, hit: new Set(), bossCd: 0,
     });
   }
 
-  /** Explosion: damages everything around and carves the terrain. */
-  explode(x: number, y: number, z: number, r: number, damage: number, px: number, py: number, pz: number) {
-    this.hooks.blast(x, y, z, r);
+  /** Explosion: damages everything around and carves the terrain. Enemy
+   *  bombs only hurt the player and leave the ground (and your town) intact. */
+  explode(x: number, y: number, z: number, r: number, damage: number, px: number, py: number, pz: number, hostile = false) {
+    if (!hostile) this.hooks.blast(x, y, z, r);
     this.hooks.particles(x, y, z, 0, 1, 0, 0xffa040, 40, 9);
     this.hooks.particles(x, y, z, 0, 1, 0, 0x404040, 30, 6);
     this.hooks.flash(x, y, z, 0xffa050, 18, 0.5);
     this.hooks.sound('explode', x, y, z);
-    for (const c of [...this.creatures]) {
-      const d = Math.hypot(c.cx - x, c.cy - y, c.cz - z);
-      if (d < r + 1.5) this.applyHit(c, damage * (1 - d / (r + 2)), 12, x, z);
+    if (!hostile) {
+      for (const c of [...this.creatures]) {
+        const d = Math.hypot(c.cx - x, c.cy - y, c.cz - z);
+        if (d < r + 1.5) this.applyHit(c, damage * (1 - d / (r + 2)), 12, x, z);
+      }
+      if (this.boss && this.boss.hitTest(x, y, z, r + 1) >= 0) this.hitBoss(damage, x, y, z);
     }
-    if (this.boss && this.boss.hitTest(x, y, z, r + 1) >= 0) this.hitBoss(damage, x, y, z);
     const pd = Math.hypot(px - x, py + 0.9 - y, pz - z);
-    if (pd < r + 1) this.hooks.hurtPlayer(Math.round(damage * 0.5 * (1 - pd / (r + 2))), x, z, 10);
+    if (pd < r + 1) this.hooks.hurtPlayer(Math.round(damage * (hostile ? 1 : 0.5) * (1 - pd / (r + 2))), x, z, 10);
     this.hooks.shake(Math.max(0, 1 - pd / 30) * 0.8);
   }
 
@@ -306,10 +358,12 @@ export class Combat {
         const sx = c.x, sy = c.y + c.def.height * 0.9, sz = c.z;
         const dx = tx - sx, dz = tz - sz, dist = Math.hypot(dx, dz);
         // Lob: aim above the target to compensate for gravity.
+        const bomb = r.projectile === 'bomb';
         const flight = dist / r.speed;
-        const dy = ty - sy + 0.5 * 12 * flight * flight;
+        const dy = ty - sy + 0.5 * (bomb ? 20 : 12) * flight * flight;
         const l = Math.hypot(dx, dy, dz) || 1;
-        this.fire('rock', sx, sy, sz, dx / l, dy / l, dz / l, r.speed, r.damage, 6);
+        if (bomb) this.fire('bomb', sx, sy, sz, dx / l, dy / l - 0.15, dz / l, r.speed, r.damage, 8, 2.4, true);
+        else this.fire('rock', sx, sy, sz, dx / l, dy / l, dz / l, r.speed, r.damage, 6);
       },
     };
     for (const c of [...this.creatures]) {
@@ -321,7 +375,10 @@ export class Combat {
       const dx = px - c.x, dz = pz - c.z;
       const horiz = Math.hypot(dx, dz);
       const overlapY = py < c.y + c.def.height && py + 1.8 > c.y;
-      if (horiz < c.def.radius + 0.45 && overlapY) this.hooks.hurtPlayer(c.def.damage, c.x, c.z, 7);
+      if (horiz < c.def.radius + 0.45 && overlapY) {
+        const heavy = c.def.kbResist > 0.8;
+        if (this.hooks.hurtPlayer(c.def.damage, c.x, c.z, heavy ? 14 : 7) > 0) c.attack = Math.max(c.attack, 0.6);
+      }
       // Visual.
       const vis = this.visuals.get(c.uid);
       if (vis) {
@@ -407,7 +464,7 @@ export class Combat {
             }
           }
           if (p.enemy) {
-            if (Math.hypot(px - p.x, pz - p.z) < 0.55 && p.y > py - 0.1 && p.y < py + 1.9) {
+            if (p.kind !== 'bomb' && Math.hypot(px - p.x, pz - p.z) < 0.55 && p.y > py - 0.1 && p.y < py + 1.9) {
               this.hooks.hurtPlayer(p.damage, p.x - p.vx, p.z - p.vz, p.knockback);
               this.hooks.particles(p.x, p.y, p.z, 0, 1, 0, 0x9a98a2, 6, 3);
               dead = true;
@@ -434,7 +491,7 @@ export class Combat {
         if (p.kind === 'bomb') {
           p.fuse -= dt;
           if (Math.random() < 0.6) this.hooks.particles(p.x, p.y + 0.25, p.z, 0, 1, 0, 0xffc050, 1, 1);
-          if (p.fuse <= 0) { this.explode(p.x, p.y, p.z, p.blast, p.damage, px, py, pz); dead = true; }
+          if (p.fuse <= 0) { this.explode(p.x, p.y, p.z, p.blast, p.damage, px, py, pz, p.enemy); dead = true; }
         }
       }
       if (dead) { this.group.remove(p.mesh); this.projectiles.splice(i, 1); continue; }

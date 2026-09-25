@@ -9,6 +9,12 @@ export class Sky {
   private clouds: THREE.InstancedMesh;
   private cloudData: { x: number; y: number; z: number; s: number; r: number }[] = [];
   private cloudMat: THREE.MeshLambertMaterial;
+  private sun: THREE.Mesh;
+  private moon: THREE.Group;
+  private moonMat: THREE.MeshBasicMaterial;
+  private sunMat: THREE.MeshBasicMaterial;
+  private moonBase = new THREE.Color(0xe8ecf8);
+  private bloodMoon = new THREE.Color(0xff3a30);
   readonly uniforms = {
     uTop: { value: new THREE.Color(0x3f63c8) },
     uHorizon: { value: new THREE.Color(0xa9c6ee) },
@@ -34,6 +40,31 @@ export class Sky {
     this.dome.renderOrder = -10;
     this.dome.frustumCulled = false;
     this.group.add(this.dome);
+
+    // Faceted sun and moon, drawn just inside the dome.
+    this.sunMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0, fog: false, depthWrite: false });
+    this.sun = new THREE.Mesh(new THREE.IcosahedronGeometry(68, 0), this.sunMat);
+    const halo = new THREE.Mesh(new THREE.IcosahedronGeometry(92, 0), new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.22, fog: false, depthWrite: false }));
+    this.sun.add(halo);
+    this.moonMat = new THREE.MeshBasicMaterial({ color: this.moonBase, fog: false, depthWrite: false });
+    const craterMat = new THREE.MeshBasicMaterial({ color: 0xb8bccc, fog: false, depthWrite: false });
+    this.moon = new THREE.Group();
+    this.moon.add(new THREE.Mesh(new THREE.IcosahedronGeometry(48, 1), this.moonMat));
+    const rc = mulberry32(seed ^ 0x300);
+    for (let i = 0; i < 6; i++) {
+      const c = new THREE.Mesh(new THREE.IcosahedronGeometry(6 + rc() * 8, 0), craterMat);
+      const a = rc() * Math.PI * 2, b = rc() * 0.85;
+      c.position.set(Math.cos(a) * 40 * b, Math.sin(a) * 40 * b, 42 - b * 14);
+      c.scale.z = 0.3;
+      this.moon.add(c);
+    }
+    this.moon.userData.crater = craterMat;
+    // Draw after the dome (renderOrder on meshes only: a Group's renderOrder
+    // would become a group order for its children and sort them first).
+    for (const o of [this.sun, this.moon]) {
+      o.traverse(m => { m.frustumCulled = false; if ((m as THREE.Mesh).isMesh) m.renderOrder = -9; });
+      this.group.add(o);
+    }
 
     // Clouds: each is a cluster of flattened, jittered icosahedra merged into one geometry.
     const rand = mulberry32(seed ^ 0xc10d);
@@ -76,6 +107,22 @@ export class Sky {
 
   follow(pos: THREE.Vector3) {
     this.dome.position.copy(pos);
+  }
+
+  /**
+   * Place the sun (by day) or moon (by night) along `dir` from the camera.
+   * @param blood 0..1 how red the moon is (Blood Moon)
+   */
+  setCelestial(cam: THREE.Vector3, dir: THREE.Vector3, day: boolean, fade: number, blood: number) {
+    const body = day ? this.sun : this.moon;
+    this.sun.visible = day && fade > 0.01;
+    this.moon.visible = !day && fade > 0.01;
+    body.position.copy(cam).addScaledVector(dir, 820);
+    body.lookAt(cam);
+    this.moonMat.color.copy(this.moonBase).lerp(this.bloodMoon, blood).multiplyScalar(0.35 + 0.65 * fade);
+    (this.moon.userData.crater as THREE.MeshBasicMaterial).color.setRGB(0.72, 0.74, 0.8).lerp(new THREE.Color(0x9a1a18), blood).multiplyScalar(0.35 + 0.65 * fade);
+    this.sunMat.color.setRGB(1, 0.95 * fade + 0.5 * (1 - fade), 0.7 * fade + 0.3 * (1 - fade));
+    this.moon.scale.setScalar(1 + blood * 0.35);
   }
 
   /** Dim/tint clouds for night and dusk. */

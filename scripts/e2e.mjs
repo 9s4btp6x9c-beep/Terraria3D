@@ -365,14 +365,22 @@ try {
     g.stats = g.equipment.stats();
     const s = g.gen.spawn;
     g.player.teleport(s.x, s.y + 0.5, s.z);
-    g.player.pitch = -0.6;
+    g.player.yaw = -1.72; g.player.pitch = -0.6;
     g.simulate(0.3);
     const before = { x: g.player.x, y: g.player.y, z: g.player.z };
-    g.grapple.fire(g.camera.position.x, g.camera.position.y, g.camera.position.z, ...(() => { const d = new g.camera.position.constructor(0, 0, -1).applyQuaternion(g.camera.quaternion); return [d.x, d.y, d.z]; })());
+    const c = g.camera.position, d = new c.constructor(0, 0, -1).applyQuaternion(g.camera.quaternion);
+    const probe = {
+      cam: [c.x, c.y, c.z].map(v => +v.toFixed(2)), dir: [d.x, d.y, d.z].map(v => +v.toFixed(2)),
+      terrain: g.field.raycast(c.x, c.y, c.z, d.x, d.y, d.z, 26, 0.25)?.distance ?? null,
+      pieces: g.structures.raycast(c.x, c.y, c.z, d.x, d.y, d.z, 26)?.distance ?? null,
+      furniture: g.furniture.raycast(c.x, c.y, c.z, d.x, d.y, d.z, 26)?.distance ?? null,
+      hp: g.vitals.hp, dead: g.vitals.dead,
+    };
+    g.grapple.fire(c.x, c.y, c.z, d.x, d.y, d.z);
     for (let i = 0; i < 20 && g.grapple.state === 'flying'; i++) g.simulate(1 / 30);
     const state = g.grapple.state;
     g.simulate(0.6);
-    return { state, moved: Math.hypot(g.player.x - before.x, g.player.z - before.z) };
+    return { state, moved: Math.hypot(g.player.x - before.x, g.player.z - before.z), probe };
   });
   check('grappling hook latches and pulls the player', grapple.state === 'attached' && grapple.moved > 0.5, JSON.stringify(grapple));
   await page.evaluate(() => __game.grapple.release());
@@ -462,6 +470,127 @@ try {
   });
   check('defeating the Deepwyrm drops loot and sets progression', kill && kill.gone && kill.flag && kill.scales > 0, JSON.stringify(kill));
   await page.evaluate(() => { const g = __game; g.atmosphere.timeOfDay = 0.4; g.vitals.hp = g.vitals.maxHp = 100; g.simulate(0.2); });
+
+  // ------------------------------------------------------------ world events
+  // Find an open, flat spot away from the house (spawns are suppressed near homes).
+  const bloodSpot = await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    g.combat.clear();
+    g.combat.spawning = true;
+    g.atmosphere.timeOfDay = 0.45;
+    const clear = (x, z) => !g.veg.trees.some(t => t.alive && Math.hypot(t.x - x, t.z - z) < 9);
+    for (let r = 40; r < 160; r += 6) for (let a = 0; a < 6.28; a += 0.3) {
+      const x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r;
+      const sf = g.gen.surfaceAt(x, z);
+      if (!sf || sf.ny < 0.9 || sf.y < g.field.cfg.seaLevel + 3 || !clear(x, z)) continue;
+      g.player.teleport(x, sf.y + 1, z);
+      return [x, z];
+    }
+    return null;
+  });
+  await settle();
+  // New creatures lined up in daylight for visual review.
+  await page.evaluate(() => {
+    const g = __game;
+    g.player.pitch = -0.12;
+    g.simulate(0.1);
+    const ids = ['blood_glob', 'gorehound', 'vein_shambler', 'bloodwisp', 'hollow_brute', 'hollow_sapper', 'raid_miner'];
+    const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw), sx = -fz, sz = fx;
+    ids.forEach((id, i) => {
+      const o = (i - 3) * 1.7;
+      const x = g.player.x + fx * 7 + sx * o, z = g.player.z + fz * 7 + sz * o;
+      const top = g.sky.raw[Math.floor(x) + Math.floor(z) * g.sky.w];
+      const c = g.spawnCreature(id, x, top + (id === 'bloodwisp' ? 1.2 : 0.2), z);
+      c.yaw = Math.atan2(-fx, -fz);
+      c.cooldown = 5;
+    });
+    g.combat.spawning = false;
+  });
+  await page.evaluate(() => { for (const c of __game.combat.creatures) c.cooldown = 5; __game.simulate(0.1); });
+  await shot('22-event-creatures');
+  await page.evaluate(() => { __game.combat.clear(); __game.combat.spawning = true; });
+
+  await settle();
+  const blood = await page.evaluate(() => {
+    const g = __game;
+    g.vitals.hp = g.vitals.maxHp = 400;
+    g.atmosphere.timeOfDay = 0.9;
+    g.simulate(0.5);
+    g.startEvent('blood_moon');
+    let spawned = 0;
+    for (let i = 0; i < 12; i++) { g.vitals.hp = 400; g.simulate(2); spawned = Math.max(spawned, g.combat.creatures.filter(c => c.event === 'blood_moon').length); }
+    return { kind: g.events.kind, spawned, blood: g.atmosphere.bloodVisible, bar: getComputedStyle(document.querySelector('#eventbar')).display };
+  });
+  check('the Blood Moon brings its own creatures and a red sky', blood.kind === 'blood_moon' && blood.spawned > 0 && blood.blood > 0.5 && blood.bar === 'block', JSON.stringify({ spot: bloodSpot, ...blood }));
+  await page.evaluate(() => {
+    const g = __game;
+    // Look toward the moon with a Gorehound on the prowl.
+    g.combat.clear();
+    g.combat.spawning = false;
+    const t = g.atmosphere.timeOfDay, ang = (t - 0.25) * Math.PI * 2;
+    const dx = -Math.cos(ang), dz = 0.35;
+    g.player.yaw = Math.atan2(-dx, -dz); g.player.pitch = 0.3;
+    const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw);
+    const x = g.player.x + fx * 7, z = g.player.z + fz * 7;
+    const c = g.spawnCreature('gorehound', x, g.sky.raw[Math.floor(x) + Math.floor(z) * g.sky.w] + 0.3, z);
+    c.yaw = Math.atan2(-fx, -fz); c.cooldown = 5;
+    g.simulate(0.05);
+  });
+  await shot('23-blood-moon');
+  const dawn = await page.evaluate(() => {
+    const g = __game;
+    g.combat.clear();
+    g.combat.spawning = true;
+    g.atmosphere.timeOfDay = 0.3;
+    g.simulate(0.2);
+    return { kind: g.events.kind, bar: getComputedStyle(document.querySelector('#eventbar')).display };
+  });
+  check('the Blood Moon ends at dawn', dawn.kind === null && dawn.bar === 'none', JSON.stringify(dawn));
+
+  // Hollow Raid: sound the war horn in town, watch raiders march, repel them.
+  await page.evaluate(h => { const g = __game; g.player.teleport(h.x0 + 3, h.y + 0.5, h.z0 - 3); g.player.yaw = 0; }, house);
+  await settle();
+  const horn = await page.evaluate(() => {
+    const g = __game;
+    g.vitals.hp = g.vitals.maxHp = 400;
+    const started = g['consume']({ id: 'hollow_horn' });
+    return { started, kind: g.events.kind, goal: g.events.goal, town: g.townInfo(), player: [g.player.x, g.player.z], msgs: [...document.querySelectorAll('#messages div')].map(e => e.textContent).slice(-3) };
+  });
+  check('the war horn starts the Hollow Raid near town', horn.started && horn.kind === 'raid' && horn.goal > 0, JSON.stringify(horn));
+  const march = await page.evaluate(() => {
+    const g = __game;
+    let first = null, closest = Infinity, count = 0;
+    for (let i = 0; i < 16; i++) {
+      g.vitals.hp = 400;
+      g.simulate(1);
+      const raiders = g.combat.creatures.filter(c => c.event === 'raid');
+      count = Math.max(count, raiders.length);
+      for (const c of raiders) {
+        const d = Math.hypot(c.x - g.player.x, c.z - g.player.z);
+        if (first === null) first = d;
+        closest = Math.min(closest, d);
+      }
+    }
+    return { count, first, closest };
+  });
+  check('raiders spawn around the town and march in', march.count >= 4 && march.closest < march.first - 5, JSON.stringify(march));
+  await page.evaluate(() => {
+    const g = __game;
+    const r = g.combat.creatures.filter(c => c.event === 'raid').sort((a, b) => Math.hypot(a.x - g.player.x, a.z - g.player.z) - Math.hypot(b.x - g.player.x, b.z - g.player.z))[0];
+    if (r) { g.player.yaw = Math.atan2(-(r.x - g.player.x), -(r.z - g.player.z)); g.player.pitch = -0.08; }
+  });
+  await shot('24-raid');
+  const raid = await page.evaluate(() => {
+    const g = __game;
+    for (let i = 0; i < 120 && g.events.kind === 'raid'; i++) {
+      g.vitals.hp = 400;
+      for (const c of g.combat.creatures.filter(c => c.event === 'raid')) g.combat['applyHit'](c, 99999, 0, c.x, c.z);
+      g.simulate(1);
+    }
+    return { kind: g.events.kind, won: g.progress.raidDefeated, coins: g.pickups.serialize().filter(p => p.id === 'coin').length, left: g.combat.creatures.filter(c => c.event === 'raid').length };
+  });
+  check('repelling the raid sets progression and pays out', raid.kind === null && raid.won && raid.coins > 0 && raid.left === 0, JSON.stringify(raid));
+  await page.evaluate(() => { const g = __game; g.combat.spawning = false; g.combat.clear(); g.vitals.hp = g.vitals.maxHp = 100; g.simulate(0.2); });
 
   // Far view over the world with the debug readout (LOD + draw stats).
   await page.evaluate(() => {

@@ -51,6 +51,11 @@ export const RECIPES: Recipe[] = [
   R('bomb', 3, 'anvil', ['gel', 2], ['iron_bar', 1]),
   R('grappling_hook', 1, 'anvil', ['barbed_hook', 1], ['iron_bar', 4]),
   R('wyrm_bait', 1, 'anvil', ['lumite', 5], ['gel', 6], ['bat_wing', 2]),
+  // Blood Moon spoils.
+  R('heartstone', 1, 'anvil', ['blood_shard', 10], ['iron_bar', 3], ['red_cap', 2]),
+  R('sanguine_blade', 1, 'anvil', ['blood_shard', 14], ['iron_bar', 8]),
+  // Calls the Hollow Raid once the Deepwyrm's scales are in hand.
+  R('hollow_horn', 1, 'anvil', ['wyrm_scale', 3], ['iron_bar', 5], ['bat_wing', 2]),
   // The Lumite Forge needs scales from the Deepwyrm: defeating the boss opens lumite gear.
   R('forge', 1, 'anvil', ['lumite', 12], ['iron_bar', 8], ['wyrm_scale', 6]),
   // lumite forge

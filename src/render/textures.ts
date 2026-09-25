@@ -38,11 +38,14 @@ export const EXTRA_LAYERS = {
   deadbark: { style: 'bark', palette: [0x5a5058, 0x2a2430, 0x7a7078, 0x1e1a22] },
   blightleaves: { style: 'blotch', palette: [0x6a3a7a, 0x4a2458, 0x8a52a0, 0xb070c8] },
   scale: { style: 'chitin', palette: [0x7a8a5a, 0x3a4228, 0x9aaa76, 0xc8d890] },
+  bloodMetal: { style: 'metal', palette: [0xb0222e, 0x4a0812, 0xe8444c, 0xffb0a0] },
+  bloodgel: { style: 'gel', palette: [0xd02a3a, 0x6a0a18, 0xff6a78, 0xffd0d4] },
+  hide: { style: 'fur', palette: [0x6a2a2a, 0x2e1014, 0x8a3a36, 0xc0605a] },
 } as const satisfies Record<string, { style: Style; palette: readonly number[] }>;
 
 /** Self-illumination per extra layer (flames glow, crystals shimmer). */
 export const EXTRA_EMISSIVE: Partial<Record<keyof typeof EXTRA_LAYERS, number>> = {
-  flame: 1.2, lumiteMetal: 0.35, gel: 0.08, emberMetal: 0.4,
+  flame: 1.2, lumiteMetal: 0.35, gel: 0.08, emberMetal: 0.4, bloodMetal: 0.18, bloodgel: 0.1,
 };
 
 export type ExtraLayer = keyof typeof EXTRA_LAYERS;

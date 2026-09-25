@@ -8,6 +8,7 @@ import { Combat } from './entities/combat';
 import type { NpcContext } from './entities/npcs';
 import { Town } from './entities/town';
 import { CREATURES, type Creature } from './entities/creatures';
+import { type EventKind, type EventSignal, WorldEvents } from './entities/events';
 import { Equipment, type PlayerStats } from './items/equipment';
 import { HOTBAR, Inventory } from './items/inventory';
 import { type ItemDef, item } from './items/items';
@@ -81,7 +82,8 @@ export class Game {
   town!: Town;
   private dialogue!: DialogueUI;
   /** World progression flags (bosses defeated, events). */
-  progress = { bossDefeated: false };
+  progress = { bossDefeated: false, raidDefeated: false };
+  readonly events = new WorldEvents();
   private rope!: RopeRenderer;
   private pool!: TerrainWorkerPool;
   private uniforms!: WorldUniforms;
@@ -268,6 +270,7 @@ export class Game {
       () => { if (!this.invUI.open) this.input.lock(); });
     if (save?.extra?.town) this.town.load(save.extra.town as never);
     if (save?.extra?.progress) Object.assign(this.progress, save.extra.progress);
+    if (save?.extra?.events) this.events.load(save.extra.events as never);
     this.inventory.onChange(() => this.refreshHeld());
     this.equipment.onChange(() => { this.stats = this.equipment.stats(); });
     this.stats = this.equipment.stats();
@@ -334,6 +337,8 @@ export class Game {
       seaLevel: this.field.cfg.seaLevel,
       isLoaded: (x, z) => this.terrain.isLoaded(x, z),
       safeZone: (x, y, z) => this.furniture.near(x, y, z, 18).some(f => f.type === 'bed' || f.type === 'door'),
+      activeEvent: () => (this.events.kind ? { kind: this.events.kind, target: this.events.target } : null),
+      eventKill: () => this.onEventSignals(this.events.kill()),
     });
     this.scene.add(this.combat.group);
   }
@@ -380,9 +385,14 @@ export class Game {
       case 'melee': {
         this.viewmodel.triggerSwing(w.speed * 0.9);
         this.audio.play('swing');
-        this.combat.melee(eye, dir, w.reach ?? 2.6, w.damage, w.knockback);
+        const dealt = this.combat.melee(eye, dir, w.reach ?? 2.6, w.damage, w.knockback);
+        if (w.lifesteal && dealt > 0 && this.vitals.hp < this.vitals.maxHp) {
+          const heal = Math.max(1, Math.round(Math.min(dealt, 60) * w.lifesteal));
+          this.vitals.heal(heal);
+          this.labels.add(this.player.x, this.player.y + 2, this.player.z, `+${heal}`, '#6aff8a');
+        }
         // Slash trail.
-        const trail = def.id === 'lumite_blade' ? 0x7af0ff : 0xfff4d0;
+        const trail = def.id === 'lumite_blade' ? 0x7af0ff : def.id === 'sanguine_blade' ? 0xff5a5a : 0xfff4d0;
         const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
         for (let i = 0; i < 6; i++) {
           const a = (i / 5 - 0.5) * 1.4;
@@ -425,6 +435,13 @@ export class Game {
   }
 
   private consume(def: ItemDef): boolean {
+    if (def.id === 'hollow_horn') {
+      const t = this.townInfo();
+      if (this.events.active) { this.hud.message(`${this.events.info!.name} is already under way!`, '#ffb070'); return false; }
+      if (!t || Math.hypot(t.x - this.player.x, t.z - this.player.z) > 80) { this.hud.message('Sound the horn near a town with residents — that is what the raiders want.', '#ffb070'); return false; }
+      this.startEvent('raid');
+      return true;
+    }
     if (def.id === 'wyrm_bait') {
       const underground = this.sky.visibility(this.player.x, this.player.y + 1.5, this.player.z) < 0.4;
       if (this.combat.boss) { this.hud.message('The Deepwyrm is already here!', '#ffb070'); return false; }
@@ -445,6 +462,56 @@ export class Game {
       return true;
     }
     return false;
+  }
+
+  /**
+   * The town nearest the player: the cluster of occupied houses around the
+   * closest one (stray valid rooms such as explored cabins don't count).
+   */
+  townInfo(): { x: number; z: number; npcs: number } | null {
+    const occupied = this.town.houses.filter(h => h.npc);
+    if (!occupied.length) return null;
+    const px = this.player.x, pz = this.player.z;
+    const anchor = occupied.reduce((a, h) => (Math.hypot(h.x - px, h.z - pz) < Math.hypot(a.x - px, a.z - pz) ? h : a));
+    const cluster = occupied.filter(h => Math.hypot(h.x - anchor.x, h.z - anchor.z) < 60);
+    return { x: cluster.reduce((a, h) => a + h.x, 0) / cluster.length, z: cluster.reduce((a, h) => a + h.z, 0) / cluster.length, npcs: cluster.length };
+  }
+
+  /** Start a world event right away (war horn, tests). */
+  startEvent(kind: EventKind) {
+    this.onEventSignals(this.events.start(kind, { town: this.townInfo(), px: this.player.x, pz: this.player.z }));
+  }
+
+  private onEventSignals(signals: EventSignal[]) {
+    for (const s of signals) {
+      if (s.type === 'start') {
+        if (s.kind === 'blood_moon') {
+          this.hud.message('The Blood Moon is rising...', '#ff6a6a');
+          this.audio.play('omen');
+        } else {
+          this.hud.message('The Hollowfolk are marching on your town!', '#e6dcc0');
+          this.audio.play('horn');
+          this.shake = Math.min(1, this.shake + 0.3);
+        }
+      } else if (s.type === 'end') {
+        if (s.kind === 'blood_moon') this.hud.message('The Blood Moon sets. Dawn at last.', '#ffb0a0');
+        else if (s.won) {
+          const first = !this.progress.raidDefeated;
+          this.progress.raidDefeated = true;
+          this.combat.dismiss('raid');
+          this.hud.message('The Hollow Raid has been repelled!', '#ffe08a');
+          if (first) this.hud.message('Word of your victory will spread...', '#c89aff');
+          const p = this.player;
+          this.pickups.spawn('coin', 120, p.x, p.y + 1.5, p.z, 1.5);
+          this.pickups.spawn('healing_potion', 3, p.x, p.y + 1.5, p.z, 1.5);
+          this.audio.play('craft');
+          writeSave(this.snapshot());
+        } else {
+          this.combat.dismiss('raid');
+          this.hud.message('With no one to stop them, the raiders loot the outskirts and leave.', '#ffb070');
+        }
+      }
+    }
   }
 
   private hurtPlayer(amount: number, fx: number, fz: number, kb: number): number {
@@ -585,6 +652,7 @@ export class Game {
         hp: this.vitals.hp,
         town: this.town.serialize(),
         progress: this.progress,
+        events: this.events.serialize(),
       },
     };
   }
@@ -598,7 +666,9 @@ export class Game {
       inv: this.inventory,
       kills: this.combat.kills,
       bossDefeated: this.progress.bossDefeated,
+      raidDefeated: this.progress.raidDefeated,
       isNight: this.atmosphere.daylight < 0.3,
+      event: this.events.info?.name ?? null,
       hasStation: id => [...this.furniture.items.values()].some(f => f.type === id),
     };
   }
@@ -772,6 +842,12 @@ export class Game {
       this.rope.update(this.grapple.state !== 'idle', hx, hy, hz, this.grapple.x, this.grapple.y, this.grapple.z);
     }
     this.pickups.update(dt, this.player.x, this.player.y, this.player.z);
+    this.onEventSignals(this.events.update(dt, {
+      daylight: this.atmosphere.daylight, px: this.player.x, pz: this.player.z, town: this.townInfo(), bossDefeated: this.progress.bossDefeated,
+    }));
+    const ev = this.events.kind;
+    this.combat.spawnBoost = ev === 'blood_moon' ? 1.8 : ev === 'raid' ? 1.6 : 1;
+    this.atmosphere.bloodTarget = ev === 'blood_moon' ? 1 : 0;
     this.combat.update(dt, this.player.x, this.player.y, this.player.z, this.time);
     this.town.update(dt, this.player.x, this.player.y, this.player.z, this.atmosphere.daylight < 0.3, this.npcContext());
     this.flushSky();
@@ -793,6 +869,7 @@ export class Game {
     }
     this.post.setUnderground(this.atmosphere.underground);
     this.post.setNight(1 - this.atmosphere.daylight);
+    this.post.setBlood(this.atmosphere.bloodVisible);
     const moving = Math.min(1, Math.hypot(this.player.vx, this.player.vz) / 5) * (this.player.grounded ? 1 : 0);
     const ambient = this.atmosphere.ambientAt(vis);
     this.viewmodel.update(dt, moving, Math.max(ambient, 0.25 + this.atmosphere.underground * 0.25));
@@ -802,11 +879,15 @@ export class Game {
     this.hud.update(dt);
     const boss = this.combat.boss;
     this.hud.setBoss(boss ? boss.name : null, boss?.hp ?? 0, boss?.maxHp ?? 1);
+    this.hud.setEvent(this.events.info, this.events.progress, this.events.goal);
     this.hud.setVitals(this.vitals.hp, this.vitals.maxHp, this.vitals.mana, this.vitals.maxMana, this.vitals.defense);
     this.labels.update(dt, this.camera, window.innerWidth, window.innerHeight);
     this.minimap.draw(this.player.x, this.player.z, this.player.yaw, this.combat.creatures.map(c => ({ x: c.x, z: c.z, color: '#ff5a4a' })));
     const hours = this.atmosphere.timeOfDay * 24;
-    $('#clock').textContent = `${String(Math.floor(hours)).padStart(2, '0')}:${String(Math.floor((hours % 1) * 60)).padStart(2, '0')} ${this.atmosphere.daylight > 0.3 ? '☀' : '☾'}`;
+    const clock = `${String(Math.floor(hours)).padStart(2, '0')}:${String(Math.floor((hours % 1) * 60)).padStart(2, '0')} ${this.atmosphere.daylight > 0.3 ? '☀' : '☾'}`;
+    const clockEl = $('#clock');
+    if (clockEl.textContent !== clock) clockEl.textContent = clock;
+    clockEl.style.color = ev === 'blood_moon' ? '#ff7a6a' : '';
     if (this.hud.debugVisible) {
       const s2 = this.terrain.stats, vc = this.vegRenderer.counts;
       this.hud.setDebug(
