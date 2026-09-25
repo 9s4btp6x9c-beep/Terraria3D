@@ -18,6 +18,8 @@ export class Hud {
   private bossbar = $('#bossbar');
   private bossKey = '';
   private eventbar = $('#eventbar');
+  private flight = $('#flight');
+  private flightShown = -1;
   private eventKey = '';
   debugVisible = false;
   modeLabel = '';
@@ -90,6 +92,15 @@ export class Hud {
     const bar = goal > 0 ? `<div class="bar"><div style="width:${Math.min(100, (progress / goal) * 100).toFixed(1)}%"></div></div>` : '';
     this.eventbar.innerHTML = `<div class="name" style="color:${ev.color}">${ev.name}</div>` +
       `<div class="sub">${goal > 0 ? `${ev.subtitle} · ${progress} / ${goal}` : ev.subtitle}</div>${bar}`;
+  }
+
+  /** Wing flight meter under the crosshair (null hides it). */
+  setFlight(f: number | null) {
+    const v = f === null ? -1 : Math.round(f * 40) / 40;
+    if (v === this.flightShown) return;
+    this.flightShown = v;
+    this.flight.style.display = f === null ? 'none' : 'block';
+    if (f !== null) (this.flight.firstElementChild as HTMLElement).style.width = `${(v * 100).toFixed(0)}%`;
   }
 
   damageFlash(strength = 1) {

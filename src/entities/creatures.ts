@@ -6,7 +6,7 @@ import type { WorldCollision } from '../world/collision';
 import type { EventKind } from './events';
 
 export type AIKind = 'hopper' | 'walker' | 'flyer' | 'thrower' | 'crawler' | 'pouncer';
-export type SpawnEnv = 'surface' | 'cave' | 'deep' | 'depths';
+export type SpawnEnv = 'surface' | 'cave' | 'deep' | 'depths' | 'sky';
 
 export interface Drop { item: string; min: number; max: number; chance: number }
 
@@ -114,6 +114,20 @@ export const CREATURES: Record<string, CreatureDef> = {
     ranged: { damage: 14, interval: 2.4, speed: 17, range: 16 },
   },
 };
+
+// ---- high sky (floating islands)
+Object.assign(CREATURES, {
+  gale_swift: {
+    id: 'gale_swift', name: 'Gale Swift', hp: 42, damage: 17, defense: 5, speed: 9, ai: 'flyer', radius: 0.45, height: 0.8, kbResist: 0.1,
+    drops: [{ item: 'sky_feather', min: 1, max: 3, chance: 0.85 }, { item: 'coin', min: 2, max: 5, chance: 1 }],
+    spawn: { env: 'sky', time: 'any', weight: 5 }, aggro: 50, color: 0xdce4ee,
+  },
+  cloud_glob: {
+    id: 'cloud_glob', name: 'Cloud Glob', hp: 38, damage: 14, defense: 4, speed: 5, ai: 'hopper', radius: 0.58, height: 0.85, kbResist: 0.1, model: 'glob', skin: 'glass', tint: 0xf4faff,
+    drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'aerite_ore', min: 1, max: 2, chance: 0.35 }, { item: 'coin', min: 1, max: 3, chance: 0.8 }],
+    spawn: { env: 'sky', time: 'any', weight: 4 }, color: 0xe8f4ff,
+  },
+} satisfies Record<string, CreatureDef>);
 
 const EVENT_DROPS: Drop[] = [{ item: 'blood_shard', min: 1, max: 2, chance: 0.45 }];
 

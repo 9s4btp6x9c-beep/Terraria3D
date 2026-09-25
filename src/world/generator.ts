@@ -336,6 +336,8 @@ export class WorldGenerator {
       if (biome === Biome.Snow) return exposure < 1.5 ? Mat.Snow : this.detail.noise3(x / 9, y / 9, z / 9) > 0.3 ? Mat.Ice : Mat.Dirt;
       return Mat.Dirt;
     }
+    // Sky islands: stone cores threaded with glowing aerite.
+    if (sky) return this.ore.noise3(x / 4 + 200, y / 4, z / 4) > 0.4 ? Mat.Aerite : Mat.Stone;
     // Ember Depths: glowing emberstone with emberite veins near the bottom.
     const emberTop = EMBER_Y + this.detail.noise2(x / 30, z / 30) * 3;
     if (y < emberTop) return this.ore.noise3(x / 5 + 90, y / 5, z / 5) > 0.58 ? Mat.Emberite : Mat.Emberstone;

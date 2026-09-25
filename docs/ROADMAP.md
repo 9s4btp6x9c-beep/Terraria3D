@@ -63,16 +63,20 @@ a minimap, particles, and a held-item viewmodel.
 | M3 Core loop | Items, recipes, stations, furniture, pickups, creatures, melee/ranged combat, sound | crafting, furniture and combat checks |
 | M4 Progression | Desert/snow/Blight biomes, Ember Depths, cabins with loot, housing + NPCs with shop, grappling hook, the Deepwyrm boss | biome, housing, NPC, grapple and boss checks |
 | M5 Mobile | Touch controls, quality presets, free-look fallback without pointer lock, compact phone UI | `scripts/e2e-mobile.mjs` |
+| M6 Events | Blood Moon (red sky, event creatures, shard gear), Hollow Raid (raiders march on the town, progress bar, Tinkerer NPC), visible sun and moon | `tests/events.test.ts`, event e2e checks |
+| M7 Sky tier | Aerite ore in the sky islands, Skyforged armor, Gale Bow, Gale Swifts and Cloud Globs, the Tempest Roc boss, Roc Wings flight and gliding, Tempest Staff | sky tier e2e checks |
 
 ## Next phases
 
-1. **More progression:** a second ore tier past iron, armor sets with set
-   bonuses, and accessories (double jump, dash, fall protection).
-2. **Events:** night invasions and a blood-moon style event that raises
-   spawn rates and brings special enemies.
-3. **Second boss** tied to the sky islands, and a flying mount or wings.
-4. **More NPCs** unlocked by progress (a smith who reforges, a guide).
-5. **Water and liquids** that flow into dug-out cavities.
+1. **Water and liquids** that flow into dug-out cavities, with swimming
+   creatures and fishing.
+2. **Hardmode-style world shift** after a final boss: new ores seeded into
+   the existing world, harder variants of every biome.
+3. **More NPCs** unlocked by progress (a smith who reforges gear, a guide
+   who explains recipes).
+4. **Mounts and pets** from rare drops.
+5. **Better underground variety:** mushroom caverns, crystal geodes and
+   buried temples.
 
 ## Performance notes
 

@@ -7,7 +7,7 @@ import { Mat } from '../world/materials';
 export type PieceShape = 'floor' | 'wall' | 'pillar' | 'stairs' | 'roof';
 export type StationId = 'workbench' | 'furnace' | 'anvil' | 'forge';
 export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed';
-export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal' | 'emberMetal' | 'bone' | 'bloodMetal';
+export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal' | 'emberMetal' | 'bone' | 'bloodMetal' | 'aeriteMetal';
 
 export interface ToolDef {
   type: 'pickaxe' | 'axe';
@@ -39,6 +39,8 @@ export interface WeaponDef {
   blast?: number;
   /** Fraction of melee damage dealt returned as health. */
   lifesteal?: number;
+  /** Projectiles per shot (fanned out). */
+  multishot?: number;
 }
 
 export interface ArmorDef { slot: 'head' | 'body' | 'legs'; defense: number; set?: string }
@@ -51,6 +53,8 @@ export interface AccessoryDef {
   lightRadius?: number;
   hook?: { range: number; speed: number };
   regen?: number;
+  /** Wings: seconds of powered flight per take-off, then gliding. */
+  flight?: number;
 }
 
 /** Procedural model recipe (see render/models.ts). */
@@ -58,7 +62,7 @@ export type ModelSpec =
   | { type: 'pickaxe' | 'axe' | 'sword' | 'bow' | 'staff' | 'hook'; head: MetalLayer }
   | { type: 'ore' | 'bar' | 'crystal' | 'nugget'; layer: string; tint?: number }
   | { type: 'block'; layer: string }
-  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' }
+  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' }
   | { type: 'armor'; slot: ArmorDef['slot']; layer: MetalLayer }
   | { type: 'boots' | 'jar' | 'charm' | 'band'; layer: string }
   | { type: 'furniture'; id: FurnitureId };
@@ -113,6 +117,8 @@ const list: ItemDef[] = [
   { id: 'lumite_staff', name: 'Lumite Staff', kind: 'weapon', maxStack: 1, color: '#6ae6ff', rarity: 2, model: { type: 'staff', head: 'lumiteMetal' }, weapon: { type: 'magic', damage: 22, speed: 0.35, knockback: 3, projectileSpeed: 34, manaCost: 6 }, description: 'Fires seeking bolts of light.' },
   { id: 'sanguine_blade', name: 'Sanguine Blade', kind: 'weapon', maxStack: 1, color: '#e8444c', rarity: 2, model: { type: 'sword', head: 'bloodMetal' }, weapon: { type: 'melee', damage: 24, speed: 0.38, knockback: 6, reach: 3.2, lifesteal: 0.1 }, description: 'Forged under a Blood Moon. Heals you for part of the damage it deals.' },
   { id: 'bonebreaker', name: 'Bonebreaker', kind: 'weapon', maxStack: 1, color: '#e6dcc0', rarity: 2, model: { type: 'club' }, weapon: { type: 'melee', damage: 36, speed: 0.62, knockback: 15, reach: 3.0 }, description: 'A Hollow Brute\'s club. Slow, but sends foes flying.' },
+  { id: 'gale_bow', name: 'Gale Bow', kind: 'weapon', maxStack: 1, color: '#a8e4ff', rarity: 2, model: { type: 'bow', head: 'aeriteMetal' }, weapon: { type: 'bow', damage: 15, speed: 0.42, knockback: 3, projectileSpeed: 58, ammo: 'wooden_arrow', multishot: 2 }, description: 'Looses two arrows at once.' },
+  { id: 'tempest_staff', name: 'Tempest Staff', kind: 'weapon', maxStack: 1, color: '#d8f0ff', rarity: 3, model: { type: 'staff', head: 'aeriteMetal' }, weapon: { type: 'magic', damage: 34, speed: 0.5, knockback: 16, projectileSpeed: 30, manaCost: 10 }, description: 'Hurls a piercing gale that scatters everything it passes through.' },
   { id: 'wooden_arrow', name: 'Wooden Arrow', kind: 'ammo', maxStack: 999, color: '#c0a070', model: { type: 'arrow' } },
   { id: 'bomb', name: 'Bomb', kind: 'weapon', maxStack: 99, color: '#3a3842', model: { type: 'bomb' }, weapon: { type: 'thrown', damage: 60, speed: 0.6, knockback: 12, projectileSpeed: 16, blast: 3.2 }, description: 'Blasts a crater out of the terrain.' },
 
@@ -125,6 +131,9 @@ const list: ItemDef[] = [
   { id: 'ember_helmet', name: 'Ember Helmet', kind: 'armor', maxStack: 1, color: '#ff8a30', rarity: 2, model: { type: 'armor', slot: 'head', layer: 'emberMetal' }, armor: { slot: 'head', defense: 6, set: 'ember' } },
   { id: 'ember_plate', name: 'Ember Plate', kind: 'armor', maxStack: 1, color: '#ff8a30', rarity: 2, model: { type: 'armor', slot: 'body', layer: 'emberMetal' }, armor: { slot: 'body', defense: 8, set: 'ember' } },
   { id: 'ember_greaves', name: 'Ember Greaves', kind: 'armor', maxStack: 1, color: '#ff8a30', rarity: 2, model: { type: 'armor', slot: 'legs', layer: 'emberMetal' }, armor: { slot: 'legs', defense: 6, set: 'ember' } },
+  { id: 'aerite_helmet', name: 'Skyforged Helm', kind: 'armor', maxStack: 1, color: '#a8e4ff', rarity: 2, model: { type: 'armor', slot: 'head', layer: 'aeriteMetal' }, armor: { slot: 'head', defense: 4, set: 'aerite' } },
+  { id: 'aerite_breastplate', name: 'Skyforged Breastplate', kind: 'armor', maxStack: 1, color: '#a8e4ff', rarity: 2, model: { type: 'armor', slot: 'body', layer: 'aeriteMetal' }, armor: { slot: 'body', defense: 6, set: 'aerite' } },
+  { id: 'aerite_greaves', name: 'Skyforged Greaves', kind: 'armor', maxStack: 1, color: '#a8e4ff', rarity: 2, model: { type: 'armor', slot: 'legs', layer: 'aeriteMetal' }, armor: { slot: 'legs', defense: 4, set: 'aerite' } },
   { id: 'iron_greaves', name: 'Iron Greaves', kind: 'armor', maxStack: 1, color: '#d6d0ca', model: { type: 'armor', slot: 'legs', layer: 'iron' }, armor: { slot: 'legs', defense: 3, set: 'iron' } },
 
   // ---- accessories
@@ -136,6 +145,7 @@ const list: ItemDef[] = [
   { id: 'burrowing_claws', name: 'Burrowing Claws', kind: 'accessory', maxStack: 1, color: '#c8d890', rarity: 3, model: { type: 'charm', layer: 'bone' }, accessory: { miningSpeed: 0.6 }, description: 'From the Deepwyrm. +60% mining speed.' },
   { id: 'heartstone', name: 'Heartstone Amulet', kind: 'accessory', maxStack: 1, color: '#e8444c', rarity: 2, model: { type: 'charm', layer: 'bloodMetal' }, accessory: { regen: 1.5 }, description: 'Beats softly. Faster health regeneration.' },
   { id: 'houndfang_charm', name: 'Houndfang Charm', kind: 'accessory', maxStack: 1, color: '#f0e0c8', rarity: 2, model: { type: 'fang' }, accessory: { moveSpeed: 0.15, jumps: 1 }, description: 'Taken from a Gorehound. +15% speed and a double jump.' },
+  { id: 'roc_wings', name: 'Roc Wings', kind: 'accessory', maxStack: 1, color: '#d8e4f4', rarity: 3, model: { type: 'wings' }, accessory: { flight: 2.4, noFallDamage: true }, description: 'Hold jump in the air to fly, then glide. From the Tempest Roc.' },
   { id: 'grappling_hook', name: 'Grappling Hook', kind: 'accessory', maxStack: 1, color: '#9a98a6', rarity: 1, model: { type: 'hook', head: 'iron' }, accessory: { hook: { range: 26, speed: 22 } }, description: 'Press F to fire. Latches onto any surface.' },
   { id: 'barbed_hook', name: 'Barbed Hook', kind: 'material', maxStack: 99, color: '#9a98a6', model: { type: 'hook', head: 'metal' }, description: 'Dropped by Hollow Miners. Craft into a grappling hook.' },
 
@@ -152,6 +162,11 @@ const list: ItemDef[] = [
   { id: 'emberite', name: 'Emberite Ore', kind: 'material', maxStack: 999, color: '#ff8a30', rarity: 2, model: { type: 'ore', layer: 'emberite' }, description: 'Found only in the Ember Depths.' },
   { id: 'ember_bar', name: 'Ember Bar', kind: 'material', maxStack: 999, color: '#ff8a30', rarity: 2, model: { type: 'bar', layer: 'emberMetal' } },
   { id: 'wyrm_scale', name: 'Wyrm Scale', kind: 'material', maxStack: 999, color: '#8a9a6a', rarity: 2, model: { type: 'scale' }, description: 'Shed by the Deepwyrm. Hard as stone.' },
+  { id: 'aerite_ore', name: 'Aerite Ore', kind: 'material', maxStack: 999, color: '#a8e4ff', rarity: 1, model: { type: 'ore', layer: 'aerite' }, description: 'Found only inside the floating islands.' },
+  { id: 'aerite_bar', name: 'Aerite Bar', kind: 'material', maxStack: 999, color: '#a8e4ff', rarity: 1, model: { type: 'bar', layer: 'aeriteMetal' } },
+  { id: 'sky_feather', name: 'Sky Feather', kind: 'material', maxStack: 999, color: '#e8f0fa', model: { type: 'feather' }, description: 'Drifts down from the creatures of the high sky.' },
+  { id: 'roc_plume', name: 'Roc Plume', kind: 'material', maxStack: 999, color: '#f0e0a0', rarity: 2, model: { type: 'plume' }, description: 'A storm-charged feather from the Tempest Roc.' },
+  { id: 'gale_idol', name: 'Gale Idol', kind: 'consumable', maxStack: 20, color: '#a8e4ff', rarity: 2, model: { type: 'idol' }, description: 'Calls the Tempest Roc. Use high in the sky.' },
   { id: 'blood_shard', name: 'Sanguine Shard', kind: 'material', maxStack: 999, color: '#e8444c', rarity: 1, model: { type: 'crystal', layer: 'bloodMetal' }, description: 'Falls from creatures of the Blood Moon.' },
   { id: 'hollow_horn', name: 'Hollow War Horn', kind: 'consumable', maxStack: 20, color: '#e6dcc0', rarity: 2, model: { type: 'horn' }, description: 'Sounds a challenge to the Hollowfolk. Use near your town.' },
   { id: 'wyrm_bait', name: 'Wyrm Bait', kind: 'consumable', maxStack: 20, color: '#b04a6a', rarity: 1, model: { type: 'bait' }, description: 'Summons the Deepwyrm. Use at night or underground.' },

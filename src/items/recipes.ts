@@ -33,6 +33,7 @@ export const RECIPES: Recipe[] = [
   R('copper_bar', 1, 'furnace', ['copper_ore', 3]),
   R('iron_bar', 1, 'furnace', ['iron_ore', 3]),
   R('glass_bottle', 2, 'furnace', ['sand', 2]),
+  R('aerite_bar', 1, 'furnace', ['aerite_ore', 3]),
   R('torch', 5, 'furnace', ['wood', 1], ['gel', 1]),
   // anvil
   R('copper_sword', 1, 'anvil', ['copper_bar', 8]),
@@ -51,6 +52,12 @@ export const RECIPES: Recipe[] = [
   R('bomb', 3, 'anvil', ['gel', 2], ['iron_bar', 1]),
   R('grappling_hook', 1, 'anvil', ['barbed_hook', 1], ['iron_bar', 4]),
   R('wyrm_bait', 1, 'anvil', ['lumite', 5], ['gel', 6], ['bat_wing', 2]),
+  // Sky tier: aerite from the floating islands, feathers from their creatures.
+  R('aerite_helmet', 1, 'anvil', ['aerite_bar', 10], ['sky_feather', 4]),
+  R('aerite_breastplate', 1, 'anvil', ['aerite_bar', 14], ['sky_feather', 6]),
+  R('aerite_greaves', 1, 'anvil', ['aerite_bar', 12], ['sky_feather', 4]),
+  R('gale_bow', 1, 'anvil', ['aerite_bar', 9], ['sky_feather', 5]),
+  R('gale_idol', 1, 'anvil', ['aerite_bar', 5], ['sky_feather', 10], ['lumite', 3]),
   // Blood Moon spoils.
   R('heartstone', 1, 'anvil', ['blood_shard', 10], ['iron_bar', 3], ['red_cap', 2]),
   R('sanguine_blade', 1, 'anvil', ['blood_shard', 14], ['iron_bar', 8]),

@@ -13,6 +13,8 @@ export interface PlayerStats {
   lightBoost: number;
   hook: { range: number; speed: number } | null;
   regen: number;
+  /** Seconds of wing flight (0 = no wings). */
+  flight: number;
   setBonus: string | null;
 }
 
@@ -52,7 +54,7 @@ export class Equipment {
   }
 
   stats(): PlayerStats {
-    const st: PlayerStats = { defense: 0, moveSpeed: 1, extraJumps: 0, noFallDamage: false, miningSpeed: 1, lightBoost: 0, hook: null, regen: 0, setBonus: null };
+    const st: PlayerStats = { defense: 0, moveSpeed: 1, extraJumps: 0, noFallDamage: false, miningSpeed: 1, lightBoost: 0, hook: null, regen: 0, flight: 0, setBonus: null };
     const sets = new Map<string, number>();
     for (const s of this.items) {
       if (!s) continue;
@@ -70,6 +72,7 @@ export class Equipment {
       st.lightBoost += a.lightRadius ?? 0;
       st.regen += a.regen ?? 0;
       if (a.hook) st.hook = a.hook;
+      st.flight = Math.max(st.flight, a.flight ?? 0);
     }
     for (const [set, n] of sets) {
       if (n < 3) continue;
@@ -77,6 +80,7 @@ export class Equipment {
       if (set === 'copper') { st.defense += 2; st.miningSpeed += 0.15; }
       if (set === 'iron') { st.defense += 3; st.moveSpeed += 0.05; }
       if (set === 'ember') { st.defense += 5; st.regen += 1.5; st.lightBoost += 0.5; }
+      if (set === 'aerite') { st.defense += 3; st.extraJumps += 1; st.moveSpeed += 0.1; st.noFallDamage = true; st.flight *= 1.35; }
     }
     return st;
   }

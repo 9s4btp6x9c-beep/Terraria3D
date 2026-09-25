@@ -17,6 +17,9 @@ export const PLAYER_RADIUS = 0.4;
 const STAND_SPHERES = [0.4, 0.95, 1.45];
 const CROUCH_SPHERES = [0.4, 0.8];
 const WALKABLE = 0.55;
+/** Wing climb speed and glide sink rate (m/s). */
+const FLIGHT_RISE = 7.5;
+const GLIDE_FALL = 2.6;
 
 export class PlayerController {
   x = 0; y = 0; z = 0;
@@ -34,6 +37,13 @@ export class PlayerController {
   landingImpact = 0;
   /** Set when an air jump fires this frame (for effects). */
   airJumped = false;
+  /** Wings: seconds of powered flight per take-off (0 = none). */
+  flightTime = 0;
+  /** Flight seconds left before landing again. */
+  flightLeft = 0;
+  /** This frame: rising on wings / gliding down on them. */
+  flying = false;
+  gliding = false;
   /** World extents; the player is kept inside [margin, size - margin]. */
   bounds: { x: number; z: number } | null = null;
   /** Seconds since last grounded (coyote time). */
@@ -90,7 +100,7 @@ export class PlayerController {
     } else {
       this.airTime = this.grounded ? 0 : this.airTime + dt;
       this.airJumped = false;
-      if (this.grounded) this.airJumps = this.extraJumps;
+      if (this.grounded) { this.airJumps = this.extraJumps; this.flightLeft = this.flightTime; }
       if (input.jump && !this.jumpHeld && this.airTime < 0.12) {
         this.vy = this.jumpSpeed;
         this.grounded = false;
@@ -102,6 +112,21 @@ export class PlayerController {
       }
       this.vy -= this.gravity * dt;
       this.vy = Math.max(this.vy, -50);
+      // Wings: holding jump in the air climbs until the flight time runs
+      // out, then the wings glide (a slow, safe descent).
+      this.flying = this.gliding = false;
+      if (this.flightTime > 0 && input.jump && !this.grounded && this.airTime > 0.2 && !this.airJumped) {
+        if (this.flightLeft > 0) {
+          // Powered flight cancels gravity and eases toward the climb speed.
+          this.vy += this.gravity * dt;
+          this.vy += (FLIGHT_RISE - this.vy) * Math.min(1, dt * 4);
+          this.flightLeft = Math.max(0, this.flightLeft - dt);
+          this.flying = true;
+        } else if (this.vy < -GLIDE_FALL) {
+          this.vy = -GLIDE_FALL;
+          this.gliding = true;
+        }
+      }
     }
     this.jumpHeld = input.jump;
 

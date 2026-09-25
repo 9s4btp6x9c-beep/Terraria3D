@@ -18,7 +18,7 @@ type Layer = ExtraLayer | number;
 /** Terrain-material layers usable by name in models (e.g. dirt blocks). */
 const TERRAIN_LAYERS: Record<string, Mat> = {
   dirt: Mat.Dirt, stone: Mat.Stone, sand: Mat.Sand, clay: Mat.Clay, snow: Mat.Snow, grass: Mat.Grass, deepstone: Mat.Deepstone,
-  sandstone: Mat.Sandstone, ice: Mat.Ice, blightstone: Mat.Blightstone, emberstone: Mat.Emberstone, emberite: Mat.Emberite,
+  sandstone: Mat.Sandstone, ice: Mat.Ice, blightstone: Mat.Blightstone, emberstone: Mat.Emberstone, emberite: Mat.Emberite, aerite: Mat.Aerite,
 };
 
 function layerIndex(l: Layer | string): number {
@@ -313,6 +313,50 @@ function fang() {
   return merge(parts);
 }
 
+/** A single flight feather: quill plus a tapered vane. */
+function feather(layer: string, tint = 0xffffff, spine = 0xd8d0c0) {
+  return merge([
+    box(0.012, 0.36, 0.012, 'plain', { y: 0.16 }, spine),
+    taper(0.1, 0.26, 0.012, 0.25, 1, layer, { x: 0.02, y: 0.2, rz: -0.05 }, tint),
+    taper(0.06, 0.1, 0.012, 1, 1, layer, { x: 0.012, y: 0.02, rz: 0.1 }, tint),
+  ]);
+}
+
+/** A storm-gold Roc plume with a crackling tip. */
+function plume() {
+  return merge([
+    box(0.014, 0.42, 0.014, 'gold', { y: 0.18 }),
+    taper(0.14, 0.3, 0.014, 0.2, 1, 'feather', { x: 0.03, y: 0.22, rz: -0.08 }, 0xf8e8b0),
+    taper(0.08, 0.1, 0.014, 1, 1, 'feather', { x: 0.015, y: 0.03 }, 0x8a9ac0),
+    octa(0.03, 'lumiteMetal', { x: 0.03, y: 0.4 }),
+  ]);
+}
+
+/** Folded wings for the item icon: two layered feather fans on a harness. */
+function wings() {
+  const parts: THREE.BufferGeometry[] = [box(0.14, 0.1, 0.06, 'cloth', { y: 0.2 }, 0x6a4a3a), box(0.05, 0.05, 0.05, 'gold', { y: 0.2, z: 0.04 })];
+  for (const side of [1, -1]) {
+    for (let i = 0; i < 4; i++) {
+      const t = i / 3;
+      parts.push(taper(0.08, 0.3 - t * 0.06, 0.02, 0.4, 1, 'feather', { x: side * (0.1 + t * 0.12), y: 0.22 + t * 0.03, z: -0.01 * i, rz: side * (-0.6 - t * 0.35) }, t > 0.6 ? 0x9aa8c8 : 0xffffff));
+    }
+  }
+  return merge(parts);
+}
+
+/** Gale Idol: a small aerite bird effigy on a stone plinth. */
+function idol() {
+  return merge([
+    cyl(0.1, 0.12, 0.08, 6, 'stone', { y: 0.04 }),
+    cyl(0.04, 0.05, 0.1, 6, 'aeriteMetal', { y: 0.13 }),
+    ico(0.07, 'aeriteMetal', { y: 0.23, sz: 1.3 }),
+    cone(0.03, 0.08, 4, 'gold', { y: 0.25, z: 0.1, rx: Math.PI / 2 }),
+    taper(0.16, 0.02, 0.06, 0.3, 1, 'feather', { x: 0.1, y: 0.28, rz: -0.5 }),
+    taper(0.16, 0.02, 0.06, 0.3, 1, 'feather', { x: -0.1, y: 0.28, rz: 0.5 }),
+    octa(0.025, 'flame', { x: 0.03, y: 0.25, z: 0.06 }, 0x9af0ff),
+  ]);
+}
+
 // ------------------------------------------------------------ armour, trinkets
 
 function armor(slot: 'head' | 'body' | 'legs', layer: MetalLayer) {
@@ -526,6 +570,10 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'horn': g = horn(); break;
     case 'club': g = club(); break;
     case 'fang': g = fang(); break;
+    case 'feather': g = feather('feather'); break;
+    case 'plume': g = plume(); break;
+    case 'wings': g = wings(); break;
+    case 'idol': g = idol(); break;
     case 'armor': g = armor(spec.slot, spec.layer); break;
     case 'boots': g = boots(spec.layer); break;
     case 'jar': g = jar(spec.layer); break;

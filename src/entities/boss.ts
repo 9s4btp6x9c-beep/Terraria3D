@@ -11,17 +11,54 @@ const SPACING = 1.85;
 
 export interface BossContext {
   px: number; py: number; pz: number;
+  /** Player velocity (for leading shots and dives). */
+  pvx: number; pvz: number;
   dt: number;
   /** Is this point below the ground surface (the wyrm "swims" there)? */
   underground(x: number, y: number, z: number): boolean;
+  /** Distance to terrain / pieces (flyers keep clear). */
+  distance(x: number, y: number, z: number): number;
   carve(x: number, y: number, z: number, r: number): void;
   erupt(x: number, y: number, z: number): void;
   spit(x: number, y: number, z: number, tx: number, ty: number, tz: number): void;
+  /** Roc: a fan of feathers aimed at a point. */
+  feathers(x: number, y: number, z: number, tx: number, ty: number, tz: number, count: number, damage: number): void;
+  /** Roc: call minions. */
+  summon(id: string, x: number, y: number, z: number): void;
+  /** Roc: a wind blast that shoves the player away from a point. */
+  gust(x: number, y: number, z: number, strength: number): void;
+  sound(name: 'screech' | 'gust' | 'flap'): void;
   hurtPlayer(dmg: number, fx: number, fz: number, kb: number): void;
   worldHeight: number;
 }
 
-export class Deepwyrm {
+/** What combat needs from any boss. */
+export interface Boss {
+  readonly id: 'deepwyrm' | 'roc';
+  readonly name: string;
+  readonly maxHp: number;
+  hp: number;
+  readonly defense: number;
+  alive: boolean;
+  leaving: boolean;
+  hitFlash: number;
+  readonly group: THREE.Group;
+  /** Main body point: despawn checks and loot. */
+  readonly center: THREE.Vector3;
+  update(ctx: BossContext): void;
+  /** Index of the body part hit by a sphere, or -1. */
+  hitTest(x: number, y: number, z: number, r: number): number;
+  /** Distance along a ray to the body, or null. */
+  rayHit(o: THREE.Vector3, d: THREE.Vector3, reach: number): number | null;
+  /** Points for death effects. */
+  points(): THREE.Vector3[];
+  drops(): [string, number][];
+  /** A leaving boss is out of the arena and can be removed. */
+  readonly departed: boolean;
+}
+
+export class Deepwyrm implements Boss {
+  readonly id = 'deepwyrm' as const;
   readonly name = 'The Deepwyrm';
   readonly maxHp = 1500;
   hp = 1500;
@@ -81,7 +118,14 @@ export class Deepwyrm {
   }
 
   get head() { return this.seg[0]; }
+  get center() { return this.seg[0]; }
   get phase2() { return this.hp < this.maxHp / 2; }
+  get departed() { return this.leaving && this.head.y < 8; }
+  points() { return this.seg; }
+  drops(): [string, number][] {
+    return [['wyrm_scale', 24 + Math.floor(Math.random() * 12)], ['coin', 150 + Math.floor(Math.random() * 100)], ['healing_potion', 5],
+      [Math.random() < 0.5 ? 'burrowing_claws' : 'wyrmfang_staff', 1]];
+  }
 
   update(ctx: BossContext) {
     const { dt } = ctx;

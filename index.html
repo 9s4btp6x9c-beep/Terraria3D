@@ -36,6 +36,8 @@
   #hotbar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 4px; pointer-events: auto; }
   #itemname { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 15px; text-shadow: 1px 1px 0 #000, 0 0 6px #000; text-align: center; white-space: nowrap; }
   #itemname small { display: block; opacity: 0.8; font-size: 12px; }
+  #flight { position: absolute; left: 50%; top: calc(50% + 16px); transform: translateX(-50%); width: 46px; height: 5px; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.35); display: none; }
+  #flight div { height: 100%; width: 100%; background: linear-gradient(#e8f4ff, #9ac8f0); }
   #prompt { position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); font-size: 13px; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px; display: none; }
   #messages { position: absolute; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; text-shadow: 1px 1px 0 #000; }
   #messages div { transition: opacity 0.5s; }
@@ -164,6 +166,7 @@
   <div id="vitals"></div>
   <canvas id="minimap" width="176" height="176"></canvas>
   <div id="clock"></div>
+  <div id="flight"><div></div></div>
   <div id="prompt"></div>
   <div id="topbars"><div id="bossbar"></div><div id="eventbar"></div></div>
   <div id="itemname"></div>

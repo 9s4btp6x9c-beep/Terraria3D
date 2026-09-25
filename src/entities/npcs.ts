@@ -24,6 +24,7 @@ export interface NpcContext {
   kills: number;
   bossDefeated: boolean;
   raidDefeated: boolean;
+  rocDefeated: boolean;
   isNight: boolean;
   /** Name of the running world event, if any. */
   event: string | null;
@@ -44,6 +45,9 @@ export const NPCS: NpcDef[] = [
       t.push('Copper and iron can be mined with your starter pickaxe. Deepstone and glowing lumite need an Iron Pickaxe.');
       t.push('Old cabins are buried under the hills. Their chests hold boots, charms and other trinkets.');
       t.push('Those floating islands up high? Someone built shrines up there. Maybe a grappling hook would help.');
+      t.push('The islands are laced with aerite — pale blue ore, light as air. Smelt it and forge armor that lets you leap like the wind.');
+      if (!ctx.rocDefeated) t.push('Gale Swifts nest on the islands. Enough of their feathers and some aerite make an idol — they say a great bird answers it.');
+      else t.push('You brought down the Tempest Roc! With its wings you can finally reach every island.');
       t.push('Hollow Miners in the deep caves sometimes carry a barbed hook. With iron bars, that makes a grappling hook (press F).');
       if (ctx.isNight) t.push('Shamblers roam the surface at night. A house with a door keeps the worst of them away.');
       if (ctx.event === 'Blood Moon') t.push('The moon is bleeding! Stay indoors — or go out and collect the shards those horrors drop.');

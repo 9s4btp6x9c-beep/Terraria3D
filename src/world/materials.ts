@@ -21,6 +21,7 @@ export const enum Mat {
   Blightstone = 15,
   Emberstone = 16,
   Emberite = 17,
+  Aerite = 18,
 }
 
 /** Procedural pixel-art texture recipe (see render/textures.ts). */
@@ -65,6 +66,7 @@ const defs: MaterialDef[] = [
   { id: Mat.Blightstone, name: 'Blightstone', texture: 'cobble', palette: [0x5a4a6e, 0x221a2e, 0x7a6a90, 0x8a4aa0], hardness: 1.1, tier: 0, drop: 'blightstone', volumePerItem: 2, emissive: 0, particle: 0x6a5a80 },
   { id: Mat.Emberstone, name: 'Emberstone', texture: 'cobble', palette: [0x5a2a22, 0x1a0a08, 0x7a3426, 0xe05a24], hardness: 2, tier: 2, drop: 'emberstone', volumePerItem: 2, emissive: 0.14, particle: 0xff6a2a },
   { id: Mat.Emberite, name: 'Emberite Ore', texture: 'ore', palette: [0x4a1e16, 0x1a0806, 0xff8a30, 0xffe070], hardness: 2.4, tier: 2, drop: 'emberite', volumePerItem: 1.5, emissive: 0.7, particle: 0xffa040 },
+  { id: Mat.Aerite, name: 'Aerite Ore', texture: 'ore', palette: [0x8e98ae, 0x3e4458, 0xa8e4ff, 0xfff4c0], hardness: 1.6, tier: 1, drop: 'aerite_ore', volumePerItem: 1.5, emissive: 0.3, particle: 0xbfeaff },
 ];
 
 export const MATERIALS: readonly MaterialDef[] = defs;

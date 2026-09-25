@@ -259,6 +259,52 @@ function hollowMiner(mat: THREE.Material, sapper = false): CreatureVisual {
   };
 }
 
+/** Gale Swift: a sleek storm-blue bird with swept wings and a forked tail. */
+function galeSwift(mat: THREE.Material): CreatureVisual {
+  const root = new THREE.Group();
+  const body = pivot(root, 0, 0.45, 0);
+  const back = 0x6a84b8, belly = 0xf4f6fa;
+  mesh(merge([
+    ico(0.22, 'feather', { sx: 0.9, sy: 0.8, sz: 1.7, detail: 1 }, back),
+    ico(0.17, 'feather', { y: -0.06, z: 0.05, sx: 0.85, sy: 0.7, sz: 1.5 }, belly),
+    ico(0.15, 'feather', { y: 0.08, z: 0.36, sy: 0.9 }, back),
+    cone(0.05, 0.16, 4, 'gold', { y: 0.06, z: 0.54, rx: Math.PI / 2 }),
+    octa(0.028, 'flame', { x: 0.08, y: 0.12, z: 0.44 }, 0xffe060),
+    octa(0.028, 'flame', { x: -0.08, y: 0.12, z: 0.44 }, 0xffe060),
+    taper(0.05, 0.22, 0.03, 0.4, 1, 'feather', { y: 0.2, z: 0.3, rx: -0.9 }, back),
+    // Forked tail.
+    taper(0.08, 0.4, 0.02, 0.3, 1, 'feather', { x: 0.07, y: 0.02, z: -0.5, rx: -Math.PI / 2 + 0.15, rz: 0.25 }, back),
+    taper(0.08, 0.4, 0.02, 0.3, 1, 'feather', { x: -0.07, y: 0.02, z: -0.5, rx: -Math.PI / 2 + 0.15, rz: -0.25 }, back),
+  ]), mat, body);
+  const wing = (side: number) => {
+    const shoulder = pivot(body, side * 0.16, 0.06, 0.05);
+    mesh(merge([
+      taper(0.46, 0.03, 0.34, 1, 0.7, 'feather', { x: side * 0.23 }, back),
+      taper(0.46, 0.02, 0.12, 1, 0.8, 'feather', { x: side * 0.23, y: -0.02, z: -0.2 }, belly),
+    ]), mat, shoulder);
+    const elbow = pivot(shoulder, side * 0.46, 0, 0);
+    mesh(merge([
+      taper(0.5, 0.025, 0.26, 1, 0.3, 'feather', { x: side * 0.25, z: -0.04, ry: side * 0.25 }, back),
+      ...[0, 1, 2].map(i => taper(0.06, 0.02, 0.32, 0.3, 1, 'feather', { x: side * (0.35 + i * 0.07), z: -0.18 - i * 0.03, ry: side * (0.4 + i * 0.15) }, 0x4a5a88)),
+    ]), mat, elbow);
+    return { shoulder, elbow };
+  };
+  const wl = wing(1), wr = wing(-1);
+  return {
+    root,
+    animate(c) {
+      const climb = Math.max(-1, Math.min(1, c.vy / 6));
+      // Powerful beats when climbing, long glides when diving.
+      const beat = Math.sin(c.t * (climb > 0 ? 14 : 8)) * (0.35 + Math.max(0, climb) * 0.5);
+      const glide = climb < -0.3 ? 0.3 : 0;
+      wl.shoulder.rotation.z = beat + glide; wr.shoulder.rotation.z = -beat - glide;
+      wl.elbow.rotation.z = beat * 0.6; wr.elbow.rotation.z = -beat * 0.6;
+      body.rotation.x = -climb * 0.35;
+      body.rotation.z = Math.sin(c.t * 2 + c.uid) * 0.15;
+    },
+  };
+}
+
 /** Gorehound: a lean, skinless hound with exposed ribs and a split jaw. */
 function gorehound(mat: THREE.Material): CreatureVisual {
   const outer = new THREE.Group();
@@ -398,6 +444,7 @@ export function buildCreatureVisual(id: string, mat: THREE.Material, tint = 0xff
     case 'hollow_sapper': return hollowMiner(mat, true);
     case 'hollow_brute': return hollowBrute(mat);
     case 'gorehound': return gorehound(mat);
+    case 'gale_swift': return galeSwift(mat);
     default: return glob(mat, 0xff80ff);
   }
 }

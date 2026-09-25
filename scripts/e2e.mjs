@@ -592,6 +592,150 @@ try {
   check('repelling the raid sets progression and pays out', raid.kind === null && raid.won && raid.coins > 0 && raid.left === 0, JSON.stringify(raid));
   await page.evaluate(() => { const g = __game; g.combat.spawning = false; g.combat.clear(); g.vitals.hp = g.vitals.maxHp = 100; g.simulate(0.2); });
 
+  // ---------------------------------------------------------------- sky tier
+  const aerite = await page.evaluate(() => {
+    const g = __game;
+    let ore = 0, total = 0;
+    for (const isl of g.gen.islands) {
+      for (let y = isl.y - isl.depth + 2; y < isl.y - 2; y += 1.5)
+        for (let a = 0; a < 6.28; a += 0.6) for (const r of [0, isl.r * 0.3, isl.r * 0.55]) {
+          const x = isl.x + Math.cos(a) * r, z = isl.z + Math.sin(a) * r;
+          if (g.gen.densityAt(x, y, z) < 2) continue;
+          total++;
+          if (g.gen.materialFor(x, y, z, 10, 1) === 18) ore++;
+        }
+    }
+    return { islands: g.gen.islands.length, ore, total };
+  });
+  check('floating islands hold aerite ore', aerite.ore > 20 && aerite.ore < aerite.total * 0.6, JSON.stringify(aerite));
+
+  // Wings: take off from an island, climb, then glide.
+  const island = await page.evaluate(() => {
+    const g = __game;
+    // An open spot on an island (away from its shrine), clear sky above.
+    for (const isl of g.gen.islands) for (const f of [0.5, 0.35, 0.65]) for (let a = 0; a < 6.28; a += 0.5) {
+      const x = isl.x + Math.cos(a) * isl.r * f, z = isl.z + Math.sin(a) * isl.r * f;
+      const top = g.gen.surfaceAt(x, z);
+      if (!top || top.y < isl.y - 3 || top.ny < 0.8) continue;
+      if (g.structures.raycast(x, top.y + 1, z, 0, 1, 0, 40) || g.furniture.near(x, top.y, z, 4).length) continue;
+      g.player.teleport(x, top.y + 1, z);
+      return { x, y: top.y, z };
+    }
+    return null;
+  });
+  await settle();
+  const flight = await page.evaluate(() => {
+    const g = __game;
+    g.combat.clear();
+    g.combat.spawning = false;
+    g.atmosphere.timeOfDay = 0.42;
+    g.equipment.set(4, { id: 'roc_wings', count: 1 });
+    g.stats = g.equipment.stats();
+    g.simulate(0.3);
+    const y0 = g.player.y;
+    g.input.keys.add('Space');
+    let peak = y0, minVy = 0;
+    for (let i = 0; i < 60; i++) { g.simulate(0.05); peak = Math.max(peak, g.player.y); }
+    for (let i = 0; i < 30; i++) { g.simulate(0.05); if (!g.player.grounded) minVy = Math.min(minVy, g.player.vy); }
+    const gliding = g.player.gliding;
+    g.input.keys.delete('Space');
+    return { climb: +(peak - y0).toFixed(1), minVy: +minVy.toFixed(2), gliding, time: g.stats.flight };
+  });
+  check('Roc Wings fly and then glide', flight.climb > 10 && flight.minVy > -3 && flight.time > 0, JSON.stringify(flight));
+  await page.evaluate(() => { const g = __game; g.equipment.set(4, null); g.stats = g.equipment.stats(); g.simulate(3); });
+
+  const skySpawns = await page.evaluate(i => {
+    const g = __game;
+    g.player.teleport(i.x, i.y + 1, i.z);
+    g.vitals.hp = g.vitals.maxHp = 400;
+    g.combat.spawning = true;
+    const seen = new Set();
+    for (let k = 0; k < 20; k++) { g.vitals.hp = 400; g.simulate(1); for (const c of g.combat.creatures) seen.add(c.def.id); }
+    g.combat.spawning = false;
+    return [...seen];
+  }, island);
+  check('sky creatures live around the islands', skySpawns.some(id => id === 'gale_swift' || id === 'cloud_glob'), skySpawns.join(', '));
+  await page.evaluate(() => {
+    const g = __game;
+    const c = g.combat.creatures.find(c => c.def.id === 'gale_swift') ?? g.spawnCreature('gale_swift', g.player.x + 3, g.player.y + 3, g.player.z - 5);
+    g.player.yaw = Math.atan2(-(c.x - g.player.x), -(c.z - g.player.z)); g.player.pitch = Math.atan2(c.y - g.player.y - 1.6, Math.hypot(c.x - g.player.x, c.z - g.player.z));
+  });
+  await shot('25-sky-island');
+
+  // The Tempest Roc: summon it with the idol, watch it dive and volley feathers.
+  const roc = await page.evaluate(i => {
+    const g = __game;
+    g.combat.clear();
+    g.player.teleport(i.x, i.y + 1, i.z);
+    g.vitals.hp = g.vitals.maxHp = 600;
+    g.simulate(0.2);
+    const ok = g['consume']({ id: 'gale_idol' });
+    const b = g.combat.boss;
+    let dove = false, feathers = 0, minDist = Infinity;
+    for (let k = 0; k < 160 && b; k++) {
+      g.vitals.hp = 600;
+      g.simulate(0.1);
+      if (b['mode'] === 'dive') dove = true;
+      feathers = Math.max(feathers, g.combat['projectiles'].filter(p => p.kind === 'feather').length);
+      minDist = Math.min(minDist, b.center.distanceTo(g.player.position));
+    }
+    return { ok, id: b?.id, dove, feathers, minDist: +minDist.toFixed(1) };
+  }, island);
+  check('the Tempest Roc circles, volleys feathers and dives', roc.ok && roc.id === 'roc' && roc.dove && roc.feathers > 0 && roc.minDist < 12, JSON.stringify(roc));
+  await page.evaluate(() => {
+    const g = __game, b = g.combat.boss;
+    if (!b) return;
+    b['mode'] = 'circle'; b['modeTime'] = 0;
+    const c = b.center;
+    c.set(g.player.x + 10, g.player.y + 7, g.player.z - 14);
+    b.update({ px: g.player.x, py: g.player.y, pz: g.player.z, pvx: 0, pvz: 0, dt: 0.001, underground: () => false, distance: () => 99, carve() {}, erupt() {}, spit() {}, feathers() {}, summon() {}, gust() {}, sound() {}, hurtPlayer() {}, worldHeight: 160 });
+    g.player.yaw = Math.atan2(-(c.x - g.player.x), -(c.z - g.player.z)); g.player.pitch = Math.atan2(c.y - g.player.y - 1.6, Math.hypot(c.x - g.player.x, c.z - g.player.z));
+    g.combat['projectiles'].forEach(p => g.combat.group.remove(p.mesh)); g.combat['projectiles'].length = 0;
+  });
+  await page.evaluate(() => { __game.render(); });
+  await page.screenshot({ path: `${OUT}/26-tempest-roc.png` });
+  const rocKill = await page.evaluate(() => {
+    const g = __game, b = g.combat.boss;
+    if (!b) return null;
+    const c = b.center;
+    g.combat['hitBoss'](99999, c.x, c.y, c.z);
+    g.simulate(0.1);
+    const drops = g.pickups.serialize().map(p => p.id);
+    return { gone: !g.combat.boss, flag: g.progress.rocDefeated, wings: drops.includes('roc_wings'), staff: drops.includes('tempest_staff'), plumes: drops.includes('roc_plume') };
+  });
+  check('defeating the Roc drops its wings and staff', rocKill && rocKill.gone && rocKill.flag && rocKill.wings && rocKill.staff && rocKill.plumes, JSON.stringify(rocKill));
+
+  // Tempest Staff gust and Gale Bow multishot.
+  const weapons = await page.evaluate(() => {
+    const g = __game;
+    g.combat.clear();
+    g.vitals.mana = g.vitals.maxMana;
+    // Face the island's middle so both targets stand on solid ground.
+    const isl = g.gen.islands.reduce((a, i) => (Math.hypot(i.x - g.player.x, i.z - g.player.z) < Math.hypot(a.x - g.player.x, a.z - g.player.z) ? i : a));
+    g.player.yaw = Math.atan2(-(isl.x - g.player.x), -(isl.z - g.player.z));
+    g.player.pitch = 0;
+    g.simulate(0.05);
+    const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw);
+    const targets = [3, 5.5].map(d => g.spawnCreature('shambler', g.player.x + fx * d, g.player.y + 0.2, g.player.z + fz * d));
+    targets.forEach(t => { t.hp = 999; t.cooldown = 9; });
+    g.simulate(0.3);
+    // Aim through both (the ground may slope).
+    const far = targets[1];
+    g.player.pitch = Math.atan2(far.cy - g.camera.position.y, Math.hypot(far.x - g.player.x, far.z - g.player.z));
+    g.simulate(0.02);
+    g['attack']({ id: 'tempest_staff', weapon: { type: 'magic', damage: 34, speed: 0.5, knockback: 16, projectileSpeed: 30, manaCost: 10 } });
+    g.simulate(0.6);
+    const pierced = targets.filter(t => t.hp < 999).length;
+    g.inventory.add('wooden_arrow', 10);
+    const before = g.inventory.count('wooden_arrow');
+    const arrows0 = g.combat['projectiles'].filter(p => p.kind === 'arrow').length;
+    g['attack']({ id: 'gale_bow', weapon: { type: 'bow', damage: 15, speed: 0.42, knockback: 3, projectileSpeed: 58, ammo: 'wooden_arrow', multishot: 2 } });
+    const arrows = g.combat['projectiles'].filter(p => p.kind === 'arrow').length - arrows0;
+    return { pierced, arrows, used: before - g.inventory.count('wooden_arrow') };
+  });
+  check('the gale pierces a line of foes; the Gale Bow looses two arrows', weapons.pierced === 2 && weapons.arrows === 2 && weapons.used === 1, JSON.stringify(weapons));
+  await page.evaluate(() => { const g = __game; g.combat.clear(); g.vitals.hp = g.vitals.maxHp = 100; g.simulate(0.2); });
+
   // Far view over the world with the debug readout (LOD + draw stats).
   await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;

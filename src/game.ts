@@ -82,7 +82,7 @@ export class Game {
   town!: Town;
   private dialogue!: DialogueUI;
   /** World progression flags (bosses defeated, events). */
-  progress = { bossDefeated: false, raidDefeated: false };
+  progress = { bossDefeated: false, raidDefeated: false, rocDefeated: false };
   readonly events = new WorldEvents();
   private rope!: RopeRenderer;
   private pool!: TerrainWorkerPool;
@@ -110,6 +110,7 @@ export class Game {
   private dir = new THREE.Vector3();
   private shake = 0;
   private potionCooldown = 0;
+  private flapTimer = 0;
   private deathShown = false;
   fps = 0;
   private frameMs = 0;
@@ -320,11 +321,21 @@ export class Game {
           }
         }
       },
-      bossDefeated: () => {
-        this.progress.bossDefeated = true;
-        this.hud.message('The Deepwyrm has been defeated!', '#c89aff');
-        this.hud.message('Its scales could fire a Lumite Forge...', '#c89aff');
+      bossDefeated: b => {
+        this.hud.message(`${b.name} has been defeated!`, '#c89aff');
+        if (b.id === 'deepwyrm') {
+          this.progress.bossDefeated = true;
+          this.hud.message('Its scales could fire a Lumite Forge...', '#c89aff');
+        } else {
+          this.progress.rocDefeated = true;
+          this.hud.message('The skies are calm. Its wings are yours to wear.', '#c89aff');
+        }
         writeSave(this.snapshot());
+      },
+      pushPlayer: (fx, fz, strength) => {
+        const dx = this.player.x - fx, dz = this.player.z - fz, l = Math.hypot(dx, dz) || 1;
+        this.player.impulse((dx / l) * strength, strength * 0.35, (dz / l) * strength);
+        this.shake = Math.min(1, this.shake + 0.3);
       },
       flash: (x, y, z, c, r, l) => this.atmosphere.lights.flash(x, y, z, c, r, l),
       shake: a => { this.shake = Math.min(1, this.shake + a); },
@@ -407,7 +418,12 @@ export class Game {
         const ammo = w.ammo!;
         if (!this.inventory.remove(ammo, 1)) { this.hud.message(`Out of ${item(ammo).name}s`, '#ffb070'); return 0.5; }
         const o = eye.clone().addScaledVector(dir, 0.6);
-        this.combat.fire('arrow', o.x, o.y - 0.1, o.z, dir.x, dir.y, dir.z, w.projectileSpeed!, w.damage, w.knockback);
+        const n = w.multishot ?? 1;
+        const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+        for (let i = 0; i < n; i++) {
+          const f = n > 1 ? (i / (n - 1) - 0.5) * 0.06 : 0;
+          this.combat.fire('arrow', o.x, o.y - 0.1, o.z, dir.x + side.x * f, dir.y, dir.z + side.z * f, w.projectileSpeed!, w.damage, w.knockback);
+        }
         this.viewmodel.triggerSwing(w.speed * 0.6);
         this.audio.play('bow');
         return w.speed;
@@ -415,11 +431,11 @@ export class Game {
       case 'magic': {
         if (!this.vitals.useMana(w.manaCost ?? 5)) { this.hud.message('Not enough mana', '#8ab8ff'); return 0.3; }
         const o = eye.clone().addScaledVector(dir, 0.8);
-        const boring = def.id === 'wyrmfang_staff';
-        this.combat.fire(boring ? 'drill' : 'bolt', o.x, o.y - 0.15, o.z, dir.x, dir.y, dir.z, w.projectileSpeed!, w.damage, w.knockback);
+        const boring = def.id === 'wyrmfang_staff', gale = def.id === 'tempest_staff';
+        this.combat.fire(boring ? 'drill' : gale ? 'gust' : 'bolt', o.x, o.y - 0.15, o.z, dir.x, dir.y, dir.z, w.projectileSpeed!, w.damage, w.knockback);
         this.viewmodel.triggerSwing(w.speed);
-        this.audio.play('magic');
-        this.atmosphere.lights.flash(o.x, o.y, o.z, boring ? 0xc8ff90 : 0x46d0ff, 8, 0.15);
+        this.audio.play(gale ? 'gust' : 'magic');
+        this.atmosphere.lights.flash(o.x, o.y, o.z, boring ? 0xc8ff90 : gale ? 0xe8f4ff : 0x46d0ff, 8, 0.15);
         return w.speed;
       }
       case 'thrown': {
@@ -440,6 +456,16 @@ export class Game {
       if (this.events.active) { this.hud.message(`${this.events.info!.name} is already under way!`, '#ffb070'); return false; }
       if (!t || Math.hypot(t.x - this.player.x, t.z - this.player.z) > 80) { this.hud.message('Sound the horn near a town with residents — that is what the raiders want.', '#ffb070'); return false; }
       this.startEvent('raid');
+      return true;
+    }
+    if (def.id === 'gale_idol') {
+      const p = this.player;
+      if (this.combat.boss) { this.hud.message(`${this.combat.boss.name} is already here!`, '#ffb070'); return false; }
+      if (p.y < 100 || this.sky.visibility(p.x, p.y + 1.5, p.z) < 0.6) { this.hud.message('The idol stays silent. Hold it up in the open sky, high above the land.', '#ffb070'); return false; }
+      const a = p.yaw + Math.PI;
+      this.combat.summonBoss(p.x + Math.sin(a) * 45, p.y + 24, p.z + Math.cos(a) * 45, 'roc');
+      this.hud.message('A storm gathers... the Tempest Roc descends!', '#c89aff');
+      this.audio.play('screech');
       return true;
     }
     if (def.id === 'wyrm_bait') {
@@ -667,6 +693,7 @@ export class Game {
       kills: this.combat.kills,
       bossDefeated: this.progress.bossDefeated,
       raidDefeated: this.progress.raidDefeated,
+      rocDefeated: this.progress.rocDefeated,
       isNight: this.atmosphere.daylight < 0.3,
       event: this.events.info?.name ?? null,
       hasStation: id => [...this.furniture.items.values()].some(f => f.type === id),
@@ -723,6 +750,7 @@ export class Game {
     const st = this.stats;
     this.player.speedMul = st.moveSpeed;
     this.player.extraJumps = st.extraJumps;
+    this.player.flightTime = st.flight;
     this.vitals.defense = st.defense;
     this.vitals.regenBonus = st.regen;
 
@@ -761,6 +789,16 @@ export class Game {
         sprint: !!(k('ShiftLeft') || k('ShiftRight')),
         crouch: !!k('KeyC'),
       }, outdoorsHere ? this.field.cfg.seaLevel : null);
+      if (this.player.flying || this.player.gliding) {
+        // Feathers shed from the wings.
+        this.flapTimer -= dt;
+        if (this.flapTimer <= 0) {
+          this.flapTimer = this.player.flying ? 0.28 : 0.6;
+          this.audio.play('flap');
+          const side = new THREE.Vector3(-this.dir.z, 0, this.dir.x).normalize();
+          for (const sx of [-1, 1]) this.particles.burst(this.player.x + side.x * sx * 0.7, this.player.y + 1.2, this.player.z + side.z * sx * 0.7, 0, -1, 0, 0xf0f4fa, 3, { speed: 1.5, gravity: 1.5, size: 0.06, life: 0.7 });
+        }
+      } else this.flapTimer = 0;
       if (this.player.airJumped) {
         this.particles.burst(this.player.x, this.player.y, this.player.z, 0, -1, 0, 0xe8f4ff, 12, { speed: 3, gravity: 2 });
         this.audio.play('jump');
@@ -848,7 +886,7 @@ export class Game {
     const ev = this.events.kind;
     this.combat.spawnBoost = ev === 'blood_moon' ? 1.8 : ev === 'raid' ? 1.6 : 1;
     this.atmosphere.bloodTarget = ev === 'blood_moon' ? 1 : 0;
-    this.combat.update(dt, this.player.x, this.player.y, this.player.z, this.time);
+    this.combat.update(dt, this.player.x, this.player.y, this.player.z, this.time, this.player.vx, this.player.vz);
     this.town.update(dt, this.player.x, this.player.y, this.player.z, this.atmosphere.daylight < 0.3, this.npcContext());
     this.flushSky();
     for (const [id, t] of this.wobble) {
@@ -881,6 +919,8 @@ export class Game {
     this.hud.setBoss(boss ? boss.name : null, boss?.hp ?? 0, boss?.maxHp ?? 1);
     this.hud.setEvent(this.events.info, this.events.progress, this.events.goal);
     this.hud.setVitals(this.vitals.hp, this.vitals.maxHp, this.vitals.mana, this.vitals.maxMana, this.vitals.defense);
+    const pl = this.player;
+    this.hud.setFlight(pl.flightTime > 0 && !pl.grounded && !this.vitals.dead ? pl.flightLeft / pl.flightTime : null);
     this.labels.update(dt, this.camera, window.innerWidth, window.innerHeight);
     this.minimap.draw(this.player.x, this.player.z, this.player.yaw, this.combat.creatures.map(c => ({ x: c.x, z: c.z, color: '#ff5a4a' })));
     const hours = this.atmosphere.timeOfDay * 24;

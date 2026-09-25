@@ -30,6 +30,7 @@ the touch controls).
 | LMB | Use held item (mine, chop, attack, place, drink) |
 | RMB | Interact: doors, chests, beds, talk to NPCs |
 | F | Grappling hook (equip a hook in an accessory slot) |
+| Space (hold, in the air) | Fly with wings, then glide |
 | H | Check whether the room you stand in is valid housing |
 | 1–9, mouse wheel | Select hotbar slot |
 | Q | Cycle build shape for the held material (terrain fill, floor, wall, pillar, stairs, roof) |
@@ -57,9 +58,25 @@ Touch devices start on the low quality preset.
 - **Biomes:** forest, desert, snow and the purple Blight on the surface.
   Underground are caves, cabins with loot chests, glowing lumite crystals
   and the molten Ember Depths.
-- **Boss:** craft Wyrm Bait at an anvil and use it at night or underground to
-  summon the Deepwyrm. It is a segmented worm that tunnels through the real
-  terrain and erupts out of the ground at you.
+- **Bosses:**
+  - **The Deepwyrm:** craft Wyrm Bait at an anvil and use it at night or
+    underground. It is a segmented worm that tunnels through the real
+    terrain and erupts out of the ground at you.
+  - **The Tempest Roc:** use a Gale Idol high in the open sky. A giant storm
+    bird that circles, fires volleys of feathers and dives at you. In its
+    second phase it calls Gale Swifts and blasts gusts of wind. It drops Roc
+    Wings (flight) and the Tempest Staff.
+- **Events:**
+  - **Blood Moon:** any night after the first can turn red. Blood Globs,
+    Gorehounds, Vein Shamblers and Bloodwisps come out and drop Sanguine
+    Shards for the Heartstone Amulet and the lifestealing Sanguine Blade.
+  - **The Hollow Raid:** once the Deepwyrm is dead, the Hollowfolk may march
+    on a town with two residents (or sound a Hollow War Horn). Raiders,
+    bomb-lobbing Sappers and club-wielding Brutes attack until enough of
+    them fall. Winning brings Wren the Tinkerer, who sells accessories.
+- **Sky tier:** the floating islands hold Aerite ore and are home to Gale
+  Swifts and Cloud Globs. Aerite makes the Skyforged armor set (extra jump,
+  speed, no fall damage and longer wing flight) and the two-arrow Gale Bow.
 - **World:** 512 m across with sky islands, a day/night cycle, and distant
   terrain drawn at lower detail so the whole map is visible from a high
   point.
@@ -96,7 +113,8 @@ src/
               Surface Nets mesher, worker pool, SkyMap, vegetation,
               world structures (cabins, depths), collision, persistence
   building/   modular pieces, furniture, housing check
-  entities/   creatures, combat, NPCs and town, the Deepwyrm
+  entities/   creatures, combat, NPCs and town, world events, bosses
+              (the Deepwyrm, the Tempest Roc)
   items/      item database, recipes, inventory, equipment
   player/     controller, input, interaction, grappling hook, vitals
   render/     pixel-art textures, world shader, terrain streaming + LOD,
@@ -121,5 +139,9 @@ scripts/      e2e browser tests (desktop and mobile)
 | ![](docs/screenshots/desert.jpg) | ![](docs/screenshots/ember-depths.jpg) |
 | **Crafting stations** | **The Deepwyrm** |
 | ![](docs/screenshots/crafting-stations.jpg) | ![](docs/screenshots/deepwyrm.jpg) |
-| **Touch controls on a phone** | |
-| ![](docs/screenshots/mobile-touch.jpg) | |
+| **Blood Moon** | **The Hollow Raid** |
+| ![](docs/screenshots/blood-moon.jpg) | ![](docs/screenshots/hollow-raid.jpg) |
+| **The Tempest Roc** | **Gale Swifts over a sky island** |
+| ![](docs/screenshots/tempest-roc.jpg) | ![](docs/screenshots/gale-swifts.jpg) |
+| **Event creatures** | **Touch controls on a phone** |
+| ![](docs/screenshots/event-creatures.jpg) | ![](docs/screenshots/mobile-touch.jpg) |
