@@ -55,13 +55,13 @@ function shambler(mat: THREE.Material): CreatureVisual {
   const root = new THREE.Group();
   const skin = 0x8aa070, rag = 0x5a6a80;
   const hipL = pivot(root, 0.13, 0.95, 0), hipR = pivot(root, -0.13, 0.95, 0);
-  mesh(merge([box(0.16, 0.9, 0.18, 'cloth', { y: -0.45 }, 0x4a4040), box(0.18, 0.1, 0.26, 'plain', { y: -0.9, z: 0.04 }, 0x3a3030)]), mat, hipL);
-  mesh(merge([box(0.16, 0.9, 0.18, 'cloth', { y: -0.45 }, 0x4a4040), box(0.18, 0.1, 0.26, 'plain', { y: -0.9, z: 0.04 }, 0x3a3030)]), mat, hipR);
+  mesh(merge([box(0.16, 0.9, 0.18, 'fabric', { y: -0.45 }, 0x4a4040), box(0.18, 0.1, 0.26, 'plain', { y: -0.9, z: 0.04 }, 0x3a3030)]), mat, hipL);
+  mesh(merge([box(0.16, 0.9, 0.18, 'fabric', { y: -0.45 }, 0x4a4040), box(0.18, 0.1, 0.26, 'plain', { y: -0.9, z: 0.04 }, 0x3a3030)]), mat, hipR);
   const torso = pivot(root, 0, 0.95, 0);
   mesh(merge([
-    taper(0.46, 0.62, 0.26, 1.1, 1, 'cloth', { y: 0.31 }, rag),
-    box(0.48, 0.08, 0.28, 'cloth', { y: 0.05 }, 0x3a3a48),
-    box(0.1, 0.25, 0.02, 'cloth', { x: 0.12, y: -0.05, z: 0.13, rz: 0.3 }, rag),
+    taper(0.46, 0.62, 0.26, 1.1, 1, 'fabric', { y: 0.31 }, rag),
+    box(0.48, 0.08, 0.28, 'fabric', { y: 0.05 }, 0x3a3a48),
+    box(0.1, 0.25, 0.02, 'fabric', { x: 0.12, y: -0.05, z: 0.13, rz: 0.3 }, rag),
   ]), mat, torso);
   const head = pivot(torso, 0, 0.66, 0.02);
   mesh(merge([
@@ -69,10 +69,10 @@ function shambler(mat: THREE.Material): CreatureVisual {
     box(0.07, 0.05, 0.03, 'flame', { x: 0.07, y: 0.2, z: 0.15 }, 0xff4020),
     box(0.07, 0.05, 0.03, 'flame', { x: -0.07, y: 0.2, z: 0.15 }, 0xff4020),
     box(0.2, 0.06, 0.04, 'plain', { y: 0.05, z: 0.15 }, 0x2a1a1a),
-    box(0.32, 0.08, 0.32, 'cloth', { y: 0.33 }, 0x3a2a24),
+    box(0.32, 0.08, 0.32, 'fabric', { y: 0.33 }, 0x3a2a24),
   ]), mat, head);
   const shL = pivot(torso, 0.3, 0.55, 0), shR = pivot(torso, -0.3, 0.55, 0);
-  for (const sh of [shL, shR]) mesh(merge([box(0.13, 0.62, 0.14, 'cloth', { y: -0.3 }, rag), box(0.12, 0.14, 0.13, 'plain', { y: -0.66 }, skin)]), mat, sh);
+  for (const sh of [shL, shR]) mesh(merge([box(0.13, 0.62, 0.14, 'fabric', { y: -0.3 }, rag), box(0.12, 0.14, 0.13, 'plain', { y: -0.66 }, skin)]), mat, sh);
   return {
     root,
     animate(c) {
@@ -89,11 +89,11 @@ function shambler(mat: THREE.Material): CreatureVisual {
   };
 }
 
-function gloomwisp(mat: THREE.Material): CreatureVisual {
+function gloomwisp(mat: THREE.Material, tint = 0xffffff): CreatureVisual {
   const root = new THREE.Group();
   const body = pivot(root, 0, 0.5, 0);
   mesh(merge([
-    ico(0.42, 'plain', { detail: 1 }, 0xf0e8e0),
+    ico(0.42, 'plain', { detail: 1 }, mulTint(0xf0e8e0, tint)),
     ico(0.2, 'plain', { z: 0.3, sz: 0.4 }, 0xb02030),
     ico(0.09, 'plain', { z: 0.4, sz: 0.4 }, 0x080808),
     ico(0.04, 'plain', { x: 0.06, y: 0.07, z: 0.45 }, 0xffffff),
@@ -103,7 +103,7 @@ function gloomwisp(mat: THREE.Material): CreatureVisual {
   const tails: THREE.Group[] = [];
   for (let i = 0; i < 3; i++) {
     const p = pivot(body, (i - 1) * 0.16, (i % 2) * 0.1 - 0.05, -0.32);
-    mesh(merge([taper(0.12, 0.7, 0.1, 0.2, 0.2, 'cloth', { y: 0.35, rx: 0 }, 0x6a1a2a)]), mat, p).rotation.x = -Math.PI / 2;
+    mesh(merge([taper(0.12, 0.7, 0.1, 0.2, 0.2, 'fabric', { y: 0.35, rx: 0 }, mulTint(0x6a1a2a, tint))]), mat, p).rotation.x = -Math.PI / 2;
     tails.push(p);
   }
   return {
@@ -115,12 +115,12 @@ function gloomwisp(mat: THREE.Material): CreatureVisual {
   };
 }
 
-function duskwing(mat: THREE.Material): CreatureVisual {
+function duskwing(mat: THREE.Material, tint = 0xffffff): CreatureVisual {
   const root = new THREE.Group();
   const body = pivot(root, 0, 0.35, 0);
   mesh(merge([
-    ico(0.18, 'fur', { sy: 1.15, detail: 1 }),
-    ico(0.13, 'fur', { y: 0.16, z: 0.08 }),
+    ico(0.18, 'fur', { sy: 1.15, detail: 1 }, tint),
+    ico(0.13, 'fur', { y: 0.16, z: 0.08 }, tint),
     cone(0.05, 0.14, 4, 'fur', { x: 0.07, y: 0.3, z: 0.06 }),
     cone(0.05, 0.14, 4, 'fur', { x: -0.07, y: 0.3, z: 0.06 }),
     octa(0.025, 'flame', { x: 0.05, y: 0.19, z: 0.19 }, 0xff3030),
@@ -131,7 +131,7 @@ function duskwing(mat: THREE.Material): CreatureVisual {
   const wing = (side: number) => {
     const p = pivot(body, side * 0.12, 0.05, 0);
     mesh(merge([
-      taper(0.5, 0.02, 0.36, 0.2, 0.4, 'fur', { x: side * 0.25, rz: side * Math.PI / 2 }, 0x9a88a0),
+      taper(0.5, 0.02, 0.36, 0.2, 0.4, 'fur', { x: side * 0.25, rz: side * Math.PI / 2 }, mulTint(0x9a88a0, tint)),
       box(0.5, 0.03, 0.03, 'fur', { x: side * 0.25, y: 0.01, z: 0.15 }),
     ]), mat, p);
     return p;
@@ -147,13 +147,13 @@ function duskwing(mat: THREE.Material): CreatureVisual {
   };
 }
 
-function rockmite(mat: THREE.Material): CreatureVisual {
+function rockmite(mat: THREE.Material, tint = 0xffffff): CreatureVisual {
   const root = new THREE.Group();
   const body = pivot(root, 0, 0.36, 0);
   mesh(merge([
-    ico(0.34, 'chitin', { z: -0.25, sx: 1, sy: 0.7, sz: 1.2, jitter: 0.15, seed: 4 }, 0xb0aab8),
-    ico(0.28, 'chitin', { z: 0.12, sy: 0.72, jitter: 0.15, seed: 5 }, 0xc0bac8),
-    ico(0.2, 'chitin', { y: 0.02, z: 0.42, sy: 0.8 }, 0xa09aa8),
+    ico(0.34, 'chitin', { z: -0.25, sx: 1, sy: 0.7, sz: 1.2, jitter: 0.15, seed: 4 }, mulTint(0xb0aab8, tint)),
+    ico(0.28, 'chitin', { z: 0.12, sy: 0.72, jitter: 0.15, seed: 5 }, mulTint(0xc0bac8, tint)),
+    ico(0.2, 'chitin', { y: 0.02, z: 0.42, sy: 0.8 }, mulTint(0xa09aa8, tint)),
     ico(0.14, 'stone', { x: 0.1, y: 0.22, z: -0.28, jitter: 0.4, seed: 6 }),
     ico(0.12, 'stone', { x: -0.12, y: 0.2, z: -0.05, jitter: 0.4, seed: 8 }),
     cone(0.035, 0.18, 4, 'bone', { x: 0.08, y: -0.05, z: 0.6, rx: Math.PI / 2, rz: -0.3 }),
@@ -196,7 +196,7 @@ function hollowMiner(mat: THREE.Material): CreatureVisual {
     box(0.06, 0.6, 0.06, 'bone', { y: 0.32, z: -0.06 }),
     ...[0, 1, 2, 3].map(i => box(0.4 - i * 0.04, 0.05, 0.24, 'bone', { y: 0.25 + i * 0.1 })),
     box(0.5, 0.08, 0.14, 'bone', { y: 0.62 }),
-    box(0.3, 0.3, 0.02, 'cloth', { x: 0.05, y: 0.3, z: 0.13, rz: 0.1 }, 0x4a3a30),
+    box(0.3, 0.3, 0.02, 'fabric', { x: 0.05, y: 0.3, z: 0.13, rz: 0.1 }, 0x4a3a30),
   ]), mat, torso);
   const head = pivot(torso, 0, 0.68, 0);
   mesh(bone([
@@ -234,14 +234,19 @@ function hollowMiner(mat: THREE.Material): CreatureVisual {
   };
 }
 
-export function buildCreatureVisual(id: string, mat: THREE.Material): CreatureVisual {
+function mulTint(a: number, b: number) {
+  const ca = new THREE.Color(a), cb = new THREE.Color(b);
+  return ca.multiply(cb).getHex();
+}
+
+export function buildCreatureVisual(id: string, mat: THREE.Material, tint = 0xffffff): CreatureVisual {
   switch (id) {
-    case 'glob': return glob(mat, 0xffffff);
+    case 'glob': return glob(mat, tint);
     case 'deep_glob': return glob(mat, 0x80a8ff);
     case 'shambler': return shambler(mat);
-    case 'gloomwisp': return gloomwisp(mat);
-    case 'duskwing': return duskwing(mat);
-    case 'rockmite': return rockmite(mat);
+    case 'gloomwisp': return gloomwisp(mat, tint);
+    case 'duskwing': return duskwing(mat, tint);
+    case 'rockmite': return rockmite(mat, tint);
     case 'hollow_miner': return hollowMiner(mat);
     default: return glob(mat, 0xff80ff);
   }

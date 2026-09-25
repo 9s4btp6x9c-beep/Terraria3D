@@ -7,12 +7,12 @@
 // (mined grass never grows back as floating tufts).
 
 import { SimplexNoise, hash3 } from '../core/noise';
-import type { WorldGenerator } from './generator';
+import { Biome, type WorldGenerator } from './generator';
 import { Mat } from './materials';
 import type { SkyMap } from './skymap';
 import type { TerrainField } from './terrain';
 
-export type TreeKind = 'tall' | 'round' | 'pine';
+export type TreeKind = 'tall' | 'round' | 'pine' | 'cactus' | 'dead';
 
 export interface Tree {
   id: number;
@@ -28,7 +28,7 @@ export interface Tree {
 export interface Tuft { x: number; y: number; z: number; rot: number; scale: number; flower: boolean }
 
 export const TREE_VARIANTS = 4;
-export const TREE_KINDS: TreeKind[] = ['tall', 'round', 'pine'];
+export const TREE_KINDS: TreeKind[] = ['tall', 'round', 'pine', 'cactus', 'dead'];
 export const TUFT_CELL = 8;
 
 export class Vegetation {
@@ -52,19 +52,24 @@ export class Vegetation {
         const s = this.seed;
         const r1 = hash3(gx, gz, 1, s), r2 = hash3(gx, gz, 2, s), r3 = hash3(gx, gz, 3, s);
         const x = (gx + 0.15 + r1 * 0.7) * cell, z = (gz + 0.15 + r2 * 0.7) * cell;
-        const dens = this.forest.fbm2(x / 90, z / 90, 3) * 0.5 + 0.5;
+        const biome = gen.biomeAt(x, z);
+        let dens = this.forest.fbm2(x / 90, z / 90, 3) * 0.5 + 0.5;
+        if (biome === Biome.Desert) dens = 0.28;
+        if (biome === Biome.Snow) dens *= 0.8;
         if (r3 > dens * 1.05 - 0.2) continue;
         if (Math.hypot(x - spawn.x, z - spawn.z) < 5) continue;
         const h = gen.height(x, z);
         if (h < sea + 1.5) continue;
         const surf = gen.surfaceAt(x, z);
-        if (!surf || surf.mat !== Mat.Grass || surf.ny < 0.82 || surf.y < sea + 1.5) continue;
+        const ground = { [Mat.Grass]: true, [Mat.Sand]: biome === Biome.Desert, [Mat.Snow]: biome === Biome.Snow, [Mat.Blightgrass]: true } as Record<number, boolean>;
+        if (!surf || !ground[surf.mat] || surf.ny < 0.82 || surf.y < sea + 1.5) continue;
         const r4 = hash3(gx, gz, 4, s);
-        const kind: TreeKind = surf.y > 100 ? 'pine' : dens > 0.62 ? 'tall' : r4 < 0.5 ? 'round' : 'tall';
-        const height = kind === 'tall' ? 12 + r4 * 8 : kind === 'pine' ? 8 + r4 * 5 : 6 + r4 * 3;
+        const kind: TreeKind = biome === Biome.Desert ? 'cactus' : biome === Biome.Blight ? 'dead'
+          : surf.y > 100 || biome === Biome.Snow ? 'pine' : dens > 0.62 ? 'tall' : r4 < 0.5 ? 'round' : 'tall';
+        const height = { tall: 12 + r4 * 8, pine: 8 + r4 * 5, round: 6 + r4 * 3, cactus: 3 + r4 * 2.5, dead: 7 + r4 * 5 }[kind];
         const tree: Tree = {
           id: id++, x, y: surf.y - 0.3, z, kind, variant: Math.floor(hash3(gx, gz, 5, s) * TREE_VARIANTS),
-          height, radius: kind === 'round' ? 0.45 : 0.35, hp: 5, alive: true,
+          height, radius: kind === 'round' ? 0.45 : kind === 'cactus' ? 0.3 : 0.35, hp: kind === 'cactus' ? 3 : 5, alive: true,
         };
         this.trees.push(tree);
         const key = this.key(x, z, 8);

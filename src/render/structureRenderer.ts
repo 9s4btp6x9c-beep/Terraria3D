@@ -34,8 +34,8 @@ export function pieceGeometry(shape: PieceShape, texture: 'planks' | 'bricks', x
 
 export class StructureRenderer {
   readonly group = new THREE.Group();
-  private mesh: THREE.Mesh | null = null;
-  private version = -1;
+  /** One merged mesh per 32 m region; only edited regions are rebuilt. */
+  private meshes = new Map<number, THREE.Mesh>();
   readonly ghost: THREE.Mesh;
   private ghostMat: THREE.MeshBasicMaterial;
 
@@ -47,21 +47,21 @@ export class StructureRenderer {
   }
 
   update() {
-    if (this.structures.version === this.version) return;
-    this.version = this.structures.version;
-    if (this.mesh) {
-      this.group.remove(this.mesh);
-      this.mesh.geometry.dispose();
-      this.mesh = null;
+    if (this.structures.dirtyRegions.size === 0) return;
+    for (const key of this.structures.dirtyRegions) {
+      const old = this.meshes.get(key);
+      if (old) { this.group.remove(old); old.geometry.dispose(); this.meshes.delete(key); }
+      const pieces: Piece[] = this.structures.inRegion(key);
+      if (pieces.length === 0) continue;
+      const geo = mergeNonIndexed(pieces.map(p => pieceGeometry(p.shape, p.texture, p.x, p.y, p.z, p.rot)));
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, this.material);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.meshes.set(key, mesh);
+      this.group.add(mesh);
     }
-    const pieces: Piece[] = [...this.structures.pieces.values()];
-    if (pieces.length === 0) return;
-    const geo = mergeNonIndexed(pieces.map(p => pieceGeometry(p.shape, p.texture, p.x, p.y, p.z, p.rot)));
-    geo.computeBoundingSphere();
-    this.mesh = new THREE.Mesh(geo, this.material);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
-    this.group.add(this.mesh);
+    this.structures.dirtyRegions.clear();
   }
 
   showGhost(shape: PieceShape | 'blob' | null, pos: { x: number; y: number; z: number; rot: number } | null, valid: boolean, radius = 1) {

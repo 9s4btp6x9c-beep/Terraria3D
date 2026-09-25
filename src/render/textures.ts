@@ -25,6 +25,7 @@ export const EXTRA_LAYERS = {
   lumiteMetal: { style: 'metal', palette: [0x2aa8d8, 0x0e4a74, 0x6ae6ff, 0xd8ffff] },
   flame: { style: 'flame', palette: [0xffb030, 0xe0501a, 0xffe070, 0xfff8d0] },
   cloth: { style: 'cloth', palette: [0xb03a36, 0x6e1e22, 0xd0584a, 0xe8c070] },
+  fabric: { style: 'cloth', palette: [0xe4e0dc, 0xb8b2ae, 0xf4f2f0, 0xcac4c0] },
   gel: { style: 'gel', palette: [0x4ec87a, 0x2a8a50, 0x8af0a8, 0xe0fff0] },
   bone: { style: 'bone', palette: [0xe6dcc0, 0x9a8e74, 0xfff6de, 0x6a604e] },
   chitin: { style: 'chitin', palette: [0x4a4658, 0x1e1c26, 0x6e6a82, 0x9a96b0] },
@@ -32,11 +33,16 @@ export const EXTRA_LAYERS = {
   gold: { style: 'metal', palette: [0xe0b030, 0x8a5e10, 0xffd860, 0xfff4b0] },
   glass: { style: 'gel', palette: [0x9ad8f0, 0x5a9ab8, 0xd8f4ff, 0xffffff] },
   red: { style: 'gel', palette: [0xd83a3a, 0x8a1e22, 0xff7a6a, 0xffd0c8] },
+  emberMetal: { style: 'metal', palette: [0xd0501e, 0x5a1a0a, 0xff8a3a, 0xffe070] },
+  cactus: { style: 'bark', palette: [0x4a8a4a, 0x2a5a30, 0x6aaa5a, 0xd8e8a0] },
+  deadbark: { style: 'bark', palette: [0x5a5058, 0x2a2430, 0x7a7078, 0x1e1a22] },
+  blightleaves: { style: 'blotch', palette: [0x6a3a7a, 0x4a2458, 0x8a52a0, 0xb070c8] },
+  scale: { style: 'chitin', palette: [0x7a8a5a, 0x3a4228, 0x9aaa76, 0xc8d890] },
 } as const satisfies Record<string, { style: Style; palette: readonly number[] }>;
 
 /** Self-illumination per extra layer (flames glow, crystals shimmer). */
 export const EXTRA_EMISSIVE: Partial<Record<keyof typeof EXTRA_LAYERS, number>> = {
-  flame: 1.2, lumiteMetal: 0.35, gel: 0.08,
+  flame: 1.2, lumiteMetal: 0.35, gel: 0.08, emberMetal: 0.4,
 };
 
 export type ExtraLayer = keyof typeof EXTRA_LAYERS;

@@ -36,7 +36,7 @@ async function begin(useSave: boolean) {
   button('Play', resume);
   overlay.onclick = e => { if (e.target === overlay) resume(); };
   document.addEventListener('pointerlockchange', () => {
-    if (!document.pointerLockElement && !game.inventoryOpen) {
+    if (!document.pointerLockElement && !game.menuOpen) {
       overlay.style.display = 'flex';
       status.textContent = 'Paused';
     }

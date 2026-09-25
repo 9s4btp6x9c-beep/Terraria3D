@@ -70,26 +70,59 @@ export function pieceSDF(p: Piece, x: number, y: number, z: number): number {
   return d;
 }
 
+const GRID = 8;
+export const REGION = 32;
+const cellKey = (x: number, z: number) => Math.floor(x / GRID) * 65536 + Math.floor(z / GRID);
+export const regionKey = (x: number, z: number) => Math.floor(x / REGION) * 4096 + Math.floor(z / REGION);
+
 export class Structures {
   readonly pieces = new Map<number, Piece>();
+  private grid = new Map<number, Set<Piece>>();
+  /** Render regions (32 m) touched since the renderer last looked. */
+  readonly dirtyRegions = new Set<number>();
   private nextId = 1;
   version = 0;
+
+  private index(p: Piece, add: boolean) {
+    const k = cellKey(p.x, p.z);
+    let set = this.grid.get(k);
+    if (add) { if (!set) this.grid.set(k, set = new Set()); set.add(p); }
+    else set?.delete(p);
+    this.dirtyRegions.add(regionKey(p.x, p.z));
+  }
 
   add(p: Omit<Piece, 'id' | 'hp'>): Piece {
     const piece: Piece = { ...p, id: this.nextId++, hp: PIECES[p.shape].hp };
     this.pieces.set(piece.id, piece);
+    this.index(piece, true);
     this.version++;
     return piece;
   }
 
   remove(id: number) {
-    if (this.pieces.delete(id)) this.version++;
+    const p = this.pieces.get(id);
+    if (!p) return;
+    this.pieces.delete(id);
+    this.index(p, false);
+    this.version++;
   }
 
   near(x: number, y: number, z: number, r: number): Piece[] {
     const out: Piece[] = [];
-    for (const p of this.pieces.values())
-      if (Math.abs(p.x - x) < r + 3 && Math.abs(p.y - y) < r + 4 && Math.abs(p.z - z) < r + 3) out.push(p);
+    const R = r + 3;
+    for (let gx = Math.floor((x - R) / GRID); gx <= Math.floor((x + R) / GRID); gx++)
+      for (let gz = Math.floor((z - R) / GRID); gz <= Math.floor((z + R) / GRID); gz++) {
+        const set = this.grid.get(gx * 65536 + gz);
+        if (!set) continue;
+        for (const p of set)
+          if (Math.abs(p.x - x) < R && Math.abs(p.y - y) < r + 4 && Math.abs(p.z - z) < R) out.push(p);
+      }
+    return out;
+  }
+
+  inRegion(key: number): Piece[] {
+    const out: Piece[] = [];
+    for (const p of this.pieces.values()) if (regionKey(p.x, p.z) === key) out.push(p);
     return out;
   }
 
@@ -166,8 +199,11 @@ export class Structures {
 
   load(list: Piece[]) {
     this.pieces.clear();
+    this.grid.clear();
     for (const p of list) {
-      this.pieces.set(p.id, { ...p });
+      const piece = { ...p };
+      this.pieces.set(p.id, piece);
+      this.index(piece, true);
       this.nextId = Math.max(this.nextId, p.id + 1);
     }
     this.version++;

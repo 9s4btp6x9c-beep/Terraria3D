@@ -18,6 +18,7 @@ type Layer = ExtraLayer | number;
 /** Terrain-material layers usable by name in models (e.g. dirt blocks). */
 const TERRAIN_LAYERS: Record<string, Mat> = {
   dirt: Mat.Dirt, stone: Mat.Stone, sand: Mat.Sand, clay: Mat.Clay, snow: Mat.Snow, grass: Mat.Grass, deepstone: Mat.Deepstone,
+  sandstone: Mat.Sandstone, ice: Mat.Ice, blightstone: Mat.Blightstone, emberstone: Mat.Emberstone, emberite: Mat.Emberite,
 };
 
 function layerIndex(l: Layer | string): number {
@@ -470,6 +471,8 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'mushroom': g = mushroom(); break;
     case 'coin': g = coin(); break;
     case 'wing': g = wing(); break;
+    case 'scale': g = merge([taper(0.26, 0.04, 0.3, 0.3, 1, 'scale', { y: 0.03, rx: -0.2 }), taper(0.2, 0.04, 0.24, 0.3, 1, 'scale', { y: 0.06, z: -0.05, rx: -0.2 }, 0xd8e8b0)]); break;
+    case 'bait': g = merge([ico(0.1, 'red', { y: 0.1, detail: 1, jitter: 0.2, seed: 4 }), ico(0.07, 'gel', { x: 0.08, y: 0.07, jitter: 0.3, seed: 5 }), octa(0.04, 'lumiteMetal', { x: -0.06, y: 0.16 }), box(0.012, 0.15, 0.012, 'cloth', { y: 0.24 }, 0xd0c090)]); break;
     case 'armor': g = armor(spec.slot, spec.layer); break;
     case 'boots': g = boots(spec.layer); break;
     case 'jar': g = jar(spec.layer); break;

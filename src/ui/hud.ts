@@ -15,6 +15,8 @@ export class Hud {
   private prompt = $('#prompt');
   private vitals = $('#vitals');
   private flash = $('#flash');
+  private bossbar = $('#bossbar');
+  private bossKey = '';
   debugVisible = false;
   modeLabel = '';
   private lastVitals = '';
@@ -66,6 +68,14 @@ export class Hud {
     }
     this.vitals.innerHTML = `<div class="hp-label">Life ${Math.ceil(hp)}/${maxHp}${defense ? ` · <span class="def">🛡 ${defense}</span>` : ''}</div>` +
       `<div class="hearts">${hearts.join('')}</div>` + (maxMana > 0 ? `<div class="stars">${stars.join('')}</div>` : '');
+  }
+
+  setBoss(name: string | null, hp = 0, max = 1) {
+    const key = name ? `${name}${Math.ceil(hp)}` : '';
+    if (key === this.bossKey) return;
+    this.bossKey = key;
+    this.bossbar.style.display = name ? 'block' : 'none';
+    if (name) this.bossbar.innerHTML = `<div class="name">${name}</div><div class="bar"><div style="width:${Math.max(0, (hp / max) * 100).toFixed(1)}%"></div></div>`;
   }
 
   damageFlash(strength = 1) {

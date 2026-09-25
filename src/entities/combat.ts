@@ -9,6 +9,7 @@ import { type CreatureVisual, buildCreatureVisual } from '../render/creatureMode
 import { itemModel, parts } from '../render/models';
 import type { WorldCollision } from '../world/collision';
 import type { TerrainField } from '../world/terrain';
+import { Deepwyrm } from './boss';
 import { CREATURES, Creature, type CreatureDef, type SpawnEnv, think } from './creatures';
 
 export interface CombatHooks {
@@ -22,12 +23,19 @@ export interface CombatHooks {
   sound(name: 'hit' | 'die' | 'splat' | 'explode' | 'bow' | 'magic' | 'swing', x: number, y: number, z: number): void;
   /** Carve terrain for explosions; returns nothing (drops handled by the game). */
   blast(x: number, y: number, z: number, r: number): void;
+  /** Carve terrain without explosion effects (boss tunnels, drilling bolts). */
+  carve(x: number, y: number, z: number, r: number, drops: boolean): void;
+  bossDefeated(b: Deepwyrm): void;
   flash(x: number, y: number, z: number, color: number, range: number, life: number): void;
   shake(amount: number): void;
   killed(c: Creature): void;
   /** Environment probe for spawning. */
   skyVisibility(x: number, y: number, z: number): number;
   isNight(): boolean;
+  /** Biome id at a column (0 forest, 1 desert, 2 snow, 3 blight). */
+  biomeAt(x: number, z: number): number;
+  /** Height below which the Ember Depths begin. */
+  emberY: number;
   /** Surface height from the (exact, loaded) sky map at x,z. */
   surfaceTop(x: number, z: number): number;
   seaLevel: number;
@@ -36,7 +44,7 @@ export interface CombatHooks {
   safeZone(x: number, y: number, z: number): boolean;
 }
 
-type ProjKind = 'arrow' | 'bolt' | 'bomb' | 'rock';
+type ProjKind = 'arrow' | 'bolt' | 'bomb' | 'rock' | 'drill';
 
 interface Projectile {
   kind: ProjKind;
@@ -51,6 +59,9 @@ interface Projectile {
   fuse: number;
   blast: number;
   mesh: THREE.Object3D;
+  /** Creatures already hit (piercing projectiles hit each target once). */
+  hit: Set<number>;
+  bossCd: number;
 }
 
 const CAPS = { day: 5, night: 10, cave: 8 };
@@ -67,6 +78,9 @@ export class Combat {
   kills = 0;
   /** Extra spawn-rate multiplier (events such as the Blood Moon). */
   spawnBoost = 1;
+  boss: Deepwyrm | null = null;
+  private drillGeo = parts.merge([parts.cone(0.14, 0.6, 5, 'bone', { y: 0.1 }), parts.octa(0.08, 'flame', { y: -0.2 }, 0xd0ff90)]);
+  private drillCarve = 0;
   private boltGeo = parts.merge([parts.octa(0.12, 'lumiteMetal', { sy: 1.6 }), parts.octa(0.07, 'flame', {}, 0xd0ffff)]);
   private rockGeo = parts.merge([parts.ico(0.16, 'stone', { jitter: 0.4, seed: 9 })]);
 
@@ -77,7 +91,7 @@ export class Combat {
   spawn(def: CreatureDef, x: number, y: number, z: number): Creature {
     const c = new Creature(def, x, y, z);
     const mat = this.hooks.creatureMaterial();
-    const v = buildCreatureVisual(def.id, mat);
+    const v = buildCreatureVisual(def.model ?? def.id, mat, def.tint);
     this.group.add(v.root);
     this.visuals.set(c.uid, { v, mat });
     this.creatures.push(c);
@@ -116,11 +130,13 @@ export class Combat {
         if (!floor) continue;
         y = floor.y + 0.3;
         if (h.skyVisibility(x, y + 1, z) > 0.3) continue;
-        env = y < 45 ? 'deep' : 'cave';
+        env = y < h.emberY + 6 ? 'depths' : y < 45 ? 'deep' : 'cave';
       }
       if (h.safeZone(x, y, z)) continue;
+      const biome = h.biomeAt(x, z);
       const options = Object.values(CREATURES).filter(c => c.spawn && (c.spawn.env === env || (env === 'deep' && c.spawn.env === 'cave')) &&
-        (c.spawn.time === 'any' || (c.spawn.time === 'night') === night));
+        (c.spawn.time === 'any' || (c.spawn.time === 'night') === night) &&
+        (!c.spawn.biomes || env !== 'surface' || c.spawn.biomes.includes(biome)));
       if (!options.length) return;
       const total = options.reduce((s, c) => s + c.spawn!.weight, 0);
       let r = Math.random() * total;
@@ -143,6 +159,39 @@ export class Combat {
     this.hooks.particles(c.cx, c.cy, c.cz, 0, 0.6, 0, c.def.color, 6, 3);
     this.hooks.sound(c.def.id.includes('glob') ? 'splat' : 'hit', c.cx, c.cy, c.cz);
     if (c.hp <= 0) this.kill(c);
+  }
+
+  summonBoss(x: number, y: number, z: number) {
+    if (this.boss) return this.boss;
+    this.boss = new Deepwyrm(x, y, z, this.hooks.creatureMaterial());
+    this.group.add(this.boss.group);
+    return this.boss;
+  }
+
+  private hitBoss(raw: number, x: number, y: number, z: number) {
+    const b = this.boss;
+    if (!b || !b.alive) return;
+    const crit = Math.random() < 0.04;
+    const dmg = Math.max(1, Math.round((raw * (0.9 + Math.random() * 0.2) - b.defense * 0.5) * (crit ? 2 : 1)));
+    b.hp -= dmg;
+    b.hitFlash = 1;
+    this.hooks.damageNumber(x, y + 1.5, z, String(dmg), crit ? '#ff9a3a' : '#ffe0a0');
+    this.hooks.particles(x, y, z, 0, 0.6, 0, 0xc8d090, 6, 3);
+    this.hooks.sound('hit', x, y, z);
+    if (b.hp <= 0) {
+      b.alive = false;
+      this.kills++;
+      for (const s of b.seg) this.hooks.particles(s.x, s.y, s.z, 0, 1, 0, 0xc8d090, 14, 7);
+      this.hooks.shake(1);
+      this.hooks.sound('explode', b.head.x, b.head.y, b.head.z);
+      const h = b.head;
+      const drops: [string, number][] = [['wyrm_scale', 24 + Math.floor(Math.random() * 12)], ['coin', 150 + Math.floor(Math.random() * 100)], ['healing_potion', 5],
+        [Math.random() < 0.5 ? 'burrowing_claws' : 'wyrmfang_staff', 1]];
+      for (const [id, n] of drops) this.hooks.drop(id, n, h.x, h.y + 1, h.z);
+      this.hooks.bossDefeated(b);
+      this.group.remove(b.group);
+      this.boss = null;
+    }
   }
 
   private kill(c: Creature) {
@@ -180,6 +229,13 @@ export class Combat {
       this.applyHit(c, damage, knockback, eye.x, eye.z);
       hits++;
     }
+    if (this.boss) {
+      const t = this.boss.rayHit(eye, dir, reach + 1);
+      if (t !== null) {
+        this.hitBoss(damage, eye.x + dir.x * t, eye.y + dir.y * t, eye.z + dir.z * t);
+        hits++;
+      }
+    }
     return hits;
   }
 
@@ -194,6 +250,8 @@ export class Combat {
       const r = Math.max(c.def.radius, c.def.height / 2) + 0.15;
       if (px * px + py * py + pz * pz < r * r && (best === null || t < best)) best = t;
     }
+    const bt = this.boss?.rayHit(o, d, reach);
+    if (bt !== undefined && bt !== null && (best === null || bt < best)) best = bt;
     return best;
   }
 
@@ -202,13 +260,14 @@ export class Combat {
     if (kind === 'arrow') mesh = new THREE.Mesh(itemModel(item('wooden_arrow')), this.hooks.projectileMaterial);
     else if (kind === 'bomb') mesh = new THREE.Mesh(itemModel(item('bomb')), this.hooks.projectileMaterial);
     else if (kind === 'bolt') mesh = new THREE.Mesh(this.boltGeo, this.hooks.projectileMaterial);
+    else if (kind === 'drill') mesh = new THREE.Mesh(this.drillGeo, this.hooks.projectileMaterial);
     else mesh = new THREE.Mesh(this.rockGeo, this.hooks.projectileMaterial);
     mesh.castShadow = kind !== 'bolt';
     this.group.add(mesh);
     const g = kind === 'arrow' ? 9 : kind === 'bomb' ? 20 : kind === 'rock' ? 12 : 0;
     this.projectiles.push({
       kind, x, y, z, vx: dx * speed, vy: dy * speed + (kind === 'bomb' ? 3 : 0), vz: dz * speed, gravity: g, damage, knockback,
-      enemy: kind === 'rock', life: kind === 'bomb' ? 10 : 5, stuck: false, fuse: 2.2, blast, mesh,
+      enemy: kind === 'rock', life: kind === 'bomb' ? 10 : kind === 'drill' ? 1.4 : 5, stuck: false, fuse: 2.2, blast, mesh, hit: new Set(), bossCd: 0,
     });
   }
 
@@ -223,6 +282,7 @@ export class Combat {
       const d = Math.hypot(c.cx - x, c.cy - y, c.cz - z);
       if (d < r + 1.5) this.applyHit(c, damage * (1 - d / (r + 2)), 12, x, z);
     }
+    if (this.boss && this.boss.hitTest(x, y, z, r + 1) >= 0) this.hitBoss(damage, x, y, z);
     const pd = Math.hypot(px - x, py + 0.9 - y, pz - z);
     if (pd < r + 1) this.hooks.hurtPlayer(Math.round(damage * 0.5 * (1 - pd / (r + 2))), x, z, 10);
     this.hooks.shake(Math.max(0, 1 - pd / 30) * 0.8);
@@ -272,6 +332,30 @@ export class Combat {
       }
     }
 
+    // Boss.
+    const b = this.boss;
+    if (b) {
+      if (Math.hypot(b.head.x - px, b.head.z - pz) > 140) b.leaving = true;
+      b.update({
+        px, py, pz, dt,
+        underground: (x, y, z) => y < this.hooks.surfaceTop(x, z) - 0.3,
+        carve: (x, y, z, r) => this.hooks.carve(x, y, z, r, false),
+        erupt: (x, y, z) => {
+          this.hooks.particles(x, y, z, 0, 1, 0, 0x8a6a4a, 26, 8);
+          this.hooks.particles(x, y, z, 0, 1, 0, 0x9a98a2, 18, 6);
+          this.hooks.sound('explode', x, y, z);
+          this.hooks.shake(Math.max(0, 0.9 - Math.hypot(x - px, z - pz) / 40));
+        },
+        spit: (x, y, z, tx, ty, tz) => {
+          const dx = tx - x, dy = ty - y, dz = tz - z, l = Math.hypot(dx, dy, dz) || 1;
+          for (let k = -1; k <= 1; k++) this.fire('rock', x, y, z, dx / l + k * 0.12, dy / l + 0.15, dz / l - k * 0.12, 22, 20, 7);
+        },
+        hurtPlayer: (d, fx, fz, kb) => this.hooks.hurtPlayer(d, fx, fz, kb),
+        worldHeight: this.field.sy,
+      });
+      if (b.leaving && b.head.y < 8) { this.group.remove(b.group); this.boss = null; }
+    }
+
     // Projectiles.
     const n = this.n;
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -301,7 +385,14 @@ export class Combat {
           p.x += p.vx * dt / steps; p.y += p.vy * dt / steps; p.z += p.vz * dt / steps;
           this.world.prepare(p.x, p.y, p.z, 2);
           const wd = this.world.distance(p.x, p.y, p.z, n);
-          if (wd < 0.08) {
+          if (p.kind === 'drill') {
+            // Boring fang: tunnels through terrain instead of stopping.
+            if (wd < 0.3) {
+              this.drillCarve -= dt / steps;
+              if (this.drillCarve <= 0) { this.drillCarve = 0.07; this.hooks.carve(p.x, p.y, p.z, 1.1, true); }
+              if (Math.random() < 0.3) this.hooks.particles(p.x, p.y, p.z, -p.vx * 0.05, 0.5, -p.vz * 0.05, 0xa09080, 2, 2);
+            }
+          } else if (wd < 0.08) {
             if (p.kind === 'bomb') {
               // Bounce.
               p.x += n[0] * (0.1 - wd); p.y += n[1] * (0.1 - wd); p.z += n[2] * (0.1 - wd);
@@ -322,13 +413,20 @@ export class Combat {
               dead = true;
             }
           } else if (p.kind !== 'bomb') {
+            p.bossCd -= dt / steps;
+            if (this.boss && p.bossCd <= 0 && this.boss.hitTest(p.x, p.y, p.z, 0.2) >= 0) {
+              this.hitBoss(p.damage, p.x, p.y, p.z);
+              p.bossCd = 0.25;
+              if (p.kind !== 'drill') { dead = true; break; }
+            }
             for (const c of this.creatures) {
+              if (p.hit.has(c.uid)) continue;
               const r = Math.max(c.def.radius, c.def.height / 2) + 0.2;
               if ((c.cx - p.x) ** 2 + (c.cy - p.y) ** 2 + (c.cz - p.z) ** 2 < r * r) {
+                p.hit.add(c.uid);
                 this.applyHit(c, p.damage, p.knockback, p.x - p.vx, p.z - p.vz);
                 if (p.kind === 'bolt') this.hooks.particles(p.x, p.y, p.z, 0, 1, 0, 0x7af0ff, 12, 4);
-                dead = true;
-                break;
+                if (p.kind !== 'drill') { dead = true; break; }
               }
             }
           }
@@ -351,6 +449,7 @@ export class Combat {
 
   clear() {
     for (const c of [...this.creatures]) this.remove(c);
+    if (this.boss) { this.group.remove(this.boss.group); this.boss = null; }
     for (const p of this.projectiles) this.group.remove(p.mesh);
     this.projectiles = [];
   }

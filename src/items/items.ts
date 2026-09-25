@@ -7,7 +7,7 @@ import { Mat } from '../world/materials';
 export type PieceShape = 'floor' | 'wall' | 'pillar' | 'stairs' | 'roof';
 export type StationId = 'workbench' | 'furnace' | 'anvil' | 'forge';
 export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed';
-export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal';
+export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal' | 'emberMetal' | 'bone';
 
 export interface ToolDef {
   type: 'pickaxe' | 'axe';
@@ -56,7 +56,7 @@ export type ModelSpec =
   | { type: 'pickaxe' | 'axe' | 'sword' | 'bow' | 'staff' | 'hook'; head: MetalLayer }
   | { type: 'ore' | 'bar' | 'crystal' | 'nugget'; layer: string; tint?: number }
   | { type: 'block'; layer: string }
-  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' }
+  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' }
   | { type: 'armor'; slot: ArmorDef['slot']; layer: MetalLayer }
   | { type: 'boots' | 'jar' | 'charm' | 'band'; layer: string }
   | { type: 'furniture'; id: FurnitureId };
@@ -83,6 +83,8 @@ export interface ItemDef {
   description?: string;
 }
 
+// Mining power tiers: 0 copper/iron, 1 iron pickaxe (deepstone, lumite),
+// 2 lumite pickaxe (Ember Depths).
 const T = (id: string, name: string, head: MetalLayer, type: 'pickaxe' | 'axe', tier: number, power: number, speed: number, damage: number, color: string, description: string): ItemDef => ({
   id, name, kind: 'tool', maxStack: 1, color, model: { type, head },
   tool: { type, tier, power, speed, radius: type === 'pickaxe' ? 1.25 + tier * 0.12 : 0, reach: 5 + tier * 0.4, damage },
@@ -91,9 +93,9 @@ const T = (id: string, name: string, head: MetalLayer, type: 'pickaxe' | 'axe', 
 
 const list: ItemDef[] = [
   // ---- tools
-  T('copper_pickaxe', 'Copper Pickaxe', 'copper', 'pickaxe', 0, 1.0, 0.32, 4, '#c0703a', 'Digs dirt, stone, clay and copper.'),
+  T('copper_pickaxe', 'Copper Pickaxe', 'copper', 'pickaxe', 0, 1.0, 0.32, 4, '#c0703a', 'Digs dirt, stone, clay, copper and iron.'),
   T('copper_axe', 'Copper Axe', 'copper', 'axe', 0, 1.0, 0.4, 5, '#c0703a', 'Fells trees for wood.'),
-  T('iron_pickaxe', 'Iron Pickaxe', 'iron', 'pickaxe', 1, 1.5, 0.27, 6, '#d6d0ca', 'Strong enough for iron, deepstone and lumite.'),
+  T('iron_pickaxe', 'Iron Pickaxe', 'iron', 'pickaxe', 1, 1.5, 0.27, 6, '#d6d0ca', 'Strong enough for deepstone and lumite crystals.'),
   T('iron_axe', 'Iron Axe', 'iron', 'axe', 1, 1.6, 0.34, 8, '#d6d0ca', 'Chops faster.'),
   T('lumite_pickaxe', 'Lumite Pickaxe', 'lumiteMetal', 'pickaxe', 2, 2.2, 0.22, 10, '#6ae6ff', 'Hums with light. Digs anything.'),
 
@@ -104,6 +106,8 @@ const list: ItemDef[] = [
   { id: 'lumite_blade', name: 'Lumite Blade', kind: 'weapon', maxStack: 1, color: '#6ae6ff', rarity: 2, model: { type: 'sword', head: 'lumiteMetal' }, weapon: { type: 'melee', damage: 30, speed: 0.34, knockback: 7, reach: 3.4 }, description: 'Leaves a trail of light.' },
   { id: 'wooden_bow', name: 'Wooden Bow', kind: 'weapon', maxStack: 1, color: '#a8744a', model: { type: 'bow', head: 'planks' }, weapon: { type: 'bow', damage: 9, speed: 0.6, knockback: 2, projectileSpeed: 38, ammo: 'wooden_arrow' } },
   { id: 'iron_bow', name: 'Iron Bow', kind: 'weapon', maxStack: 1, color: '#d6d0ca', model: { type: 'bow', head: 'iron' }, weapon: { type: 'bow', damage: 14, speed: 0.5, knockback: 2.5, projectileSpeed: 48, ammo: 'wooden_arrow' } },
+  { id: 'ember_blade', name: 'Ember Blade', kind: 'weapon', maxStack: 1, color: '#ff8a30', rarity: 3, model: { type: 'sword', head: 'emberMetal' }, weapon: { type: 'melee', damage: 44, speed: 0.36, knockback: 8, reach: 3.6 }, description: 'Sets the air ablaze with every swing.' },
+  { id: 'wyrmfang_staff', name: 'Wyrmfang Staff', kind: 'weapon', maxStack: 1, color: '#c8d890', rarity: 3, model: { type: 'staff', head: 'bone' }, weapon: { type: 'magic', damage: 26, speed: 0.4, knockback: 4, projectileSpeed: 26, manaCost: 8 }, description: 'Fires a boring fang that tunnels through rock.' },
   { id: 'lumite_staff', name: 'Lumite Staff', kind: 'weapon', maxStack: 1, color: '#6ae6ff', rarity: 2, model: { type: 'staff', head: 'lumiteMetal' }, weapon: { type: 'magic', damage: 22, speed: 0.35, knockback: 3, projectileSpeed: 34, manaCost: 6 }, description: 'Fires seeking bolts of light.' },
   { id: 'wooden_arrow', name: 'Wooden Arrow', kind: 'ammo', maxStack: 999, color: '#c0a070', model: { type: 'arrow' } },
   { id: 'bomb', name: 'Bomb', kind: 'weapon', maxStack: 99, color: '#3a3842', model: { type: 'bomb' }, weapon: { type: 'thrown', damage: 60, speed: 0.6, knockback: 12, projectileSpeed: 16, blast: 3.2 }, description: 'Blasts a crater out of the terrain.' },
@@ -114,6 +118,9 @@ const list: ItemDef[] = [
   { id: 'copper_greaves', name: 'Copper Greaves', kind: 'armor', maxStack: 1, color: '#c0703a', model: { type: 'armor', slot: 'legs', layer: 'copper' }, armor: { slot: 'legs', defense: 2, set: 'copper' } },
   { id: 'iron_helmet', name: 'Iron Helmet', kind: 'armor', maxStack: 1, color: '#d6d0ca', model: { type: 'armor', slot: 'head', layer: 'iron' }, armor: { slot: 'head', defense: 3, set: 'iron' } },
   { id: 'iron_chainmail', name: 'Iron Chainmail', kind: 'armor', maxStack: 1, color: '#d6d0ca', model: { type: 'armor', slot: 'body', layer: 'iron' }, armor: { slot: 'body', defense: 5, set: 'iron' } },
+  { id: 'ember_helmet', name: 'Ember Helmet', kind: 'armor', maxStack: 1, color: '#ff8a30', rarity: 2, model: { type: 'armor', slot: 'head', layer: 'emberMetal' }, armor: { slot: 'head', defense: 6, set: 'ember' } },
+  { id: 'ember_plate', name: 'Ember Plate', kind: 'armor', maxStack: 1, color: '#ff8a30', rarity: 2, model: { type: 'armor', slot: 'body', layer: 'emberMetal' }, armor: { slot: 'body', defense: 8, set: 'ember' } },
+  { id: 'ember_greaves', name: 'Ember Greaves', kind: 'armor', maxStack: 1, color: '#ff8a30', rarity: 2, model: { type: 'armor', slot: 'legs', layer: 'emberMetal' }, armor: { slot: 'legs', defense: 6, set: 'ember' } },
   { id: 'iron_greaves', name: 'Iron Greaves', kind: 'armor', maxStack: 1, color: '#d6d0ca', model: { type: 'armor', slot: 'legs', layer: 'iron' }, armor: { slot: 'legs', defense: 3, set: 'iron' } },
 
   // ---- accessories
@@ -122,6 +129,7 @@ const list: ItemDef[] = [
   { id: 'feather_charm', name: 'Feather Charm', kind: 'accessory', maxStack: 1, color: '#fff6de', rarity: 1, model: { type: 'charm', layer: 'bone' }, accessory: { noFallDamage: true }, description: 'Negates fall damage.' },
   { id: 'miners_band', name: "Delver's Band", kind: 'accessory', maxStack: 1, color: '#e0b030', rarity: 1, model: { type: 'band', layer: 'gold' }, accessory: { miningSpeed: 0.35 }, description: '+35% mining speed.' },
   { id: 'glow_charm', name: 'Glowmoth Charm', kind: 'accessory', maxStack: 1, color: '#7af0ff', rarity: 1, model: { type: 'charm', layer: 'lumiteMetal' }, accessory: { lightRadius: 1 }, description: 'Your lantern shines much further.' },
+  { id: 'burrowing_claws', name: 'Burrowing Claws', kind: 'accessory', maxStack: 1, color: '#c8d890', rarity: 3, model: { type: 'charm', layer: 'bone' }, accessory: { miningSpeed: 0.6 }, description: 'From the Deepwyrm. +60% mining speed.' },
   { id: 'grappling_hook', name: 'Grappling Hook', kind: 'accessory', maxStack: 1, color: '#9a98a6', rarity: 1, model: { type: 'hook', head: 'iron' }, accessory: { hook: { range: 26, speed: 22 } }, description: 'Press F to fire. Latches onto any surface.' },
   { id: 'barbed_hook', name: 'Barbed Hook', kind: 'material', maxStack: 99, color: '#9a98a6', model: { type: 'hook', head: 'metal' }, description: 'Dropped by Hollow Miners. Craft into a grappling hook.' },
 
@@ -131,6 +139,14 @@ const list: ItemDef[] = [
   { id: 'sand', name: 'Sand', kind: 'material', maxStack: 999, color: '#dcc88c', model: { type: 'block', layer: 'sand' }, terrain: Mat.Sand },
   { id: 'clay', name: 'Clay', kind: 'material', maxStack: 999, color: '#a0604a', model: { type: 'block', layer: 'clay' }, terrain: Mat.Clay },
   { id: 'snow', name: 'Snow', kind: 'material', maxStack: 999, color: '#eaf2f8', model: { type: 'block', layer: 'snow' }, terrain: Mat.Snow },
+  { id: 'sandstone', name: 'Sandstone', kind: 'material', maxStack: 999, color: '#d4b070', model: { type: 'block', layer: 'sandstone' }, terrain: Mat.Sandstone },
+  { id: 'ice', name: 'Ice', kind: 'material', maxStack: 999, color: '#a8d8f0', model: { type: 'block', layer: 'ice' }, terrain: Mat.Ice },
+  { id: 'blightstone', name: 'Blightstone', kind: 'material', maxStack: 999, color: '#5a4a6e', model: { type: 'block', layer: 'blightstone' }, terrain: Mat.Blightstone },
+  { id: 'emberstone', name: 'Emberstone', kind: 'material', maxStack: 999, color: '#9a3a22', model: { type: 'block', layer: 'emberstone' }, terrain: Mat.Emberstone, description: 'Warm to the touch.' },
+  { id: 'emberite', name: 'Emberite Ore', kind: 'material', maxStack: 999, color: '#ff8a30', rarity: 2, model: { type: 'ore', layer: 'emberite' }, description: 'Found only in the Ember Depths.' },
+  { id: 'ember_bar', name: 'Ember Bar', kind: 'material', maxStack: 999, color: '#ff8a30', rarity: 2, model: { type: 'bar', layer: 'emberMetal' } },
+  { id: 'wyrm_scale', name: 'Wyrm Scale', kind: 'material', maxStack: 999, color: '#8a9a6a', rarity: 2, model: { type: 'scale' }, description: 'Shed by the Deepwyrm. Hard as stone.' },
+  { id: 'wyrm_bait', name: 'Wyrm Bait', kind: 'consumable', maxStack: 20, color: '#b04a6a', rarity: 1, model: { type: 'bait' }, description: 'Summons the Deepwyrm. Use at night or underground.' },
   { id: 'wood', name: 'Wood', kind: 'material', maxStack: 999, color: '#a8744a', model: { type: 'log' }, build: 'planks' },
   { id: 'copper_ore', name: 'Copper Ore', kind: 'material', maxStack: 999, color: '#e0874a', model: { type: 'ore', layer: 'copper' } },
   { id: 'iron_ore', name: 'Iron Ore', kind: 'material', maxStack: 999, color: '#c8b4a6', model: { type: 'ore', layer: 'iron' } },

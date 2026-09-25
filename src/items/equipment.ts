@@ -76,6 +76,7 @@ export class Equipment {
       st.setBonus = set;
       if (set === 'copper') { st.defense += 2; st.miningSpeed += 0.15; }
       if (set === 'iron') { st.defense += 3; st.moveSpeed += 0.05; }
+      if (set === 'ember') { st.defense += 5; st.regen += 1.5; st.lightBoost += 0.5; }
     }
     return st;
   }

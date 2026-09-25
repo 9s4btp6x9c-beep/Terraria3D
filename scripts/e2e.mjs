@@ -220,6 +220,7 @@ try {
     for (const [id, n] of [['wood', 80], ['stone', 60], ['gel', 20], ['iron_bar', 12], ['copper_bar', 6], ['sand', 6]]) g.inventory.add(id, n);
   });
   await settle();
+  const furnBefore = await page.evaluate(() => __game.furniture.items.size);
   const crafted = await page.evaluate(() => {
     const g = __game;
     const ok = g.craftItem('workbench');
@@ -233,7 +234,7 @@ try {
     const g = __game;
     return { n: g.furniture.items.size, st: [...g.furniture.stationsNear(g.player.x, g.player.y + 1, g.player.z)] };
   });
-  check('place the workbench (station nearby)', benchPlaced.n === 1 && benchPlaced.st.includes('workbench'), JSON.stringify(benchPlaced));
+  check('place the workbench (station nearby)', benchPlaced.n === furnBefore + 1 && benchPlaced.st.includes('workbench'), JSON.stringify(benchPlaced));
   const more = await page.evaluate(() => {
     const g = __game;
     const r = ['furnace', 'chair', 'table', 'chest', 'anvil', 'wooden_bow', 'wooden_arrow', 'bomb', 'door', 'bed'].map(id => [id, g.craftItem(id)]);
@@ -258,14 +259,15 @@ try {
   await placeAt('torch', 1.2, -0.7);
   await placeAt('chair', 1.0);
   const furnCount = await page.evaluate(() => __game.furniture.items.size);
-  check('furniture placed (workbench, furnace, anvil, chest, torch, chair)', furnCount >= 5, `${furnCount} pieces`);
-  await page.evaluate(() => {
+  check('furniture placed (workbench, furnace, anvil, chest, torch, chair)', furnCount >= furnBefore + 5, `${furnCount - furnBefore} pieces`);
+  const mine = await page.evaluate(n => [...__game.furniture.items.values()].slice(n).map(f => f.uid), furnBefore);
+  await page.evaluate(ids => {
     const g = __game;
-    const f = [...g.furniture.items.values()];
+    const f = [...g.furniture.items.values()].filter(x => ids.includes(x.uid));
     const cx = f.reduce((s, a) => s + a.x, 0) / f.length, cz = f.reduce((s, a) => s + a.z, 0) / f.length;
     g.player.teleport(cx + 4, g.player.y + 0.5, cz + 4);
     g.player.yaw = Math.atan2(-(cx - g.player.x), -(cz - g.player.z)); g.player.pitch = -0.35;
-  });
+  }, mine);
   await shot('11-furniture');
   await page.evaluate(() => { __game.toggleInventory(true); });
   await shot('12-inventory');
@@ -309,14 +311,157 @@ try {
   // Night with torches.
   await page.evaluate(() => { const g = __game; g.combat.clear(); g.atmosphere.timeOfDay = 0.93; });
   await page.evaluate(() => __game.simulate(0.5));
-  await page.evaluate(() => {
+  await page.evaluate(ids => {
     const g = __game;
-    const f = [...g.furniture.items.values()];
+    const f = [...g.furniture.items.values()].filter(x => ids.includes(x.uid));
     const cx = f.reduce((s, a) => s + a.x, 0) / f.length, cz = f.reduce((s, a) => s + a.z, 0) / f.length;
     g.player.yaw = Math.atan2(-(cx - g.player.x), -(cz - g.player.z)); g.player.pitch = -0.3;
-  });
+  }, mine);
   await shot('14-night');
   await page.evaluate(() => { __game.atmosphere.timeOfDay = 0.4; __game.simulate(0.2); });
+
+  // ------------------------------------------------------------ housing / NPC
+  const house = await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    // Build a 3x2-cell wooden house on a flat patch near spawn (pieces + furniture).
+    const x0 = Math.floor((s.x + 8) / 2) * 2, z0 = Math.floor((s.z + 8) / 2) * 2;
+    const y = Math.floor((g.sky.raw[Math.floor(x0 + 3) + Math.floor(z0 + 2) * g.sky.w] + 1.2) / 0.25) * 0.25;
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
+      g.structures.add({ shape: 'floor', texture: 'planks', x: x0 + i * 2 + 1, y, z: z0 + j * 2 + 1, rot: 0 });
+      g.structures.add({ shape: 'floor', texture: 'planks', x: x0 + i * 2 + 1, y: y + 2.75, z: z0 + j * 2 + 1, rot: 0 });
+    }
+    for (let i = 0; i < 3; i++) {
+      if (i !== 1) g.structures.add({ shape: 'wall', texture: 'planks', x: x0 + i * 2 + 1, y: y + 0.25, z: z0, rot: 0 });
+      g.structures.add({ shape: 'wall', texture: 'planks', x: x0 + i * 2 + 1, y: y + 0.25, z: z0 + 4, rot: 0 });
+    }
+    for (let j = 0; j < 2; j++) {
+      g.structures.add({ shape: 'wall', texture: 'planks', x: x0, y: y + 0.25, z: z0 + j * 2 + 1, rot: 1 });
+      g.structures.add({ shape: 'wall', texture: 'planks', x: x0 + 6, y: y + 0.25, z: z0 + j * 2 + 1, rot: 1 });
+    }
+    g.furniture.add({ type: 'door', x: x0 + 3, y: y + 0.25, z: z0, rot: 0 });
+    g.furniture.add({ type: 'torch', x: x0 + 0.3, y: y + 1.5, z: z0 + 2, rot: 0, wall: [1, 0, 0] });
+    g.furniture.add({ type: 'chair', x: x0 + 4.6, y: y + 0.25, z: z0 + 3, rot: 2 });
+    g.furniture.add({ type: 'table', x: x0 + 3, y: y + 0.25, z: z0 + 3, rot: 0 });
+    g.player.teleport(x0 + 1.5, y + 0.4, z0 + 1.5);
+    g.player.yaw = -2.4; g.player.pitch = -0.1;
+    return { x0, z0, y };
+  });
+  await settle();
+  const housing = await page.evaluate(() => { const g = __game; return g.town.tryRegister(g.player.x, g.player.y, g.player.z, true); });
+  check('a built room is recognised as valid housing', housing.ok, housing.ok ? `${housing.volume.toFixed(0)} m³` : housing.missing.join(', '));
+  await page.evaluate(() => { __game.simulate(11); });
+  const npcs = await page.evaluate(() => __game.town.npcs.map(n => n.def.name));
+  check('an NPC moves into the house', npcs.length >= 1, npcs.join(', '));
+  await page.evaluate(() => {
+    const g = __game, n = g.town.npcs[0];
+    if (n) { g.player.yaw = Math.atan2(-(n.body.x - g.player.x), -(n.body.z - g.player.z)); g.player.pitch = -0.15; }
+  });
+  await shot('15-house-npc');
+
+  // Grappling hook.
+  const grapple = await page.evaluate(() => {
+    const g = __game;
+    g.equipment.set(3, { id: 'grappling_hook', count: 1 });
+    g.stats = g.equipment.stats();
+    const s = g.gen.spawn;
+    g.player.teleport(s.x, s.y + 0.5, s.z);
+    g.player.pitch = -0.6;
+    g.simulate(0.3);
+    const before = { x: g.player.x, y: g.player.y, z: g.player.z };
+    g.grapple.fire(g.camera.position.x, g.camera.position.y, g.camera.position.z, ...(() => { const d = new g.camera.position.constructor(0, 0, -1).applyQuaternion(g.camera.quaternion); return [d.x, d.y, d.z]; })());
+    for (let i = 0; i < 20 && g.grapple.state === 'flying'; i++) g.simulate(1 / 30);
+    const state = g.grapple.state;
+    g.simulate(0.6);
+    return { state, moved: Math.hypot(g.player.x - before.x, g.player.z - before.z) };
+  });
+  check('grappling hook latches and pulls the player', grapple.state === 'attached' && grapple.moved > 0.5, JSON.stringify(grapple));
+  await page.evaluate(() => __game.grapple.release());
+
+  // Biomes, depths and structures (visual review).
+  const biomeSpot = async (b, name) => {
+    const ok = await page.evaluate(b => {
+      const g = __game, s = g.gen.spawn;
+      let best = null, bd = Infinity;
+      for (let z = 40; z < g.field.sz - 40; z += 8) for (let x = 40; x < g.field.sx - 40; x += 8) {
+        if (g.gen.biomeAt(x, z) !== b || g.gen.height(x, z) < g.field.cfg.seaLevel + 4) continue;
+        let pure = true;
+        for (const [ox, oz] of [[16, 0], [-16, 0], [0, 16], [0, -16]]) if (g.gen.biomeAt(x + ox, z + oz) !== b) pure = false;
+        if (!pure) continue;
+        const sf = g.gen.surfaceAt(x, z);
+        if (!sf || sf.ny < 0.85 || sf.y < g.gen.height(x, z) - 3) continue;
+        const d = Math.hypot(x - s.x, z - s.z);
+        if (d < bd) { bd = d; best = [x, z]; }
+      }
+      if (!best) return false;
+      const surf = g.gen.surfaceAt(best[0], best[1]);
+      if (surf && (surf.ny < 0.85 || surf.y < g.gen.height(best[0], best[1]) - 3)) { /* avoid chasms/cliffs */ }
+      g.player.teleport(best[0], (surf ? surf.y : g.gen.height(best[0], best[1])) + 1, best[1]);
+      g.player.pitch = -0.2;
+      return true;
+    }, b);
+    if (ok) await shot(name);
+    return ok;
+  };
+  const biomes = [await biomeSpot(1, '16-desert'), await biomeSpot(2, '17-snow'), await biomeSpot(3, '18-blight')];
+  check('world has desert, snow and blight biomes', biomes.every(Boolean), JSON.stringify(biomes));
+  const depths = await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    for (let r = 0; r < 120; r += 4) for (let a = 0; a < 6.28; a += 0.5) {
+      const x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r;
+      for (let y = 8; y < 19; y++) {
+        if (g.gen.densityAt(x, y, z) < -1.5 && g.gen.densityAt(x, y + 1.8, z) < -1 && g.gen.densityAt(x, y - 1.2, z) > 0) {
+          g.player.teleport(x, y - 0.6, z); g.player.pitch = -0.1; return [x, y, z];
+        }
+      }
+    }
+    return null;
+  });
+  if (depths) await shot('19-depths');
+  check('found an Ember Depths cavern', !!depths, JSON.stringify(depths));
+  const cabin = await page.evaluate(() => {
+    const g = __game, c = g.gen.cabins[0];
+    if (!c) return null;
+    g.player.teleport(c.x + 1.2, c.y + 0.4, c.z + 1.2);
+    g.player.yaw = -2.4; g.player.pitch = -0.15;
+    return { chests: [...g.furniture.items.values()].filter(f => f.type === 'chest' && f.chest.some(Boolean)).length };
+  });
+  if (cabin) await shot('20-cabin');
+  check('cabins with loot chests were generated', cabin && cabin.chests >= 3, JSON.stringify(cabin));
+
+  // Boss: summon the Deepwyrm at night and let it erupt.
+  const bossInfo = await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    g.player.teleport(s.x, s.y + 0.5, s.z);
+    g.atmosphere.timeOfDay = 0.9;
+    g.vitals.hp = g.vitals.maxHp = 400;
+    g.inventory.add('wyrm_bait', 1);
+    const ok = g.consume ? true : true;
+    const b = g.combat.summonBoss(s.x + 14, s.y - 20, s.z + 14);
+    return { segs: b.seg.length, hp: b.hp };
+  });
+  await page.evaluate(() => __game.simulate(0.2));
+  await settle();
+  let erupted = false;
+  for (let i = 0; i < 20 && !erupted; i++) {
+    const st = await page.evaluate(() => { const g = __game; g.simulate(0.5); const b = g.combat.boss; return b ? { y: b.head.y, top: g.sky.raw[Math.floor(b.head.x) + Math.floor(b.head.z) * g.sky.w], edits: g.log.edits.length } : null; });
+    if (st && st.y > st.top + 2) erupted = true;
+  }
+  await page.evaluate(() => {
+    const g = __game, b = g.combat.boss;
+    if (b) { g.player.yaw = Math.atan2(-(b.head.x - g.player.x), -(b.head.z - g.player.z)); g.player.pitch = Math.atan2(b.head.y - g.player.y - 1.6, Math.hypot(b.head.x - g.player.x, b.head.z - g.player.z)) * 0.8; }
+  });
+  await shot('21-boss');
+  const bossStats = await page.evaluate(() => ({ alive: !!__game.combat.boss, edits: __game.log.edits.length }));
+  check('Deepwyrm burrows (carves tunnels) and erupts from the ground', erupted && bossStats.edits > 20, `erupted ${erupted}, edits ${bossStats.edits}`);
+  const kill = await page.evaluate(() => {
+    const g = __game, b = g.combat.boss;
+    if (!b) return false;
+    g.combat.explode(b.head.x, b.head.y, b.head.z, 1, 99999, g.player.x, g.player.y + 500, g.player.z);
+    g.simulate(0.1);
+    return { gone: !g.combat.boss, flag: g.progress.bossDefeated, scales: g.pickups.serialize().filter(p => p.id === 'wyrm_scale').length };
+  });
+  check('defeating the Deepwyrm drops loot and sets progression', kill && kill.gone && kill.flag && kill.scales > 0, JSON.stringify(kill));
+  await page.evaluate(() => { const g = __game; g.atmosphere.timeOfDay = 0.4; g.vitals.hp = g.vitals.maxHp = 100; g.simulate(0.2); });
 
   // Far view over the world with the debug readout (LOD + draw stats).
   await page.evaluate(() => {

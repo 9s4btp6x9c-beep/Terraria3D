@@ -17,8 +17,8 @@ function poseFor(def: ItemDef): Pose {
 }
 
 function armGeometry() {
-  const sleeve = part(new THREE.BoxGeometry(0.085, 0.085, 0.42).translate(0, 0, 0.23), 'cloth', 0x46548a);
-  const cuff = part(new THREE.BoxGeometry(0.095, 0.095, 0.04).translate(0, 0, 0.03), 'cloth', 0xb89a5a);
+  const sleeve = part(new THREE.BoxGeometry(0.085, 0.085, 0.42).translate(0, 0, 0.23), 'fabric', 0x46548a);
+  const cuff = part(new THREE.BoxGeometry(0.095, 0.095, 0.04).translate(0, 0, 0.03), 'fabric', 0xb89a5a);
   const hand = part(new THREE.BoxGeometry(0.075, 0.07, 0.085).translate(0, 0, -0.035), 'plain', 0xd8a07a);
   const thumb = part(new THREE.BoxGeometry(0.028, 0.03, 0.05).translate(-0.042, 0.022, -0.04), 'plain', 0xc88c6a);
   return mergeNonIndexed([sleeve, cuff, hand, thumb]);

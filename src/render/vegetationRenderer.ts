@@ -73,6 +73,45 @@ function buildTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
       parts.push(blob(rand, 0.26 + rand() * 0.08, 0.2, 0.26, Math.cos(a) * 0.18, H * (0.72 + rand() * 0.12), Math.sin(a) * 0.18));
     }
     parts.push(blob(rand, 0.3, 0.24, 0.3, 0, H * 0.92, 0));
+  } else if (kind === 'cactus') {
+    const c = (g: THREE.BufferGeometry) => tagLayer(g, layerOf('cactus'));
+    const col = (r: number, h: number, x: number, y: number, z: number) => {
+      const g = new THREE.CylinderGeometry(r, r * 1.05, h, 7);
+      g.translate(x, y + h / 2, z);
+      return c(g);
+    };
+    parts.push(col(0.1, 0.9, 0, 0, 0));
+    parts.push(c(new THREE.SphereGeometry(0.1, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.9, 0)));
+    const arms = 1 + (variant % 2);
+    for (let i = 0; i < arms; i++) {
+      const side = i === 0 ? 1 : -1, y = 0.35 + rand() * 0.2;
+      parts.push(c(new THREE.CylinderGeometry(0.06, 0.06, 0.18, 6).rotateZ(Math.PI / 2).translate(side * 0.14, y, 0)));
+      parts.push(col(0.065, 0.28 + rand() * 0.1, side * 0.22, y - 0.03, 0));
+      parts.push(c(new THREE.SphereGeometry(0.065, 6, 3, 0, Math.PI * 2, 0, Math.PI / 2).translate(side * 0.22, y + 0.3, 0)));
+    }
+    // A bloom on top.
+    parts.push(tagLayer(new THREE.OctahedronGeometry(0.05, 0).scale(1, 0.6, 1).translate(0.03, 0.99, 0), layerOf('red')));
+  } else if (kind === 'dead') {
+    const bark = (g: THREE.BufferGeometry) => tagLayer(g, layerOf('deadbark'));
+    const t = new THREE.CylinderGeometry(0.02, 0.045, H, 5, 1, true);
+    t.translate(0, H / 2, 0);
+    parts.push(bark(t));
+    for (let i = 0; i < 5; i++) {
+      const a = rand() * Math.PI * 2, y = H * (0.45 + rand() * 0.45), len = 0.12 + rand() * 0.18;
+      const b = new THREE.CylinderGeometry(0.006, 0.014, len, 4, 1, true).translate(0, len / 2, 0);
+      b.rotateZ(-0.9 - rand() * 0.4);
+      b.rotateY(a);
+      b.translate(0, y, 0);
+      parts.push(bark(b));
+      if (rand() < 0.6) {
+        const g = new THREE.IcosahedronGeometry(1, 0);
+        jitter(g, rand, 0.3);
+        g.scale(0.07, 0.05, 0.07);
+        g.translate(Math.cos(a) * len * 0.8, y + len * 0.5, -Math.sin(a) * len * 0.8);
+        g.computeVertexNormals();
+        parts.push(tagLayer(g, layerOf('blightleaves')));
+      }
+    }
   } else {
     parts.push(trunk(0.05, 0.02, H));
     for (let i = 0; i < 4; i++) {
@@ -102,6 +141,8 @@ function buildFarTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
   } else if (kind === 'round') {
     parts.push(trunk(0.07, 0.05, 0.7, 0, 0, 0, 0, 0, 4));
     parts.push(blob(rand, 0.38, 0.28, 0.38, 0, 0.85, 0, 0));
+  } else if (kind === 'cactus' || kind === 'dead') {
+    return buildTree(kind, variant);
   } else {
     parts.push(trunk(0.05, 0.02, 1, 0, 0, 0, 0, 0, 4));
     const g = new THREE.ConeGeometry(0.36, 0.75, 6, 1);

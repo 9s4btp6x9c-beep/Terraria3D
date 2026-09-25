@@ -37,6 +37,8 @@ export interface InteractionHooks {
   creatureHit?(o: THREE.Vector3, d: THREE.Vector3, reach: number): number | null;
   /** Mining speed multiplier from equipment. */
   miningSpeed(): number;
+  /** Feedback for doors opening/closing etc. */
+  interacted?(what: string): void;
 }
 
 type Aim =
@@ -176,6 +178,7 @@ export class Interaction {
         // Don't let a closing door trap the player inside its leaf.
         if (!f.open && FurnitureSet.distance([f], this.player.x, this.player.y + 0.9, this.player.z) < 0.45) { f.open = true; return true; }
         this.furniture.changed();
+        this.hooks.interacted?.('door');
         return true;
       case 'chest': this.hooks.openChest(f); return true;
       case 'bed': this.hooks.setSpawn(f); return true;

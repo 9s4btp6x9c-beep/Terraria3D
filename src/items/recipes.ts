@@ -50,13 +50,20 @@ export const RECIPES: Recipe[] = [
   R('iron_greaves', 1, 'anvil', ['iron_bar', 12]),
   R('bomb', 3, 'anvil', ['gel', 2], ['iron_bar', 1]),
   R('grappling_hook', 1, 'anvil', ['barbed_hook', 1], ['iron_bar', 4]),
-  R('forge', 1, 'anvil', ['lumite', 12], ['iron_bar', 8], ['stone', 20]),
+  R('wyrm_bait', 1, 'anvil', ['lumite', 5], ['gel', 6], ['bat_wing', 2]),
+  // The Lumite Forge needs scales from the Deepwyrm: defeating the boss opens lumite gear.
+  R('forge', 1, 'anvil', ['lumite', 12], ['iron_bar', 8], ['wyrm_scale', 6]),
   // lumite forge
   R('lumite_bar', 1, 'forge', ['lumite', 3]),
   R('lumite_pickaxe', 1, 'forge', ['lumite_bar', 12], ['iron_bar', 3]),
   R('lumite_blade', 1, 'forge', ['lumite_bar', 10]),
   R('lumite_staff', 1, 'forge', ['lumite_bar', 8], ['wood', 4]),
   R('glow_charm', 1, 'forge', ['lumite_bar', 6], ['bat_wing', 4]),
+  R('ember_bar', 1, 'forge', ['emberite', 3]),
+  R('ember_blade', 1, 'forge', ['ember_bar', 12], ['wyrm_scale', 4]),
+  R('ember_helmet', 1, 'forge', ['ember_bar', 10]),
+  R('ember_plate', 1, 'forge', ['ember_bar', 14]),
+  R('ember_greaves', 1, 'forge', ['ember_bar', 12]),
 ];
 
 export const STATION_NAMES: Record<StationId, string> = {

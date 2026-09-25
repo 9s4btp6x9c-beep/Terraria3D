@@ -5,7 +5,7 @@
 import type { WorldCollision } from '../world/collision';
 
 export type AIKind = 'hopper' | 'walker' | 'flyer' | 'thrower' | 'crawler';
-export type SpawnEnv = 'surface' | 'cave' | 'deep';
+export type SpawnEnv = 'surface' | 'cave' | 'deep' | 'depths';
 
 export interface Drop { item: string; min: number; max: number; chance: number }
 
@@ -22,7 +22,11 @@ export interface CreatureDef {
   /** 0 = full knockback, 1 = immune. */
   kbResist: number;
   drops: Drop[];
-  spawn: { env: SpawnEnv; time: 'day' | 'night' | 'any'; weight: number } | null;
+  spawn: { env: SpawnEnv; time: 'day' | 'night' | 'any'; weight: number; biomes?: number[] } | null;
+  /** Visual tint for variants (multiplies the base model colours). */
+  tint?: number;
+  /** Model to use when this is a variant of another creature. */
+  model?: string;
   /** Particle / blood colour. */
   color: number;
   /** Ranged attack (throwers). */
@@ -34,7 +38,42 @@ export const CREATURES: Record<string, CreatureDef> = {
   glob: {
     id: 'glob', name: 'Glob', hp: 18, damage: 8, defense: 0, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'coin', min: 1, max: 2, chance: 0.6 }],
-    spawn: { env: 'surface', time: 'any', weight: 6 }, color: 0x4ec87a,
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [0] }, color: 0x4ec87a,
+  },
+  sand_glob: {
+    id: 'sand_glob', name: 'Sand Glob', hp: 26, damage: 11, defense: 2, speed: 5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'glob', tint: 0xf0d070,
+    drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'sand', min: 2, max: 4, chance: 0.5 }, { item: 'coin', min: 1, max: 3, chance: 0.7 }],
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [1] }, color: 0xe0c060,
+  },
+  frost_glob: {
+    id: 'frost_glob', name: 'Frost Glob', hp: 28, damage: 11, defense: 3, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'glob', tint: 0xb8ecff,
+    drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'ice', min: 1, max: 3, chance: 0.5 }, { item: 'coin', min: 1, max: 3, chance: 0.7 }],
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [2] }, color: 0xa8d8f0,
+  },
+  blight_glob: {
+    id: 'blight_glob', name: 'Blight Glob', hp: 42, damage: 16, defense: 5, speed: 5.5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.2, model: 'glob', tint: 0xc080f0,
+    drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'coin', min: 2, max: 5, chance: 1 }],
+    spawn: { env: 'surface', time: 'any', weight: 5, biomes: [3] }, color: 0x9a5ac0,
+  },
+  dune_crawler: {
+    id: 'dune_crawler', name: 'Dune Crawler', hp: 42, damage: 15, defense: 8, speed: 2.8, ai: 'crawler', radius: 0.55, height: 0.7, kbResist: 0.5, model: 'rockmite', tint: 0xf0d8a0,
+    drops: [{ item: 'sandstone', min: 2, max: 5, chance: 1 }, { item: 'coin', min: 2, max: 4, chance: 1 }, { item: 'swift_boots', min: 1, max: 1, chance: 0.02 }],
+    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [1] }, color: 0xd8b880,
+  },
+  rotwing: {
+    id: 'rotwing', name: 'Rotwing', hp: 38, damage: 18, defense: 4, speed: 6, ai: 'flyer', radius: 0.5, height: 1, kbResist: 0.2, model: 'gloomwisp', tint: 0xc080ff,
+    drops: [{ item: 'coin', min: 2, max: 5, chance: 1 }, { item: 'bat_wing', min: 1, max: 1, chance: 0.3 }],
+    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [3] }, color: 0x8a4ab0,
+  },
+  ember_glob: {
+    id: 'ember_glob', name: 'Ember Glob', hp: 75, damage: 26, defense: 12, speed: 6, ai: 'hopper', radius: 0.65, height: 0.9, kbResist: 0.3, model: 'glob', tint: 0xff8040,
+    drops: [{ item: 'gel', min: 3, max: 5, chance: 1 }, { item: 'emberite', min: 1, max: 3, chance: 0.5 }, { item: 'coin', min: 4, max: 9, chance: 1 }],
+    spawn: { env: 'depths', time: 'any', weight: 5 }, color: 0xff6a2a,
+  },
+  cinder_bat: {
+    id: 'cinder_bat', name: 'Cinder Bat', hp: 44, damage: 24, defense: 8, speed: 8.5, ai: 'flyer', radius: 0.35, height: 0.7, kbResist: 0.1, model: 'duskwing', tint: 0xff9050,
+    drops: [{ item: 'bat_wing', min: 1, max: 2, chance: 0.6 }, { item: 'coin', min: 3, max: 6, chance: 1 }],
+    spawn: { env: 'depths', time: 'any', weight: 4 }, color: 0xff7030,
   },
   deep_glob: {
     id: 'deep_glob', name: 'Deep Glob', hp: 34, damage: 13, defense: 2, speed: 5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.1,

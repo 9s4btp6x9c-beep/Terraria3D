@@ -79,6 +79,20 @@
   #cursor-stack img.icon { width: 40px; height: 40px; image-rendering: pixelated; }
   #cursor-stack .count { position: absolute; right: 0; bottom: 0; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; }
 
+  #bossbar { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); width: min(460px, 60vw); display: none; text-align: center; }
+  #bossbar .name { font-size: 16px; color: #e8d0ff; text-shadow: 2px 2px 0 #000; margin-bottom: 4px; letter-spacing: 1px; }
+  #bossbar .bar { height: 14px; border: 2px solid #c89aff; background: #1a1024; box-shadow: 0 0 0 2px #3a2050; }
+  #bossbar .bar div { height: 100%; background: linear-gradient(#e05a8a, #8a1a4a); transition: width 0.15s; }
+  #dialogue { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); background: var(--panel); border: 3px solid var(--gold); box-shadow: 0 0 0 2px var(--gold-dark); padding: 12px 14px; pointer-events: auto; font-size: 14px; }
+  #dialogue .who { color: var(--gold); font-size: 16px; margin-bottom: 6px; } #dialogue .who span { color: var(--dim); font-size: 13px; }
+  #dialogue .say { line-height: 1.5; min-height: 40px; }
+  #dialogue .shop { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 10px; max-height: 220px; overflow-y: auto; }
+  #dialogue .ware { display: flex; align-items: center; gap: 6px; background: var(--panel-2); padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+  #dialogue .ware:hover { background: rgba(217,164,65,0.25); } #dialogue .ware.poor { opacity: 0.45; }
+  #dialogue .ware img.icon { width: 30px; height: 30px; image-rendering: pixelated; } #dialogue .ware span { flex: 1; } #dialogue .ware b { white-space: nowrap; }
+  #dialogue .purse { margin-top: 6px; color: var(--dim); }
+  #dialogue .btns { margin-top: 10px; display: flex; gap: 8px; }
+  #dialogue button { font: inherit; padding: 4px 14px; background: #3f2a18; color: var(--text); border: 2px solid var(--gold); cursor: pointer; }
   #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(40,60,110,0.85), rgba(10,10,20,0.95)); z-index: 10; text-align: center; padding: 16px; box-sizing: border-box; }
   #overlay h1 { font-size: 46px; margin: 0 0 6px; letter-spacing: 2px; color: var(--gold); text-shadow: 3px 3px 0 #3a2410; }
   #overlay p { margin: 4px 0; opacity: 0.85; }
@@ -109,6 +123,7 @@
   <canvas id="minimap" width="176" height="176"></canvas>
   <div id="clock"></div>
   <div id="prompt"></div>
+  <div id="bossbar"></div>
   <div id="itemname"></div>
   <div id="hotbar"></div>
   <div id="messages"></div>
@@ -140,7 +155,7 @@
   <div id="buttons"></div>
   <div class="controls">
     WASD move · Shift sprint · Space jump · C crouch · Mouse look<br/>
-    LMB use / attack / place · RMB interact (doors, chests, beds) · F grapple<br/>
+    LMB use / attack / place · RMB interact (doors, chests, beds, NPCs) · F grapple · H check housing<br/>
     1–9 / wheel select · Q cycle build shape · Tab/E inventory & crafting<br/>
     F5 save · F9 reload save · F3 debug · Esc pause
   </div>

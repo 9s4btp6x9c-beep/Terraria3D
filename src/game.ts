@@ -5,12 +5,15 @@ import { Audio } from './audio/sfx';
 import { FurnitureSet, type Placed } from './building/furniture';
 import { Structures } from './building/structures';
 import { Combat } from './entities/combat';
+import type { NpcContext } from './entities/npcs';
+import { Town } from './entities/town';
 import { CREATURES, type Creature } from './entities/creatures';
 import { Equipment, type PlayerStats } from './items/equipment';
 import { HOTBAR, Inventory } from './items/inventory';
 import { type ItemDef, item } from './items/items';
 import { RECIPES, canCraft, craft } from './items/recipes';
 import { PlayerController } from './player/controller';
+import { Grapple } from './player/grapple';
 import { Input } from './player/input';
 import { Interaction } from './player/interaction';
 import { PlayerVitals } from './player/vitals';
@@ -20,6 +23,7 @@ import { IconAtlas } from './render/icons';
 import { Particles } from './render/particles';
 import { Pickups } from './render/pickups';
 import { PostFX } from './render/postfx';
+import { RopeRenderer } from './render/rope';
 import { StructureRenderer } from './render/structureRenderer';
 import { TerrainSystem } from './render/terrainSystem';
 import { buildTextureArray } from './render/textures';
@@ -27,19 +31,21 @@ import { VegetationRenderer } from './render/vegetationRenderer';
 import { Viewmodel } from './render/viewmodel';
 import { type WorldUniforms, createSkyTexture, createWorldMaterial, createWorldUniforms, updateSkyTexture } from './render/worldMaterial';
 import { Hud } from './ui/hud';
+import { DialogueUI } from './ui/dialogue';
 import { InventoryUI } from './ui/inventoryUI';
 import { Minimap } from './ui/minimap';
 import { type Quality, detectQuality } from './ui/quality';
 import { WorldLabels } from './ui/worldLabels';
 import { WorldCollision } from './world/collision';
 import { defaultConfig } from './world/config';
-import { WorldGenerator } from './world/generator';
+import { EMBER_Y, WorldGenerator } from './world/generator';
 import { Mat, material } from './world/materials';
 import { EditLog, type SaveData, readSave, writeSave } from './world/persistence';
 import { SkyMap } from './world/skymap';
 import { TerrainField } from './world/terrain';
 import type { Tree } from './world/vegetation';
 import { Vegetation } from './world/vegetation';
+import { planStructures } from './world/worldStructures';
 import { TerrainWorkerPool } from './world/workerPool';
 
 export interface LoadCallbacks { progress(fraction: number, label: string): void }
@@ -71,6 +77,12 @@ export class Game {
   pickups!: Pickups;
   stats!: PlayerStats;
   spawnPoint = { x: 0, y: 0, z: 0 };
+  grapple!: Grapple;
+  town!: Town;
+  private dialogue!: DialogueUI;
+  /** World progression flags (bosses defeated, events). */
+  progress = { bossDefeated: false };
+  private rope!: RopeRenderer;
   private pool!: TerrainWorkerPool;
   private uniforms!: WorldUniforms;
   private skyTex!: THREE.DataTexture;
@@ -136,6 +148,10 @@ export class Game {
       if (ex.spawn) this.spawnPoint = ex.spawn as typeof this.spawnPoint;
       if (typeof ex.hp === 'number') this.vitals.hp = Math.max(1, ex.hp);
     } else {
+      // Generated cabins and sky shrines, built from regular pieces/furniture.
+      const plan = planStructures(this.gen);
+      for (const p of plan.pieces) this.structures.add(p);
+      for (const f of plan.furniture) this.furniture.add(f);
       this.inventory.add('copper_pickaxe', 1);
       this.inventory.add('copper_axe', 1);
       this.inventory.add('wooden_sword', 1);
@@ -226,8 +242,31 @@ export class Game {
       });
     this.scene.add(this.pickups.group);
 
+    this.grapple = new Grapple(this.player, (ox, oy, oz, dx, dy, dz, max) => {
+      // Latch onto terrain, building pieces or furniture — whichever is nearest.
+      const hits = [
+        this.field.raycast(ox, oy, oz, dx, dy, dz, max, 0.25),
+        this.structures.raycast(ox, oy, oz, dx, dy, dz, max),
+        this.furniture.raycast(ox, oy, oz, dx, dy, dz, max),
+      ].filter(h => h !== null);
+      return hits.sort((a, b) => a.distance - b.distance)[0] ?? null;
+    });
+    this.rope = new RopeRenderer(pickupMat);
+    this.scene.add(this.rope.group);
     this.setupCombat(collision);
     this.setupInteraction();
+    this.town = new Town(this.field, this.structures, this.furniture, collision,
+      () => createWorldMaterial(u, { vertexColors: true, objectSpace: { scale: 3, visibility: null } }));
+    this.town.onMessage = (t, c) => this.hud.message(t, c);
+    this.scene.add(this.town.group);
+    this.dialogue = new DialogueUI($('#hud'), this.inventory, this.icons, () => this.npcContext(),
+      (ok, name) => {
+        this.hud.message(ok ? `Bought ${name}` : 'Not enough coins (or no room)', ok ? '#ffe08a' : '#ff9a7a');
+        if (ok) this.audio.play('craft');
+      },
+      () => { if (!this.invUI.open) this.input.lock(); });
+    if (save?.extra?.town) this.town.load(save.extra.town as never);
+    if (save?.extra?.progress) Object.assign(this.progress, save.extra.progress);
     this.inventory.onChange(() => this.refreshHeld());
     this.equipment.onChange(() => { this.stats = this.equipment.stats(); });
     this.stats = this.equipment.stats();
@@ -264,11 +303,32 @@ export class Game {
       hurtPlayer: (amount, fx, fz, kb) => this.hurtPlayer(amount, fx, fz, kb),
       sound: (name, x, y, z) => this.audio.play(name, Math.hypot(x - this.player.x, y - this.player.y, z - this.player.z)),
       blast: (x, y, z, r) => this.blast(x, y, z, r),
+      carve: (x, y, z, r, drops) => {
+        const res = this.log.commit(this.field, 'sub', x, y, z, r, Mat.Air, drops ? 1 : 99);
+        const pad = r + 1;
+        this.markSky(x - pad, z - pad, x + pad, z + pad);
+        this.veg.invalidateTufts(x, z, r + 1);
+        if (drops) {
+          for (const [m, vol] of res.volumes) {
+            const def = material(m);
+            const n = def.drop ? Math.floor(vol / def.volumePerItem) : 0;
+            if (n > 0) this.pickups.spawn(def.drop!, n, x, y, z, 2);
+          }
+        }
+      },
+      bossDefeated: () => {
+        this.progress.bossDefeated = true;
+        this.hud.message('The Deepwyrm has been defeated!', '#c89aff');
+        this.hud.message('Its scales could fire a Lumite Forge...', '#c89aff');
+        writeSave(this.snapshot());
+      },
       flash: (x, y, z, c, r, l) => this.atmosphere.lights.flash(x, y, z, c, r, l),
       shake: a => { this.shake = Math.min(1, this.shake + a); },
       killed: (c: Creature) => { if (c.def.boss) this.hud.message(`${c.def.name} has been defeated!`, '#c89aff'); },
       skyVisibility: (x, y, z) => this.sky.visibility(x, y, z),
       isNight: () => this.atmosphere.daylight < 0.3,
+      biomeAt: (x, z) => this.gen.biomeAt(x, z),
+      emberY: EMBER_Y,
       surfaceTop: (x, z) => this.sky.raw[Math.floor(x) + Math.floor(z) * this.sky.w],
       seaLevel: this.field.cfg.seaLevel,
       isLoaded: (x, z) => this.terrain.isLoaded(x, z),
@@ -300,6 +360,7 @@ export class Game {
       consume: def => this.consume(def),
       creatureHit: (o, d, r) => this.combat.rayHit(o, d, r),
       miningSpeed: () => this.stats.miningSpeed,
+      interacted: () => this.audio.play('door'),
     });
   }
 
@@ -343,10 +404,11 @@ export class Game {
       case 'magic': {
         if (!this.vitals.useMana(w.manaCost ?? 5)) { this.hud.message('Not enough mana', '#8ab8ff'); return 0.3; }
         const o = eye.clone().addScaledVector(dir, 0.8);
-        this.combat.fire('bolt', o.x, o.y - 0.15, o.z, dir.x, dir.y, dir.z, w.projectileSpeed!, w.damage, w.knockback);
+        const boring = def.id === 'wyrmfang_staff';
+        this.combat.fire(boring ? 'drill' : 'bolt', o.x, o.y - 0.15, o.z, dir.x, dir.y, dir.z, w.projectileSpeed!, w.damage, w.knockback);
         this.viewmodel.triggerSwing(w.speed);
         this.audio.play('magic');
-        this.atmosphere.lights.flash(o.x, o.y, o.z, 0x46d0ff, 8, 0.15);
+        this.atmosphere.lights.flash(o.x, o.y, o.z, boring ? 0xc8ff90 : 0x46d0ff, 8, 0.15);
         return w.speed;
       }
       case 'thrown': {
@@ -362,6 +424,16 @@ export class Game {
   }
 
   private consume(def: ItemDef): boolean {
+    if (def.id === 'wyrm_bait') {
+      const underground = this.sky.visibility(this.player.x, this.player.y + 1.5, this.player.z) < 0.4;
+      if (this.combat.boss) { this.hud.message('The Deepwyrm is already here!', '#ffb070'); return false; }
+      if (!underground && this.atmosphere.daylight > 0.3) { this.hud.message('Nothing answers in daylight. Try at night or underground.', '#ffb070'); return false; }
+      this.combat.summonBoss(this.player.x + 12, Math.max(8, this.player.y - 26), this.player.z + 12);
+      this.hud.message('The Deepwyrm stirs beneath you...', '#c89aff');
+      this.shake = 1;
+      this.audio.play('explode');
+      return true;
+    }
     if (def.heal) {
       if (this.potionCooldown > 0) { this.hud.message(`Potion sickness (${Math.ceil(this.potionCooldown)}s)`, '#ffb070'); return false; }
       if (this.vitals.hp >= this.vitals.maxHp) { this.hud.message('Already at full health', '#ffb070'); return false; }
@@ -506,11 +578,25 @@ export class Game {
         equipment: this.equipment.serialize(),
         spawn: this.spawnPoint,
         hp: this.vitals.hp,
+        town: this.town.serialize(),
+        progress: this.progress,
       },
     };
   }
 
   get inventoryOpen() { return this.invUI.open; }
+  /** Any menu that needs the mouse cursor (inventory, dialogue). */
+  get menuOpen() { return this.invUI.open || this.dialogue.open; }
+
+  npcContext(): NpcContext {
+    return {
+      inv: this.inventory,
+      kills: this.combat.kills,
+      bossDefeated: this.progress.bossDefeated,
+      isNight: this.atmosphere.daylight < 0.3,
+      hasStation: id => [...this.furniture.items.values()].some(f => f.type === id),
+    };
+  }
 
   // ------------------------------------------------------------ tools / tests
 
@@ -538,7 +624,8 @@ export class Game {
     if (inp.wasPressed('F3')) this.hud.debugVisible = !this.hud.debugVisible;
     if (inp.wasPressed('F5')) this.saveGame();
     if (inp.wasPressed('F9')) location.href = `${location.pathname}?continue=1`;
-    if (inp.wasPressed('Tab') || inp.wasPressed('KeyE')) this.toggleInventory();
+    if (inp.wasPressed('Tab') || inp.wasPressed('KeyE')) { if (this.dialogue.open) this.dialogue.close(); this.toggleInventory(); }
+    if (inp.wasPressed('KeyH')) this.town.tryRegister(this.player.x, this.player.y, this.player.z, true);
   }
 
   // ===================================================================== update
@@ -548,7 +635,7 @@ export class Game {
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-4)) * 0.05;
     const inp = this.input;
     const alive = !this.vitals.dead;
-    const active = inp.locked && !this.invUI.open && alive;
+    const active = inp.locked && !this.menuOpen && alive;
     this.handleKeys();
     this.potionCooldown = Math.max(0, this.potionCooldown - dt);
 
@@ -567,6 +654,24 @@ export class Game {
     // Move.
     const k = (c: string) => (active && inp.down(c) ? 1 : 0);
     const outdoorsHere = this.sky.visibility(this.player.x, this.player.y + 1, this.player.z) > 0.5;
+    // Grappling hook (F): fire / release; jump releases; back key pays out rope.
+    const hook = st.hook;
+    if (!hook && this.grapple.state !== 'idle') this.grapple.release();
+    if (hook && active && inp.wasPressed('KeyF')) {
+      if (this.grapple.state === 'idle') {
+        this.grapple.range = hook.range; this.grapple.speed = hook.speed;
+        this.grapple.fire(this.camera.position.x, this.camera.position.y - 0.2, this.camera.position.z, this.dir.x, this.dir.y, this.dir.z);
+        this.audio.play('bow');
+      } else this.grapple.release();
+    }
+    if (this.grapple.state === 'attached' && active && inp.wasPressed('Space')) { this.grapple.release(true); this.audio.play('jump'); }
+    const handX = this.player.x, handY = this.player.y + 1.1, handZ = this.player.z;
+    const wasAttached = this.grapple.state === 'attached';
+    this.grapple.update(dt, k('KeyS') ? -1 : 1, handX, handY, handZ);
+    if (!wasAttached && this.grapple.state === 'attached') {
+      this.audio.play('stone');
+      this.particles.burst(this.grapple.x, this.grapple.y, this.grapple.z, 0, 1, 0, 0xd0d0d8, 6, { speed: 2 });
+    }
     if (alive) {
       this.player.update(dt, {
         forward: k('KeyW') - k('KeyS'),
@@ -618,8 +723,16 @@ export class Game {
     this.camera.updateMatrixWorld();
     const dir = this.dir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
 
-    // Interaction.
-    this.interaction.update(dt, this.camera.position, dir, active && inp.lmb, active && inp.consumeClick(), active && inp.consumeAlt());
+    // Talk to NPCs (right-click), otherwise regular interaction.
+    let alt = active && inp.consumeAlt();
+    const npcAim = this.town.pick(this.camera.position, dir, 4.5);
+    if (alt && npcAim) {
+      this.dialogue.show(npcAim);
+      this.input.unlock();
+      alt = false;
+    }
+    if (this.dialogue.open && this.dialogue.npc && Math.hypot(this.dialogue.npc.body.x - this.player.x, this.dialogue.npc.body.z - this.player.z) > 7) this.dialogue.close();
+    this.interaction.update(dt, this.camera.position, dir, active && inp.lmb, active && inp.consumeClick(), alt);
     const held = this.inventory.held;
     if (held && item(held.id).kind !== 'tool') {
       const label = this.interaction.modeLabel();
@@ -641,8 +754,15 @@ export class Game {
     this.vegRenderer.update(this.camera.position, dt);
     this.structureRenderer.update();
     this.furnitureRenderer.update(dt);
+    {
+      // Rope from the right hand to the hook head.
+      const side = new THREE.Vector3(-this.dir.z, 0, this.dir.x).normalize();
+      const hx = this.camera.position.x + side.x * 0.3 + this.dir.x * 0.4, hy = this.camera.position.y - 0.35, hz = this.camera.position.z + side.z * 0.3 + this.dir.z * 0.4;
+      this.rope.update(this.grapple.state !== 'idle', hx, hy, hz, this.grapple.x, this.grapple.y, this.grapple.z);
+    }
     this.pickups.update(dt, this.player.x, this.player.y, this.player.z);
     this.combat.update(dt, this.player.x, this.player.y, this.player.z, this.time);
+    this.town.update(dt, this.player.x, this.player.y, this.player.z, this.atmosphere.daylight < 0.3, this.npcContext());
     this.flushSky();
     for (const [id, t] of this.wobble) {
       const nt = t + dt;
@@ -653,7 +773,13 @@ export class Game {
     // Atmosphere.
     const cam = this.camera.position;
     const vis = this.sky.visibility(cam.x, cam.y, cam.z);
-    this.atmosphere.update(dt, cam, vis, this.time, this.player.position, dir, st.lightBoost);
+    const ember = THREE.MathUtils.smoothstep(EMBER_Y + 14 - cam.y, 0, 12);
+    this.atmosphere.update(dt, cam, vis, this.time, this.player.position, dir, st.lightBoost, ember);
+    // Drifting embers in the depths.
+    if (ember > 0.3 && Math.random() < ember * 0.6) {
+      const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 10;
+      this.particles.burst(cam.x + Math.cos(a) * r, cam.y - 2 + Math.random() * 3, cam.z + Math.sin(a) * r, 0, 1, 0, Math.random() < 0.5 ? 0xff8a30 : 0xffc050, 1, { speed: 0.6, size: 0.04, gravity: -0.6, life: 2.5 });
+    }
     this.post.setUnderground(this.atmosphere.underground);
     this.post.setNight(1 - this.atmosphere.daylight);
     const moving = Math.min(1, Math.hypot(this.player.vx, this.player.vz) / 5) * (this.player.grounded ? 1 : 0);
@@ -663,6 +789,8 @@ export class Game {
 
     // HUD.
     this.hud.update(dt);
+    const boss = this.combat.boss;
+    this.hud.setBoss(boss ? boss.name : null, boss?.hp ?? 0, boss?.maxHp ?? 1);
     this.hud.setVitals(this.vitals.hp, this.vitals.maxHp, this.vitals.mana, this.vitals.maxMana, this.vitals.defense);
     this.labels.update(dt, this.camera, window.innerWidth, window.innerHeight);
     this.minimap.draw(this.player.x, this.player.z, this.player.yaw, this.combat.creatures.map(c => ({ x: c.x, z: c.z, color: '#ff5a4a' })));
@@ -691,6 +819,8 @@ export class Game {
   private updatePrompt() {
     const aim = this.interaction.aim;
     let text = '';
+    const npc = this.town.pick(this.camera.position, this.dir, 4.5);
+    if (npc) { this.hud.setPrompt(`[RMB] Talk to ${npc.def.name} ${npc.def.title}`); return; }
     if (aim?.kind === 'furniture' && aim.distance < 5) {
       const f = aim.hit.f;
       if (f.type === 'door') text = `[RMB] ${f.open ? 'Close' : 'Open'} door`;

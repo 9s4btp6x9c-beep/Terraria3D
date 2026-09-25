@@ -16,6 +16,9 @@ const C = (hex: number) => new THREE.Color(hex);
 const SKY_TOP = [[0, C(0x070a1c)], [0.2, C(0x0d1430)], [0.27, C(0x4a62b0)], [0.35, C(0x3f63c8)], [0.65, C(0x3f63c8)], [0.73, C(0x5a4e9a)], [0.8, C(0x0d1430)], [1, C(0x070a1c)]] as const;
 const SKY_HORIZON = [[0, C(0x10183a)], [0.2, C(0x1c2448)], [0.26, C(0xf0a070)], [0.33, C(0xa9c6ee)], [0.67, C(0xa9c6ee)], [0.74, C(0xf08a5a)], [0.8, C(0x1c2448)], [1, C(0x10183a)]] as const;
 const CAVE_FOG = C(0x0b0a12);
+const EMBER_FOG = C(0x2a0c08);
+const CAVE_AMBIENT = C(0x1a1726);
+const EMBER_AMBIENT = C(0x3a140c);
 
 function sampleKeys(keys: readonly (readonly [number, THREE.Color])[], t: number, out: THREE.Color) {
   for (let i = 0; i < keys.length - 1; i++) {
@@ -153,7 +156,7 @@ export class Atmosphere {
    * @param cam        camera position
    * @param visibility sky visibility at the camera (0 = enclosed)
    */
-  update(dt: number, cam: THREE.Vector3, visibility: number, time: number, focus: { x: number; y: number; z: number }, lanternDir: THREE.Vector3, lanternBoost = 0) {
+  update(dt: number, cam: THREE.Vector3, visibility: number, time: number, focus: { x: number; y: number; z: number }, lanternDir: THREE.Vector3, lanternBoost = 0, ember = 0) {
     if (this.cycle) this.timeOfDay = (this.timeOfDay + dt / DAY_LENGTH) % 1;
     const t = this.timeOfDay;
     // Sun path: rises in the east (+x), sets in the west, tilted south.
@@ -185,7 +188,9 @@ export class Atmosphere {
     sampleKeys(SKY_HORIZON, t, this.horizon);
     this.sky.uniforms.uHorizon.value.copy(this.horizon);
     this.sky.uniforms.uBottom.value.copy(this.horizon).multiplyScalar(0.8);
-    this.fog.color.copy(this.horizon).lerp(CAVE_FOG, ug);
+    this.tmp.copy(CAVE_FOG).lerp(EMBER_FOG, ember);
+    this.fog.color.copy(this.horizon).lerp(this.tmp, ug);
+    this.u.uCaveAmbient.value.copy(CAVE_AMBIENT).lerp(EMBER_AMBIENT, ember);
     this.fog.near = 90 - ug * 82;
     this.fog.far = 560 - ug * 480;
     this.renderer.setClearColor(this.fog.color);

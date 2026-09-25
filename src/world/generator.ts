@@ -12,6 +12,14 @@ import { DENSITY_CLAMP } from './edits';
 
 interface Capsule { ax: number; ay: number; az: number; bx: number; by: number; bz: number; r: number }
 interface Island { x: number; y: number; z: number; r: number; depth: number }
+/** Cabin room: min corner (x, z) on the 2 m build grid, floor base y, size in 2 m cells. */
+export interface Cabin { x: number; y: number; z: number; cx: number; cz: number; seed: number }
+
+export const CABIN_WALL = 2.5;
+
+export const enum Biome { Forest = 0, Desert = 1, Snow = 2, Blight = 3 }
+/** Below this height the world becomes the Ember Depths. */
+export const EMBER_Y = 21;
 
 const smoothstep = (a: number, b: number, x: number) => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
@@ -31,8 +39,14 @@ export class WorldGenerator {
   private detail: SimplexNoise;
   private heights: Float32Array;
   private mountainMask: Float32Array;
+  private biomeNoise: SimplexNoise;
+  private blightNoise: SimplexNoise;
+  /** Per-column biome id (see Biome). */
+  private biomes: Uint8Array;
   readonly entrance: Capsule[] = [];
   readonly islands: Island[] = [];
+  /** Underground cabins: grid-aligned rooms carved out of the rock (x,z = min corner). */
+  readonly cabins: Cabin[] = [];
   /** AABB (min xyz, max xyz) around the entrance tunnel, padded. */
   private entranceBounds = [0, 0, 0, 0, 0, 0];
   spawn = { x: 0, y: 0, z: 0 };
@@ -49,39 +63,74 @@ export class WorldGenerator {
     this.cavern = new SimplexNoise(s + 7);
     this.ore = new SimplexNoise(s + 8);
     this.detail = new SimplexNoise(s + 9);
+    this.biomeNoise = new SimplexNoise(s + 10);
+    this.blightNoise = new SimplexNoise(s + 11);
 
     const w = this.size.x + 1, d = this.size.z + 1;
     this.heights = new Float32Array(w * d);
     this.mountainMask = new Float32Array(w * d);
+    this.biomes = new Uint8Array(w * d);
     for (let z = 0; z < d; z++)
       for (let x = 0; x < w; x++) {
-        const [h, m] = this.computeHeight(x, z);
+        const [h, m, b] = this.computeHeight(x, z);
         this.heights[x + z * w] = h;
         this.mountainMask[x + z * w] = m;
+        this.biomes[x + z * w] = b;
       }
     this.placeSpawnAndEntrance();
     this.placeIslands();
+    this.placeCabins();
   }
 
   // ---------------------------------------------------------------- landforms
 
-  private computeHeight(x: number, z: number): [number, number] {
+  /**
+   * Biome weights at a column: [desert, snow, blight], each 0..1 with soft
+   * borders. The centre of the world (spawn) is always forest.
+   */
+  biomeWeights(x: number, z: number): [number, number, number] {
+    const cx = this.size.x / 2, cz = this.size.z / 2;
+    const fromCenter = smoothstep(70, 130, Math.hypot(x - cx, z - cz));
+    const t = this.biomeNoise.fbm2(x / 260 + 5, z / 260 - 3, 2) + this.biomeNoise.noise2(x / 40, z / 40) * 0.04;
+    const desert = smoothstep(0.18, 0.3, t) * fromCenter;
+    const snow = smoothstep(-0.18, -0.3, t) * fromCenter;
+    const bl = this.blightNoise.fbm2(x / 190 + 40, z / 190 - 20, 2) + this.blightNoise.noise2(x / 35, z / 35) * 0.05;
+    const blight = smoothstep(0.26, 0.36, bl) * fromCenter * (1 - desert) * (1 - snow);
+    return [desert, snow, blight];
+  }
+
+  private computeHeight(x: number, z: number): [number, number, number] {
     const { x: W, z: D } = this.size;
     const sea = this.cfg.seaLevel;
+    const [desert, snow, blight] = this.biomeWeights(x, z);
     let h = 70 + this.hills.fbm2(x / 150, z / 150, 4) * 9 + this.hills.fbm2(x / 40 + 31, z / 40, 2) * 2.5;
-    const m = smoothstep(0.05, 0.45, this.mask.fbm2(x / 230 + 17, z / 230 - 9, 3));
+    let m = smoothstep(0.05, 0.45, this.mask.fbm2(x / 230 + 17, z / 230 - 9, 3));
+    m = Math.max(m * (1 - desert * 0.85), snow * 0.55);
     const r = this.ridges.ridged2(x / 120, z / 120, 4);
     h += m * Math.pow(r, 2.2) * 62;
-    // Soft terracing gives cliff bands on hillsides.
+    // Desert dunes: long, soft ridges.
+    const dune = 1 - Math.abs(this.hills.noise2(x / 34 + 9, z / 90));
+    h += desert * (dune * dune * 7 - 1);
+    h += snow * 5 - blight * 3 + blight * this.hills.noise2(x / 18, z / 18) * 2.5;
+    // Soft terracing gives cliff bands on hillsides (not on dunes).
     const step = 7;
     const t = Math.floor(h / step) * step;
     const frac = (h - t) / step;
-    h = h * 0.6 + (t + smoothstep(0.35, 0.65, frac) * step) * 0.4;
+    const terr = 0.4 * (1 - desert);
+    h = h * (1 - terr) + (t + smoothstep(0.35, 0.65, frac) * step) * terr;
     // Ocean ring around the island-shaped world.
     const nx = (x / W) * 2 - 1, nz = (z / D) * 2 - 1;
     const edge = smoothstep(0.72, 0.97, Math.max(Math.abs(nx), Math.abs(nz)) + this.mask.noise2(x / 60, z / 60) * 0.05);
     h = h * (1 - edge) + (sea - 14) * edge;
-    return [h, m * (1 - edge)];
+    const j = this.detail.noise2(x / 7, z / 7) * 0.12; // dithered borders
+    const biome = desert + j > 0.5 ? Biome.Desert : snow + j > 0.5 ? Biome.Snow : blight + j > 0.5 ? Biome.Blight : Biome.Forest;
+    return [h, m * (1 - edge), biome];
+  }
+
+  biomeAt(x: number, z: number): Biome {
+    const w = this.size.x + 1;
+    const ix = Math.max(0, Math.min(this.size.x, Math.round(x))), iz = Math.max(0, Math.min(this.size.z, Math.round(z)));
+    return this.biomes[ix + iz * w];
   }
 
   /** Heightfield value (bilinear) — the broad landform, ignoring caves/overhangs. */
@@ -162,6 +211,24 @@ export class WorldGenerator {
     }
   }
 
+  private placeCabins() {
+    const rand = mulberry32(this.cfg.seed ^ 0xcab1);
+    const want = Math.round((this.size.x * this.size.z) / (512 * 512) * 12);
+    const m = 40;
+    for (let tries = 0; this.cabins.length < want && tries < 600; tries++) {
+      const x = Math.floor((m + rand() * (this.size.x - 2 * m)) / 2) * 2;
+      const z = Math.floor((m + rand() * (this.size.z - 2 * m)) / 2) * 2;
+      const h = this.height(x + 3, z + 2);
+      if (h < this.cfg.seaLevel + 4) continue;
+      const y = Math.floor((h - 14 - rand() * 30) / 0.25) * 0.25;
+      if (y < 12) continue;
+      if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < 30) continue;
+      if (this.cabins.some(c => Math.abs(c.x - x) < 24 && Math.abs(c.z - z) < 24 && Math.abs(c.y - y) < 12)) continue;
+      const big = rand() < 0.4;
+      this.cabins.push({ x, y, z, cx: big ? 4 : 3, cz: big ? 3 : 2, seed: Math.floor(rand() * 1e9) });
+    }
+  }
+
   // ------------------------------------------------------------------ density
 
   /** Density at a point (positive = solid). Pure function of the seed. */
@@ -179,6 +246,12 @@ export class WorldGenerator {
       d += this.warp.noise3(x / 22, y / 26, z / 22) * amp + this.warp.noise3(x / 7, y / 9, z / 7) * 0.5;
     }
     if (y < 4) d = Math.max(d, 4 - y); // bedrock floor stays solid
+    // Blight chasms: narrow fissures plunging deep underground.
+    if (y > 24 && this.biomeAt(x, z) === Biome.Blight) {
+      const n = Math.abs(this.blightNoise.noise2(x / 46, z / 46));
+      const width = 0.035 + this.detail.noise2(x / 20, z / 20) * 0.012;
+      if (n < width + 0.06) d = Math.min(d, (n - width) * 55 + Math.max(0, 30 - y) * 0.3);
+    }
     if (d > -2) d = Math.min(d, this.caves(x, y, z, h));
     let tunnel = Infinity;
     const eb = this.entranceBounds;
@@ -186,6 +259,15 @@ export class WorldGenerator {
       for (const c of this.entrance) tunnel = Math.min(tunnel, capsuleDist(x, y, z, c) - c.r);
     if (tunnel < 3) d = Math.min(d, tunnel - this.detail.noise3(x / 5, y / 5, z / 5) * 0.8);
     for (const isl of this.islands) d = Math.max(d, this.islandDensity(x, y, z, isl));
+    for (const c of this.cabins) {
+      // Carve the room (slightly rounded box) so the cabin sits in open space.
+      const w = c.cx * 2, dd = c.cz * 2;
+      const qx = Math.abs(x - (c.x + w / 2)) - (w / 2 + 0.3), qy = Math.abs(y - (c.y + 1.45)) - 1.65, qz = Math.abs(z - (c.z + dd / 2)) - (dd / 2 + 0.3);
+      if (qx > 2 || qy > 2 || qz > 2) continue;
+      const ox = Math.max(qx, 0), oy = Math.max(qy, 0), oz = Math.max(qz, 0);
+      const box = Math.sqrt(ox * ox + oy * oy + oz * oz) + Math.min(Math.max(qx, qy, qz), 0) - 0.4;
+      d = Math.min(d, box);
+    }
     return Math.max(-DENSITY_CLAMP, Math.min(DENSITY_CLAMP, d));
   }
 
@@ -226,27 +308,44 @@ export class WorldGenerator {
     const h = this.height(x, z);
     const depth = h - y;
     if (y < 3 + this.detail.noise2(x / 5, z / 5) * 1.5) return Mat.Bedrock;
-    const nearSurface = depth < 8 || y > this.size.y - 40;
+    const biome = this.biomeAt(x, z);
+    const sky = y > this.size.y - 40;
+    const nearSurface = depth < 8 || sky;
     if (nearSurface && exposure < 1.5) {
       if (normalY < 0.55) {
-        // Cliff faces: stone with bands of dirt/clay strata.
+        // Cliff faces: rock with bands of strata.
         const band = Math.sin(y * 0.7 + this.detail.noise2(x / 30, z / 30) * 3);
+        if (biome === Biome.Desert && !sky) return band > 0.3 ? Mat.Sandstone : Mat.Sand;
+        if (biome === Biome.Blight && !sky) return band > 0.85 ? Mat.Dirt : Mat.Blightstone;
+        if (biome === Biome.Snow && !sky && band > 0.6) return Mat.Ice;
         return band > 0.8 ? Mat.Dirt : band < -0.93 ? Mat.Clay : Mat.Stone;
       }
-      if (y < this.cfg.seaLevel + 2.5 && y < this.size.y - 40) return Mat.Sand;
-      if (y > 108 + this.detail.noise2(x / 20, z / 20) * 6 && y < this.size.y - 40) return Mat.Snow;
-      if (normalY < 0.75 && this.detail.noise2(x / 6, z / 6) > 0.35) return Mat.Stone;
+      if (y < this.cfg.seaLevel + 2.5 && !sky) return Mat.Sand;
+      if (!sky) {
+        if (biome === Biome.Desert) return Mat.Sand;
+        if (biome === Biome.Snow) return Mat.Snow;
+        if (biome === Biome.Blight) return Mat.Blightgrass;
+      }
+      if (y > 108 + this.detail.noise2(x / 20, z / 20) * 6 && !sky) return Mat.Snow;
+      if (normalY < 0.75 && this.detail.noise2(x / 6, z / 6) > 0.35) return biome === Biome.Blight ? Mat.Blightstone : Mat.Stone;
       return Mat.Grass;
     }
     const dirtDepth = 3 + this.detail.noise2(x / 18, z / 18) * 2;
     if (nearSurface && exposure < dirtDepth) {
-      if (y < this.cfg.seaLevel + 1.5) return Mat.Sand;
+      if (y < this.cfg.seaLevel + 1.5 || biome === Biome.Desert) return Mat.Sand;
+      if (biome === Biome.Snow) return exposure < 1.5 ? Mat.Snow : this.detail.noise3(x / 9, y / 9, z / 9) > 0.3 ? Mat.Ice : Mat.Dirt;
       return Mat.Dirt;
     }
+    // Ember Depths: glowing emberstone with emberite veins near the bottom.
+    const emberTop = EMBER_Y + this.detail.noise2(x / 30, z / 30) * 3;
+    if (y < emberTop) return this.ore.noise3(x / 5 + 90, y / 5, z / 5) > 0.58 ? Mat.Emberite : Mat.Emberstone;
     if (depth > 4 && this.ore.noise3(x / 6, y / 6, z / 6) > 0.62) return y < 75 ? Mat.Copper : Mat.Stone;
     if (y < 48 && this.ore.noise3(x / 7 + 40, y / 7, z / 7) > 0.64) return Mat.Iron;
     if (y < 36 && this.ore.noise3(x / 5 - 40, y / 5, z / 5) > 0.7) return Mat.Lumite;
-    if (depth > 5 && depth < 25 && this.detail.noise3(x / 25, y / 12, z / 25) > 0.55) return Mat.Clay;
+    if (depth > 5 && depth < 25 && this.detail.noise3(x / 25, y / 12, z / 25) > 0.55) return biome === Biome.Desert ? Mat.Sandstone : Mat.Clay;
+    if (biome === Biome.Desert && depth < 30) return Mat.Sandstone;
+    if (biome === Biome.Blight && y > 30) return Mat.Blightstone;
+    if (biome === Biome.Snow && depth < 20 && this.detail.noise3(x / 12, y / 12, z / 12) > 0.45) return Mat.Ice;
     const deep = 30 + this.detail.noise2(x / 40, z / 40) * 5;
     return y < deep ? Mat.Deepstone : Mat.Stone;
   }
