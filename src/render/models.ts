@@ -18,7 +18,7 @@ type Layer = ExtraLayer | number;
 /** Terrain-material layers usable by name in models (e.g. dirt blocks). */
 const TERRAIN_LAYERS: Record<string, Mat> = {
   dirt: Mat.Dirt, stone: Mat.Stone, sand: Mat.Sand, clay: Mat.Clay, snow: Mat.Snow, grass: Mat.Grass, deepstone: Mat.Deepstone,
-  sandstone: Mat.Sandstone, ice: Mat.Ice, blightstone: Mat.Blightstone, emberstone: Mat.Emberstone, emberite: Mat.Emberite, aerite: Mat.Aerite, mud: Mat.Mud, mushgrass: Mat.Mushgrass,
+  sandstone: Mat.Sandstone, ice: Mat.Ice, blightstone: Mat.Riftstone, moss: Mat.Moss, rootwood: Mat.Rootwood, salt: Mat.Salt, fossil: Mat.Fossil, leaflitter: Mat.Leaflitter, emberstone: Mat.Emberstone, emberite: Mat.Emberite, aerite: Mat.Aerite, mud: Mat.Mud, mushgrass: Mat.Mushgrass,
 };
 
 function layerIndex(l: Layer | string): number {
@@ -332,29 +332,98 @@ function plume() {
   ]);
 }
 
-/** A faceted heart: two lobes and a point, cut from glowing red crystal. */
-function heartGem(s: number, y: number) {
+/** Heartroot cage: petrified roots curling up from the rock and over the core. */
+export function lifeCrystalBase() {
+  const parts = [
+    ico(0.3, 'stone', { y: 0.08, sy: 0.5, jitter: 0.35, seed: 41 }),
+    ico(0.15, 'stone', { x: 0.26, y: 0.06, jitter: 0.4, seed: 42 }),
+    ico(0.13, 'moss', { x: -0.22, y: 0.07, z: 0.12, jitter: 0.4, seed: 43 }),
+  ];
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 5) * Math.PI * 2 + 0.3;
+    // Each root: three segments bending inward over the top.
+    const pts = [[0.34, 0.08], [0.4, 0.42], [0.3, 0.78], [0.08, 0.98]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [r0, y0] = pts[i], [r1, y1] = pts[i + 1];
+      const x0 = Math.cos(a + i * 0.25) * r0, z0 = Math.sin(a + i * 0.25) * r0, x1 = Math.cos(a + (i + 1) * 0.25) * r1, z1 = Math.sin(a + (i + 1) * 0.25) * r1;
+      const len = Math.hypot(x1 - x0, y1 - y0, z1 - z0);
+      const g = new THREE.CylinderGeometry(0.055 - i * 0.012, 0.08 - i * 0.014, len, 5);
+      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0).normalize()));
+      g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+      parts.push(part(g, 'rootbark'));
+    }
+  }
+  return merge(parts);
+}
+
+/** The glowing ember core the renderer spins inside the root cage. */
+export function lifeCrystalHeart() {
+  return merge(heartrootCore(1, 0.52));
+}
+
+function heartrootCore(s: number, y: number) {
   return [
-    ico(0.2 * s, 'heart', { x: -0.13 * s, y: y + 0.08 * s, sz: 0.7 }),
-    ico(0.2 * s, 'heart', { x: 0.13 * s, y: y + 0.08 * s, sz: 0.7 }),
-    cone(0.26 * s, 0.34 * s, 4, 'heart', { y: y - 0.16 * s, rx: Math.PI, ry: Math.PI / 4, }),
-    octa(0.06 * s, 'plain', { x: -0.14 * s, y: y + 0.16 * s, z: 0.1 * s }, 0xffffff),
+    ico(0.15 * s, 'ember', { y, detail: 1, jitter: 0.1, seed: 44 }),
+    octa(0.1 * s, 'amber', { y, sy: 1.5 }),
+    ...[0, 1, 2].map(k => octa(0.03 * s, 'flame', { x: Math.cos(k * 2.1) * 0.2 * s, y: y + Math.sin(k * 1.3) * 0.08 * s, z: Math.sin(k * 2.1) * 0.2 * s }, 0xffe070)),
   ];
 }
 
-/** Rock cluster with small red shards (the renderer spins the heart above it). */
-export function lifeCrystalBase() {
+/** Amber: a drop of hardened resin with a spark caught inside. */
+function amberDrop() {
+  const g = new THREE.SphereGeometry(0.1, 7, 5).toNonIndexed();
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) p.setXYZ(i, p.getX(i) * (1 - p.getY(i) * 6), p.getY(i) * 1.8, p.getZ(i) * (1 - p.getY(i) * 6));
+  return merge([part(place(g, { y: 0.1 }), 'amber'), octa(0.025, 'flame', { x: 0.01, y: 0.09, z: 0.03 }, 0xfff4b0), octa(0.05, 'amber', { x: 0.08, y: 0.04, rz: 0.6 }, 0xffd080)]);
+}
+
+/** Starseed: a glowing seed trailing a crown of fine, radiant filaments. */
+function starseed() {
+  const parts = [octa(0.05, 'flame', { y: 0.12, sy: 1.6 }, 0xe0f4ff), cyl(0.008, 0.012, 0.14, 4, 'plain', { y: 0.22 }, 0xd8ecff)];
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2, tilt = 0.9;
+    const g = new THREE.CylinderGeometry(0.004, 0.004, 0.16, 3).translate(0, 0.08, 0);
+    g.rotateZ(Math.cos(a) * tilt); g.rotateX(Math.sin(a) * tilt);
+    parts.push(part(place(g, { y: 0.29 }), 'plain', 0xf0f8ff));
+    const tip = Math.sin(tilt) * 0.16;
+    parts.push(octa(0.014, 'glim', { x: -Math.cos(a) * tip, y: 0.29 + Math.cos(tilt) * 0.16, z: Math.sin(a) * tip }));
+  }
+  return merge(parts);
+}
+
+/** A carved stone post with rings of lumite and a staring eye. */
+function totem() {
   return merge([
-    ico(0.3, 'stone', { y: 0.1, sy: 0.55, jitter: 0.35, seed: 41 }),
-    ico(0.16, 'stone', { x: 0.25, y: 0.08, jitter: 0.4, seed: 42 }),
-    ico(0.14, 'stone', { x: -0.22, y: 0.07, z: 0.1, jitter: 0.4, seed: 43 }),
-    octa(0.06, 'heart', { x: 0.24, y: 0.22, sy: 2, rz: -0.4 }),
-    octa(0.05, 'heart', { x: -0.22, y: 0.2, z: 0.12, sy: 2, rz: 0.5 }),
+    taper(0.16, 0.36, 0.16, 0.7, 0.7, 'deepstone', { y: 0.18 }),
+    cyl(0.1, 0.1, 0.04, 6, 'lumiteMetal', { y: 0.12 }),
+    cyl(0.085, 0.085, 0.04, 6, 'lumiteMetal', { y: 0.28 }),
+    box(0.08, 0.05, 0.03, 'flame', { y: 0.21, z: 0.075 }, 0x9af0ff),
+    cone(0.07, 0.14, 4, 'deepstone', { y: 0.43, ry: Math.PI / 4 }),
+    cone(0.06, 0.12, 4, 'deepstone', { y: -0.05, rx: Math.PI, ry: Math.PI / 4 }),
   ]);
 }
 
-export function lifeCrystalHeart() {
-  return merge(heartGem(1.25, 0.62));
+/** Bramble Maul: a gnarled petrified root with a mossy, knotted head. */
+function maul() {
+  return merge([
+    cyl(0.03, 0.04, 0.7, 5, 'rootbark', { y: 0.33, rz: 0.04 }),
+    box(0.07, 0.12, 0.07, 'cloth', { y: 0.04 }, 0x5a3a2a),
+    ico(0.16, 'rootbark', { y: 0.74, sy: 1.2, jitter: 0.35, seed: 61 }),
+    ico(0.1, 'mossleaves', { x: 0.06, y: 0.84, z: 0.04, sy: 0.6, jitter: 0.3, seed: 62 }),
+    ...[0, 1, 2, 3].map(k => cone(0.03, 0.12, 4, 'bone', { x: Math.cos(k * 1.6) * 0.14, y: 0.72 + (k % 2) * 0.1, z: Math.sin(k * 1.6) * 0.14, rz: -Math.cos(k * 1.6) * 1.4, rx: Math.sin(k * 1.6) * 1.4 }, 0xe8dcc0)),
+  ]);
+}
+
+/** A stoppered vial of liquid light. */
+function vessel(liquid: string, sparkle: number) {
+  return merge([
+    cyl(0.07, 0.1, 0.2, 7, 'glass', { y: 0.1 }),
+    cyl(0.06, 0.09, 0.15, 7, liquid, { y: 0.085 }),
+    cyl(0.03, 0.04, 0.06, 7, 'glass', { y: 0.23 }),
+    cyl(0.035, 0.03, 0.05, 6, 'rootbark', { y: 0.28 }),
+    octa(0.035, 'flame', { y: 0.1 }, sparkle),
+    octa(0.02, 'flame', { x: 0.04, y: 0.15, z: 0.03 }, sparkle),
+  ]);
 }
 
 /** A glowing blue mushroom (item icon). */
@@ -377,16 +446,6 @@ function bucket(full: boolean) {
     part(place(new THREE.TorusGeometry(0.13, 0.01, 4, 10, Math.PI), { y: 0.24 }), 'metal'),
   ];
   if (full) parts.push(cyl(0.12, 0.12, 0.02, 9, 'glass', { y: 0.22 }, 0x6aaaf0));
-  return merge(parts);
-}
-
-/** A five-pointed star with a glowing core. */
-function star() {
-  const parts: THREE.BufferGeometry[] = [octa(0.07, 'flame', { y: 0.16, sz: 0.6 }, 0xfff4a0)];
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2;
-    parts.push(cone(0.05, 0.13, 4, 'gold', { x: Math.sin(a) * 0.09, y: 0.16 + Math.cos(a) * 0.09, rz: -a }, 0xfff0a0));
-  }
   return merge(parts);
 }
 
@@ -582,8 +641,36 @@ function furniture(id: FurnitureId): THREE.BufferGeometry {
         cone(0.26, 0.14, 7, 'iron', { y: 1.35 }),
       ]);
     case 'life_crystal':
-      // Heart crystal floating over a cluster of rock.
+      // Heartroot: an ember core caged in petrified roots.
       return merge([lifeCrystalBase(), lifeCrystalHeart()]);
+    case 'hearth':
+      // A squat fieldstone hearth with a fire in its mouth and a copper hood.
+      return merge([
+        box(1.4, 0.2, 0.9, 'stone', { y: 0.1 }),
+        box(0.28, 0.75, 0.8, 'bricks', { x: -0.56, y: 0.55 }),
+        box(0.28, 0.75, 0.8, 'bricks', { x: 0.56, y: 0.55 }),
+        box(1.1, 0.75, 0.2, 'bricks', { y: 0.55, z: -0.3 }),
+        box(1.4, 0.16, 0.9, 'stone', { y: 1.0 }),
+        taper(0.9, 0.3, 0.6, 0.5, 0.5, 'copper', { y: 1.23, z: -0.05 }),
+        ...[-0.2, 0, 0.2].map((x, i) => cyl(0.05, 0.06, 0.5, 5, 'bark', { x, y: 0.26, z: 0.08, rz: Math.PI / 2 + 0.2 * (i - 1), ry: 0.5 * (i - 1) })),
+        cone(0.22, 0.42, 5, 'flame', { y: 0.47, z: 0.08 }),
+        cone(0.12, 0.28, 5, 'flame', { x: 0.14, y: 0.4, z: 0.14 }, 0xffe070),
+      ]);
+    case 'salt_lamp':
+      return merge([
+        box(0.3, 0.06, 0.3, 'rootbark', { y: 0.03 }),
+        ico(0.2, 'salt', { y: 0.28, sy: 1.4, jitter: 0.25, seed: 71 }),
+        octa(0.08, 'flame', { y: 0.3 }, 0xffb090),
+      ]);
+    case 'amber_lantern':
+      return merge([
+        box(0.34, 0.05, 0.34, 'rootbark', { y: 0.03 }),
+        ...[[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([x, z]) => box(0.04, 0.5, 0.04, 'rootbark', { x: x * 0.14, y: 0.3, z: z * 0.14 })),
+        box(0.26, 0.4, 0.26, 'amber', { y: 0.3 }),
+        octa(0.07, 'flame', { y: 0.3 }, 0xfff0b0),
+        taper(0.38, 0.14, 0.38, 0.3, 0.3, 'rootbark', { y: 0.6 }),
+        cyl(0.03, 0.03, 0.12, 5, 'iron', { y: 0.73 }),
+      ]);
     case 'bed':
       return merge([
         box(1.2, 0.25, 2.2, 'planks', { y: 0.2 }),
@@ -630,6 +717,15 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'block': g = block(spec.layer); break;
     case 'log': g = log(); break;
     case 'gel': g = gel(); break;
+    case 'sap': g = merge([ico(0.12, 'amber', { y: 0.08, sy: 0.7, detail: 1, jitter: 0.12, seed: 4 }, 0xd8f080), ico(0.03, 'plain', { x: 0.05, y: 0.13, z: 0.05 }, 0xfffff0)]); break;
+    case 'amber': g = amberDrop(); break;
+    case 'starseed': g = starseed(); break;
+    case 'totem': g = totem(); break;
+    case 'maul': g = maul(); break;
+    case 'heartroot': g = merge([lifeCrystalBase(), lifeCrystalHeart()]); break;
+    case 'glim_vessel': g = vessel('glim', 0xe0f8ff); break;
+    case 'glim_draught': g = bottle('glim'); break;
+    case 'mending_draught': g = bottle('ember'); break;
     case 'arrow': g = arrow(); break;
     case 'bomb': g = bomb(); break;
     case 'potion': g = bottle('red'); break;
@@ -646,9 +742,6 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'plume': g = plume(); break;
     case 'wings': g = wings(); break;
     case 'idol': g = idol(); break;
-    case 'star': g = star(); break;
-    case 'mana_crystal': g = merge([octa(0.12, 'manaGem', { y: 0.16, sy: 1.6 }), octa(0.06, 'manaGem', { x: 0.1, y: 0.1, sy: 1.5, rz: -0.5 }), octa(0.05, 'manaGem', { x: -0.09, y: 0.09, sy: 1.5, rz: 0.5 }), octa(0.035, 'flame', { x: -0.04, y: 0.24, z: 0.05 }, 0xe0ecff)]); break;
-    case 'mana_potion': g = bottle('manaGem'); break;
     case 'glowcap': g = glowcapItem(); break;
     case 'bucket': g = bucket(false); break;
     case 'water_bucket': g = bucket(true); break;
@@ -667,4 +760,4 @@ export function itemModel(def: ItemDef) { return modelFor(def.model); }
 export function furnitureModel(id: FurnitureId) { return modelFor({ type: 'furniture', id }); }
 
 /** Building blocks for other model modules (creatures, NPCs). */
-export const parts = { box, cyl, ico, octa, cone, taper, merge };
+export const parts = { box, cyl, ico, octa, cone, taper, merge, part };

@@ -1,7 +1,6 @@
-// Housing check (Terraria's "valid house" rule, in 3D): flood-fill air on a
-// 0.5 m grid from a point inside a room. The room is valid if the fill is
-// enclosed (never escapes the search box), has a reasonable volume, and
-// contains a light source, a seat, a table surface and a door in its walls.
+// Housing check: flood-fill air on a 0.5 m grid from a point inside a room.
+// A Hollowdeep home is an enclosed room of reasonable size with a door in its
+// walls, a lit Hearth at its heart and somewhere to rest (a bed or a chair).
 
 import type { TerrainField } from '../world/terrain';
 import { FURNITURE, FurnitureSet, type Placed } from './furniture';
@@ -81,8 +80,7 @@ export function checkHousing(field: TerrainField, structures: Structures, furnit
   if (volume < MIN_VOLUME) missing.push('Room is too small');
   if (volume > MAX_VOLUME) missing.push('Room is too large');
   if (!hasDoor) missing.push('Needs a door');
-  if (!roles.has('light')) missing.push('Needs a light source (torch)');
-  if (!roles.has('chair')) missing.push('Needs a chair');
-  if (!roles.has('table')) missing.push('Needs a table or workbench');
+  if (!roles.has('hearth')) missing.push('Needs a Hearth');
+  if (!roles.has('chair') && !roles.has('bed')) missing.push('Needs a bed or chair');
   return { ok: missing.length === 0, missing, volume, center };
 }

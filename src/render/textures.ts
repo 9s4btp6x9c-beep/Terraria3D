@@ -47,11 +47,24 @@ export const EXTRA_LAYERS = {
   manaGem: { style: 'gel', palette: [0x3a6aff, 0x142a8a, 0x7aa8ff, 0xe0ecff] },
   bloodgel: { style: 'gel', palette: [0xd02a3a, 0x6a0a18, 0xff6a78, 0xffd0d4] },
   hide: { style: 'fur', palette: [0x6a2a2a, 0x2e1014, 0x8a3a36, 0xc0605a] },
+  sporeMetal: { style: 'metal', palette: [0x2a9a80, 0x0e4a3e, 0x5ad8b0, 0xd0fff0] },
+  rotfur: { style: 'fur', palette: [0x4e5a4a, 0x262e26, 0x6a7a62, 0x8aa07a] },
+  riftleaves: { style: 'crystal', palette: [0x3ab8c8, 0x1a5a70, 0x8af0f0, 0xe0ffff] },
+  amberleaves: { style: 'blotch', palette: [0xd8702a, 0xa0421e, 0xf0a038, 0xf8d050] },
+  mossleaves: { style: 'blotch', palette: [0x56763a, 0x344e26, 0x74924a, 0xb4c066] },
+  rootbark: { style: 'bark', palette: [0x5e4a3c, 0x33261e, 0x7a6250, 0x9ab870] },
+  amber: { style: 'gel', palette: [0xf0a028, 0xa0520e, 0xffd060, 0xfff4b0] },
+  burr: { style: 'blotch', palette: [0x6a8a3a, 0x40582a, 0x86a64a, 0xc8d868] },
+  jelly: { style: 'gel', palette: [0xb8a8ff, 0x6a5ac8, 0xe0d8ff, 0xffffff] },
+  spore: { style: 'blotch', palette: [0x3ac8a0, 0x1a6a5a, 0x7af0c8, 0xe0fff0] },
+  ember: { style: 'flame', palette: [0xff8a30, 0xd0401a, 0xffd060, 0xfff4c0] },
+  glim: { style: 'gel', palette: [0x4ab8ff, 0x1a5ab0, 0x9ae0ff, 0xf0ffff] },
 } as const satisfies Record<string, { style: Style; palette: readonly number[] }>;
 
 /** Self-illumination per extra layer (flames glow, crystals shimmer). */
 export const EXTRA_EMISSIVE: Partial<Record<keyof typeof EXTRA_LAYERS, number>> = {
   flame: 1.2, lumiteMetal: 0.35, gel: 0.08, emberMetal: 0.4, bloodMetal: 0.18, bloodgel: 0.1, aeriteMetal: 0.22, heart: 0.45, manaGem: 0.4, glowcap: 0.6,
+  riftleaves: 0.22, amber: 0.55, spore: 0.5, jelly: 0.3, ember: 1.0, glim: 0.5, sporeMetal: 0.2,
 };
 
 export type ExtraLayer = keyof typeof EXTRA_LAYERS;
@@ -59,7 +72,7 @@ export function layerOf(name: ExtraLayer): number {
   return MATERIALS.length + Object.keys(EXTRA_LAYERS).indexOf(name);
 }
 
-type Style = TextureStyle | 'bark' | 'planks' | 'bricks' | 'plain' | 'metal' | 'flame' | 'cloth' | 'gel' | 'bone' | 'chitin' | 'fur';
+type Style = TextureStyle | 'planks' | 'bricks' | 'plain' | 'metal' | 'flame' | 'cloth' | 'gel' | 'bone' | 'chitin' | 'fur';
 
 function rgb(hex: number): [number, number, number] {
   return [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
@@ -178,6 +191,31 @@ function paint(style: Style, palette: readonly number[], seed: number): Uint8Arr
             put(i, dx + dy < 0 ? accent : light);
           }
       }
+    }
+  }
+  if (style === 'crackle') {
+    // Salt-pan crust: big polygons with raised, cracked rims.
+    const vor = voronoi(rand, 9);
+    for (let i = 0; i < TEX * TEX; i++) {
+      const e = vor.edge[i];
+      const t = 0.95 + (vor.id[i] % 5) * 0.02;
+      put(i, e < 1.1 ? dark : e < 2.6 ? accent : n3[i] > 0.8 ? light : base, e < 1.1 ? 1 : t);
+    }
+  }
+  if (style === 'litter') {
+    // Fallen leaves over dark loam.
+    for (let i = 0; i < TEX * TEX; i++) put(i, n2[i] < 0.4 ? dark : base);
+    const leafCols = [light, accent, [0xb0, 0x3a, 0x22] as [number, number, number], light];
+    for (let k = 0; k < 150; k++) {
+      const cx = rand() * TEX, cy = rand() * TEX, a = rand() * Math.PI, c = leafCols[k % 4];
+      const ca = Math.cos(a), sa = Math.sin(a), shade = 0.8 + rand() * 0.3;
+      for (let dy = -3; dy <= 3; dy++)
+        for (let dx = -3; dx <= 3; dx++) {
+          const u = dx * ca + dy * sa, v = -dx * sa + dy * ca;
+          if ((u * u) / 7 + (v * v) / 1.6 > 1) continue;
+          const x = Math.floor(cx + dx + TEX) % TEX, y = Math.floor(cy + dy + TEX) % TEX;
+          put(x + y * TEX, c, Math.abs(v) < 0.4 ? shade * 0.8 : shade);
+        }
     }
   }
   if (style === 'bark') {

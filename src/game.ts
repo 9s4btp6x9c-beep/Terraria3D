@@ -39,8 +39,8 @@ import { Minimap } from './ui/minimap';
 import { type Quality, detectQuality } from './ui/quality';
 import { WorldLabels } from './ui/worldLabels';
 import { WorldCollision } from './world/collision';
-import { defaultConfig } from './world/config';
-import { EMBER_Y, WorldGenerator } from './world/generator';
+import { LEGACY_CHUNKS, WORLD_CHUNKS, defaultConfig } from './world/config';
+import { BIOME_NAMES, EMBER_Y, WorldGenerator } from './world/generator';
 import { Mat, material } from './world/materials';
 import { EditLog, type SaveData, readSave, writeSave } from './world/persistence';
 import { SkyMap } from './world/skymap';
@@ -94,6 +94,10 @@ export class Game {
   private furnVersion = -1;
   /** Seconds of breath left underwater. */
   breath = 12;
+  /** Biome whose name was last shown, and the one the player is crossing into. */
+  private biomeShown = -1;
+  private biomeNext = -1;
+  private biomeTime = 0;
   readonly maxBreath = 12;
   private drownTimer = 0;
   private wasInWater = false;
@@ -158,7 +162,8 @@ export class Game {
   // ======================================================================= load
 
   async load(seed: number, save: SaveData | null, cb: LoadCallbacks) {
-    const cfg = defaultConfig(save?.seed ?? seed);
+    const chunks = save ? (typeof save.extra?.chunks === 'number' ? save.extra.chunks : LEGACY_CHUNKS) : WORLD_CHUNKS;
+    const cfg = defaultConfig(save?.seed ?? seed, chunks);
     cb.progress(0.02, 'Shaping the land');
     await tick();
     this.gen = new WorldGenerator(cfg);
@@ -192,7 +197,12 @@ export class Game {
 
     cb.progress(0.06, 'Computing skylight');
     await tick();
-    this.sky = new SkyMap(this.field, (x, z) => this.gen.height(x, z));
+    this.sky = new SkyMap(this.field, (x, z) => this.gen.height(x, z), (x, y, z) => {
+      // Root arches and giant ribs don't count as a roof over the ground.
+      if (y < this.gen.height(x, z) + 1) return false;
+      const f = this.gen.featureAt(x, y, z);
+      return !!f && f.d > -1.5 && f.mat !== Mat.Amber;
+    });
     cb.progress(0.1, 'Growing forests');
     await tick();
     this.veg = new Vegetation(this.field, this.gen, this.sky);
@@ -316,7 +326,7 @@ export class Game {
     this.scene.add(this.town.group);
     this.dialogue = new DialogueUI($('#hud'), this.inventory, this.icons, () => this.npcContext(),
       (ok, name) => {
-        this.hud.message(ok ? `Bought ${name}` : 'Not enough coins (or no room)', ok ? '#ffe08a' : '#ff9a7a');
+        this.hud.message(ok ? `Bought ${name}` : 'Not enough amber (or no room)', ok ? '#ffe08a' : '#ff9a7a');
         if (ok) this.audio.play('craft');
       },
       () => { if (!this.invUI.open) this.input.lock(); });
@@ -483,7 +493,7 @@ export class Game {
         return w.speed;
       }
       case 'magic': {
-        if (!this.vitals.useMana(w.manaCost ?? 5)) { this.hud.message('Not enough mana', '#8ab8ff'); return 0.3; }
+        if (!this.vitals.useMana(w.manaCost ?? 5)) { this.hud.message('Not enough Glim', '#8ab8ff'); return 0.3; }
         const o = eye.clone().addScaledVector(dir, 0.8);
         const boring = def.id === 'wyrmfang_staff', gale = def.id === 'tempest_staff';
         this.combat.fire(boring ? 'drill' : gale ? 'gust' : 'bolt', o.x, o.y - 0.15, o.z, dir.x, dir.y, dir.z, w.projectileSpeed!, w.damage, w.knockback);
@@ -539,29 +549,29 @@ export class Game {
     if (def.grow) {
       const v = this.vitals;
       if (def.grow.life) {
-        if (v.maxHp >= 400) { this.hud.message('Your life is already at its peak', '#ffb070'); return false; }
+        if (v.maxHp >= 400) { this.hud.message('Your Vigor is already at its peak', '#ffb070'); return false; }
         v.maxHp += def.grow.life; v.hp = Math.min(v.maxHp, v.hp + def.grow.life);
-        this.hud.message(`Max life increased to ${v.maxHp}`, '#ff8a9a');
+        this.hud.message(`Max Vigor increased to ${v.maxHp}`, '#ffb070');
       }
       if (def.grow.mana) {
-        if (v.maxMana >= 200) { this.hud.message('Your mana is already at its peak', '#ffb070'); return false; }
+        if (v.maxMana >= 200) { this.hud.message('Your Glim is already at its peak', '#ffb070'); return false; }
         v.maxMana += def.grow.mana; v.mana = Math.min(v.maxMana, v.mana + def.grow.mana);
-        this.hud.message(`Max mana increased to ${v.maxMana}`, '#8ab8ff');
+        this.hud.message(`Max Glim increased to ${v.maxMana}`, '#8ab8ff');
       }
-      this.particles.burst(this.player.x, this.player.y + 1.2, this.player.z, 0, 1, 0, def.grow.life ? 0xff4a5a : 0x5a8aff, 24, { speed: 3, gravity: -1 });
+      this.particles.burst(this.player.x, this.player.y + 1.2, this.player.z, 0, 1, 0, def.grow.life ? 0xff9a3a : 0x6ac8ff, 24, { speed: 3, gravity: -1 });
       this.audio.play('magic');
       return true;
     }
     if (def.mana) {
-      if (this.vitals.mana >= this.vitals.maxMana) { this.hud.message('Mana is already full', '#ffb070'); return false; }
+      if (this.vitals.mana >= this.vitals.maxMana) { this.hud.message('Glim is already full', '#ffb070'); return false; }
       this.vitals.mana = Math.min(this.vitals.maxMana, this.vitals.mana + def.mana);
       this.labels.add(this.player.x, this.player.y + 2, this.player.z, `+${def.mana}`, '#7aa8ff');
       this.audio.play('drink');
       return true;
     }
     if (def.heal) {
-      if (this.potionCooldown > 0) { this.hud.message(`Potion sickness (${Math.ceil(this.potionCooldown)}s)`, '#ffb070'); return false; }
-      if (this.vitals.hp >= this.vitals.maxHp) { this.hud.message('Already at full health', '#ffb070'); return false; }
+      if (this.potionCooldown > 0) { this.hud.message(`Still queasy from the last draught (${Math.ceil(this.potionCooldown)}s)`, '#ffb070'); return false; }
+      if (this.vitals.hp >= this.vitals.maxHp) { this.hud.message('Already at full Vigor', '#ffb070'); return false; }
       this.vitals.heal(def.heal);
       this.potionCooldown = 20;
       this.labels.add(this.player.x, this.player.y + 2, this.player.z, `+${def.heal}`, '#6aff8a');
@@ -663,30 +673,67 @@ export class Game {
   }
 
   /** On clear nights stars streak down and land near the player as pickups. */
+  /**
+   * Starseeds: on clear nights seeds of light drift down from the stars like
+   * dandelion seeds on the wind. Catch one in the air, or find it where it
+   * lands. During a Sporefall, glowing spores fall instead.
+   */
   private updateFallingStars(dt: number) {
-    const night = this.atmosphere.daylight < 0.25 && this.events.kind !== 'blood_moon';
+    const night = this.atmosphere.daylight < 0.25 && this.events.kind !== 'sporefall';
     const outdoors = this.sky.visibility(this.player.x, this.player.y + 1.5, this.player.z) > 0.5;
     this.starTimer -= dt;
     if (night && outdoors && this.starTimer <= 0) {
-      this.starTimer = 35 + Math.random() * 45;
+      this.starTimer = 20 + Math.random() * 30;
       this.dropStar();
     }
+    const p = this.player;
     for (let i = this.stars.length - 1; i >= 0; i--) {
       const st = this.stars[i];
       st.t += dt;
-      st.x += st.vx * dt; st.y += st.vy * dt; st.z += st.vz * dt;
-      this.particles.burst(st.x, st.y, st.z, -st.vx * 0.02, -st.vy * 0.02, -st.vz * 0.02, Math.random() < 0.5 ? 0xfff4a0 : 0xffffff, 2, { speed: 0.5, size: 0.12, gravity: 0, life: 0.6 });
-      if (Math.floor(st.t * 10) % 2 === 0) this.atmosphere.lights.flash(st.x, st.y, st.z, 0xfff0a0, 14, 0.12);
+      // Lazy, looping drift: a steady wind plus a slow sway.
+      const sway = Math.sin(st.t * 0.9 + st.vz) * 1.4;
+      st.x += (st.vx + sway * 0.6) * dt; st.y += st.vy * dt; st.z += (st.vz + Math.cos(st.t * 0.7) * 0.8) * dt;
+      if (Math.random() < 0.35) this.particles.burst(st.x, st.y, st.z, 0, -0.3, 0, Math.random() < 0.5 ? 0xbfe8ff : 0xffffff, 1, { speed: 0.3, size: 0.07, gravity: 0, life: 0.9 });
+      if (Math.floor(st.t * 5) % 3 === 0) this.atmosphere.lights.flash(st.x, st.y, st.z, 0xbfe8ff, 12, 0.1);
+      if (Math.hypot(st.x - p.x, st.y - (p.y + 1.1), st.z - p.z) < 1.8 && this.inventory.add('fallen_star', 1) === 0) {
+        this.stars.splice(i, 1);
+        this.hud.message('Caught a Starseed!', '#bfe8ff');
+        this.particles.burst(st.x, st.y, st.z, 0, 1, 0, 0xbfe8ff, 18, { speed: 3, gravity: 0 });
+        this.audio.play('magic');
+        continue;
+      }
       const inX = st.x > 2 && st.z > 2 && st.x < this.field.sx - 2 && st.z < this.field.sz - 2;
       const ground = inX ? this.sky.raw[Math.floor(st.x) + Math.floor(st.z) * this.sky.w] : -Infinity;
-      if (st.y <= ground + 0.3 || st.t > 12) {
+      if (st.y <= ground + 0.3 || st.t > 60) {
         this.stars.splice(i, 1);
         if (!inX) continue;
         this.pickups.spawn('fallen_star', 1, st.x, Math.max(st.y, ground) + 0.6, st.z, 0.5);
-        this.particles.burst(st.x, ground + 0.5, st.z, 0, 1, 0, 0xfff4a0, 26, { speed: 5 });
-        this.atmosphere.lights.flash(st.x, ground + 1, st.z, 0xfff0a0, 18, 0.6);
-        this.audio.play('magic', Math.hypot(st.x - this.player.x, st.z - this.player.z));
+        this.particles.burst(st.x, ground + 0.5, st.z, 0, 1, 0, 0xbfe8ff, 16, { speed: 2.5 });
+        this.atmosphere.lights.flash(st.x, ground + 1, st.z, 0xbfe8ff, 14, 0.5);
+        this.audio.play('magic', Math.hypot(st.x - p.x, st.z - p.z));
       }
+    }
+    // Sporefall: glowing motes sift down around the player outdoors.
+    const spores = this.atmosphere.sporeVisible;
+    if (spores > 0.1 && outdoors) {
+      for (let k = 0; k < 3; k++) {
+        if (Math.random() > spores * dt * 30) continue;
+        const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 16;
+        this.particles.burst(p.x + Math.cos(a) * r, p.y + 4 + Math.random() * 10, p.z + Math.sin(a) * r, 0.3, -0.4, 0.1, Math.random() < 0.6 ? 0x7af0c8 : 0xd8ffb0, 1, { speed: 0.5, size: 0.06, gravity: 0.25, life: 5 });
+      }
+    }
+  }
+
+  /** Announce a biome once the player has spent a moment in it, out under the sky. */
+  private updateBiomeTitle(dt: number) {
+    const p = this.player;
+    if (this.sky.visibility(p.x, p.y + 1.5, p.z) < 0.5 || p.y > this.field.sy - 40) { this.biomeTime = 0; return; }
+    const b = this.gen.biomeAt(p.x, p.z);
+    if (b !== this.biomeNext) { this.biomeNext = b; this.biomeTime = 0; }
+    this.biomeTime += dt;
+    if (b !== this.biomeShown && this.biomeTime > 1.2) {
+      this.biomeShown = b;
+      this.hud.showBiome(BIOME_NAMES[b]);
     }
   }
 
@@ -709,14 +756,12 @@ export class Game {
 
   /** Launch a falling star that lands 15–45 m from the player. */
   dropStar() {
-    const a = Math.random() * Math.PI * 2, d = 15 + Math.random() * 30;
-    const tx = this.player.x + Math.cos(a) * d, tz = this.player.z + Math.sin(a) * d;
-    const b = a + (Math.random() - 0.5) * 1.5;
-    const sx = tx + Math.cos(b) * 60, sz = tz + Math.sin(b) * 60;
-    const sy = Math.min(this.field.sy + 30, this.player.y + 90);
-    const ty = this.gen.height(tx, tz);
-    const time = 3.2;
-    this.stars.push({ x: sx, y: sy, z: sz, vx: (tx - sx) / time, vy: (ty - sy) / time, vz: (tz - sz) / time, t: 0 });
+    // Starts high above a point near the player and drifts down over ~20 s.
+    const a = Math.random() * Math.PI * 2, d = 8 + Math.random() * 22;
+    const wind = Math.random() * Math.PI * 2;
+    const x = this.player.x + Math.cos(a) * d, z = this.player.z + Math.sin(a) * d;
+    const y = Math.min(this.field.sy + 20, Math.max(this.player.y, this.gen.height(x, z)) + 40);
+    this.stars.push({ x, y, z, vx: Math.cos(wind) * 0.9, vy: -2.1, vz: Math.sin(wind) * 0.9, t: 0 });
   }
 
   /** Start a world event right away (war horn, tests). */
@@ -727,8 +772,8 @@ export class Game {
   private onEventSignals(signals: EventSignal[]) {
     for (const s of signals) {
       if (s.type === 'start') {
-        if (s.kind === 'blood_moon') {
-          this.hud.message('The Blood Moon is rising...', '#ff6a6a');
+        if (s.kind === 'sporefall') {
+          this.hud.message('Spores are falling from the sky...', '#7af0c8');
           this.audio.play('omen');
         } else {
           this.hud.message('The Hollowfolk are marching on your town!', '#e6dcc0');
@@ -736,12 +781,12 @@ export class Game {
           this.shake = Math.min(1, this.shake + 0.3);
         }
       } else if (s.type === 'end') {
-        if (s.kind === 'blood_moon') this.hud.message('The Blood Moon sets. Dawn at last.', '#ffb0a0');
+        if (s.kind === 'sporefall') this.hud.message('The Sporefall settles. Dawn at last.', '#b0f0d8');
         else if (s.won) {
           const first = !this.progress.raidDefeated;
           this.progress.raidDefeated = true;
           this.combat.dismiss('raid');
-          this.hud.message('The Hollow Raid has been repelled!', '#ffe08a');
+          this.hud.message('The Hollow March has been turned back!', '#ffe08a');
           if (first) this.hud.message('Word of your victory will spread...', '#c89aff');
           const p = this.player;
           this.pickups.spawn('coin', 120, p.x, p.y + 1.5, p.z, 1.5);
@@ -773,7 +818,7 @@ export class Game {
   private blast(x: number, y: number, z: number, r: number) {
     const res = this.log.commit(this.field, 'sub', x, y, z, r, Mat.Air, 1);
     this.onTerrainEdited(x, y, z, r);
-    // Blasted material drops as items (like Terraria bombs).
+    // Blasted material drops as items.
     for (const [m, vol] of res.volumes) {
       const def = material(m);
       if (!def.drop || vol <= 0) continue;
@@ -823,7 +868,7 @@ export class Game {
     this.markSky(x - pad, z - pad, x + pad, z + pad);
     this.veg.invalidateTufts(x, z, r + 1);
     for (const t of this.veg.unsupportedTrees(x, z, r)) {
-      // Undermined trees topple and drop their wood (like Terraria).
+      // Undermined trees topple and drop their wood.
       t.alive = false;
       this.onTreeFelled(t);
       this.pickups.spawn(t.kind === 'mushroom' ? 'glowcap' : 'wood', Math.round(t.height / 2) + 2, t.x, t.y + 1, t.z);
@@ -888,6 +933,7 @@ export class Game {
       player: { x: this.player.x, y: this.player.y, z: this.player.z, yaw: this.player.yaw, pitch: this.player.pitch },
       savedAt: Date.now(),
       extra: {
+        chunks: this.field.cfg.chunksX,
         timeOfDay: this.atmosphere.timeOfDay,
         furniture: this.furniture.serialize(),
         equipment: this.equipment.serialize(),
@@ -997,7 +1043,7 @@ export class Game {
     this.atmosphere.update(dt, cam.position, vis, this.time, cam.position, dir, 0, 0, 0);
     this.post.setUnderground(this.atmosphere.underground);
     this.post.setNight(1 - this.atmosphere.daylight);
-    this.post.setBlood(this.atmosphere.bloodVisible);
+    this.post.setSpore(this.atmosphere.sporeVisible);
     this.post.setWater(0);
     this.particles.update(dt, this.atmosphere.ambientAt(vis));
     this.input.endFrame();
@@ -1195,8 +1241,8 @@ export class Game {
       daylight: this.atmosphere.daylight, px: this.player.x, pz: this.player.z, town: this.townInfo(), bossDefeated: this.progress.bossDefeated,
     }));
     const ev = this.events.kind;
-    this.combat.spawnBoost = ev === 'blood_moon' ? 1.8 : ev === 'raid' ? 1.6 : 1;
-    this.atmosphere.bloodTarget = ev === 'blood_moon' ? 1 : 0;
+    this.combat.spawnBoost = ev === 'sporefall' ? 1.8 : ev === 'raid' ? 1.6 : 1;
+    this.atmosphere.sporeTarget = ev === 'sporefall' ? 1 : 0;
     this.combat.update(dt, this.player.x, this.player.y, this.player.z, this.time, this.player.vx, this.player.vz);
     this.town.update(dt, this.player.x, this.player.y, this.player.z, this.atmosphere.daylight < 0.3, this.npcContext());
     this.flushSky();
@@ -1221,7 +1267,7 @@ export class Game {
     }
     this.post.setUnderground(this.atmosphere.underground);
     this.post.setNight(1 - this.atmosphere.daylight);
-    this.post.setBlood(this.atmosphere.bloodVisible);
+    this.post.setSpore(this.atmosphere.sporeVisible);
     this.post.setWater(this.atmosphere.underwater);
     const moving = Math.min(1, Math.hypot(this.player.vx, this.player.vz) / 5) * (this.player.grounded ? 1 : 0);
     const ambient = this.atmosphere.ambientAt(vis);
@@ -1236,11 +1282,12 @@ export class Game {
     this.hud.setVitals(this.vitals.hp, this.vitals.maxHp, this.vitals.mana, this.vitals.maxMana, this.vitals.defense);
     const pl = this.player;
     this.hud.setBreath(this.breath < this.maxBreath - 0.05 ? this.breath / this.maxBreath : null);
+    this.updateBiomeTitle(dt);
     this.hud.setFlight(pl.flightTime > 0 && !pl.grounded && !this.vitals.dead ? pl.flightLeft / pl.flightTime : null);
     this.labels.update(dt, this.camera, window.innerWidth, window.innerHeight);
     this.minimap.draw(this.player.x, this.player.z, this.player.yaw, this.combat.creatures.map(c => ({ x: c.x, z: c.z, color: '#ff5a4a' })));
     const hours = this.atmosphere.timeOfDay * 24;
-    this.hud.setClock(hours, this.atmosphere.daylight > 0.3, ev === 'blood_moon', this.events.nights + 1);
+    this.hud.setClock(hours, this.atmosphere.daylight > 0.3, ev === 'sporefall', this.events.nights + 1);
     this.hud.setDeath(this.vitals.dead, this.vitals.respawnTimer);
     this.hud.setFps(this.fps);
     if (this.hud.debugVisible) {

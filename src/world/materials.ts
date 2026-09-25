@@ -17,17 +17,23 @@ export const enum Mat {
   Deepstone = 11,
   Sandstone = 12,
   Ice = 13,
-  Blightgrass = 14,
-  Blightstone = 15,
+  Riftmoss = 14,
+  Riftstone = 15,
   Emberstone = 16,
   Emberite = 17,
   Aerite = 18,
   Mushgrass = 19,
   Mud = 20,
+  Moss = 21,
+  Rootwood = 22,
+  Salt = 23,
+  Fossil = 24,
+  Leaflitter = 25,
+  Amber = 26,
 }
 
 /** Procedural pixel-art texture recipe (see render/textures.ts). */
-export type TextureStyle = 'blotch' | 'speckle' | 'cobble' | 'dither' | 'ore' | 'crystal' | 'strata';
+export type TextureStyle = 'blotch' | 'speckle' | 'cobble' | 'dither' | 'ore' | 'crystal' | 'strata' | 'bark' | 'bone' | 'crackle' | 'litter';
 
 export interface MaterialDef {
   id: Mat;
@@ -64,13 +70,22 @@ const defs: MaterialDef[] = [
   { id: Mat.Deepstone, name: 'Deepstone', texture: 'cobble', palette: [0x5a5470, 0x24202e, 0x746e8c, 0x44405a], hardness: 1.4, tier: 1, drop: 'stone', volumePerItem: 2, emissive: 0, particle: 0x5a5470 },
   { id: Mat.Sandstone, name: 'Sandstone', texture: 'strata', palette: [0xd4b070, 0xa4844a, 0xe6cc92, 0x86683c], hardness: 0.7, tier: 0, drop: 'sandstone', volumePerItem: 2, emissive: 0, particle: 0xc8a868 },
   { id: Mat.Ice, name: 'Ice', texture: 'cobble', palette: [0xa8d8f0, 0x5a98c8, 0xd8f4ff, 0x88c0e0], hardness: 0.5, tier: 0, drop: 'ice', volumePerItem: 2, emissive: 0.04, particle: 0xc8ecff },
-  { id: Mat.Blightgrass, name: 'Blightgrass', texture: 'blotch', palette: [0x6a4a8a, 0x4a3068, 0x8a64a8, 0xb07ad0], hardness: 0.4, tier: 0, drop: 'dirt', volumePerItem: 2, emissive: 0, particle: 0x6a4a8a },
-  { id: Mat.Blightstone, name: 'Blightstone', texture: 'cobble', palette: [0x5a4a6e, 0x221a2e, 0x7a6a90, 0x8a4aa0], hardness: 1.1, tier: 0, drop: 'blightstone', volumePerItem: 2, emissive: 0, particle: 0x6a5a80 },
+  { id: Mat.Riftmoss, name: 'Riftmoss', texture: 'blotch', palette: [0x3e5664, 0x2a3c4a, 0x4c6676, 0x58b4bc], hardness: 0.4, tier: 0, drop: 'dirt', volumePerItem: 2, emissive: 0.03, particle: 0x4e8a96 },
+  { id: Mat.Riftstone, name: 'Riftstone', texture: 'cobble', palette: [0x46506a, 0x161c2a, 0x5e6c88, 0x2e8a9a], hardness: 1.1, tier: 0, drop: 'blightstone', volumePerItem: 2, emissive: 0.1, particle: 0x5a7890 },
   { id: Mat.Emberstone, name: 'Emberstone', texture: 'cobble', palette: [0x5a2a22, 0x1a0a08, 0x7a3426, 0xe05a24], hardness: 2, tier: 2, drop: 'emberstone', volumePerItem: 2, emissive: 0.14, particle: 0xff6a2a },
   { id: Mat.Emberite, name: 'Emberite Ore', texture: 'ore', palette: [0x4a1e16, 0x1a0806, 0xff8a30, 0xffe070], hardness: 2.4, tier: 2, drop: 'emberite', volumePerItem: 1.5, emissive: 0.7, particle: 0xffa040 },
   { id: Mat.Aerite, name: 'Aerite Ore', texture: 'ore', palette: [0x8e98ae, 0x3e4458, 0xa8e4ff, 0xfff4c0], hardness: 1.6, tier: 1, drop: 'aerite_ore', volumePerItem: 1.5, emissive: 0.3, particle: 0xbfeaff },
   { id: Mat.Mushgrass, name: 'Mushroom Grass', texture: 'blotch', palette: [0x2a6a9a, 0x163e66, 0x3aa0d0, 0x7ae8ff], hardness: 0.4, tier: 0, drop: 'mud', volumePerItem: 2, emissive: 0.32, particle: 0x3aa0d0 },
   { id: Mat.Mud, name: 'Mud', texture: 'speckle', palette: [0x4e4038, 0x2e2420, 0x64544a, 0x3a3a52], hardness: 0.4, tier: 0, drop: 'mud', volumePerItem: 2, emissive: 0, particle: 0x4e4038 },
+  // ---- Rootwold: deep moss over the petrified roots of something vast.
+  { id: Mat.Moss, name: 'Deep Moss', texture: 'blotch', palette: [0x5e7a36, 0x3e5626, 0x7a9442, 0xc8c868], hardness: 0.4, tier: 0, drop: 'dirt', volumePerItem: 2, emissive: 0, particle: 0x6a8a3e },
+  { id: Mat.Rootwood, name: 'Petrified Root', texture: 'bark', palette: [0x7a6250, 0x3e3028, 0x9a8068, 0xc4d890], hardness: 1.2, tier: 0, drop: 'rootwood', volumePerItem: 2, emissive: 0, particle: 0x8a7058 },
+  // ---- Ossuary Flats: a dead salt sea strewn with the bones of giants.
+  { id: Mat.Salt, name: 'Salt Crust', texture: 'crackle', palette: [0xe8e2d6, 0xa89c8c, 0xf8f6f0, 0xd4cabc], hardness: 0.5, tier: 0, drop: 'salt', volumePerItem: 2, emissive: 0, particle: 0xf0ece4 },
+  { id: Mat.Fossil, name: 'Colossal Bone', texture: 'bone', palette: [0xe0d4b4, 0x9a8a6a, 0xf6ecd0, 0x6a5a44], hardness: 1.5, tier: 1, drop: 'fossil', volumePerItem: 2, emissive: 0, particle: 0xe6dcc0 },
+  // ---- Amberwood: an autumn forest that bleeds glowing resin.
+  { id: Mat.Leaflitter, name: 'Leaf Litter', texture: 'litter', palette: [0x6a4a2e, 0x3e2a1a, 0xd8742a, 0xe8b440], hardness: 0.35, tier: 0, drop: 'dirt', volumePerItem: 2, emissive: 0, particle: 0xc8702e },
+  { id: Mat.Amber, name: 'Amber Deposit', texture: 'crystal', palette: [0xe8901e, 0x9a4a0e, 0xffc050, 0xfff0a0], hardness: 1.0, tier: 0, drop: 'coin', volumePerItem: 0.35, emissive: 0.6, particle: 0xffb040 },
 ];
 
 export const MATERIALS: readonly MaterialDef[] = defs;

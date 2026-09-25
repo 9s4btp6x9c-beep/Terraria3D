@@ -79,7 +79,7 @@ interface Projectile {
 const CAPS = { day: 5, night: 10, cave: 8, sky: 3 };
 /** Above this height the player is in the high sky (floating islands). */
 export const SKY_Y = 112;
-/** Raiders alive at once during the Hollow Raid. */
+/** Raiders alive at once during the Hollow March. */
 const RAID_CAP = 12;
 
 /** Weighted random pick. */
@@ -99,7 +99,7 @@ export class Combat {
   spawning = true;
   /** Total creatures defeated (stats / tests). */
   kills = 0;
-  /** Extra spawn-rate multiplier (events such as the Blood Moon). */
+  /** Extra spawn-rate multiplier (events such as the Sporefall). */
   spawnBoost = 1;
   boss: Boss | null = null;
   private drillGeo = parts.merge([parts.cone(0.14, 0.6, 5, 'bone', { y: 0.1 }), parts.octa(0.08, 'flame', { y: -0.2 }, 0xd0ff90)]);
@@ -154,6 +154,14 @@ export class Combat {
     }
   }
 
+  /** Creatures that can spawn in an environment (by biome at the surface). */
+  spawnTable(env: SpawnEnv, biome: number, night = false, shroom = false): CreatureDef[] {
+    return Object.values(CREATURES).filter(c => c.spawn && (c.spawn.env === env || (env === 'deep' && c.spawn.env === 'cave')) &&
+      (c.spawn.time === 'any' || (c.spawn.time === 'night') === night) &&
+      (!c.spawn.biomes || env !== 'surface' || c.spawn.biomes.includes(biome)) &&
+      (!c.spawn.zone || shroom));
+  }
+
   private trySpawn(px: number, py: number, pz: number) {
     const h = this.hooks;
     const ev = h.activeEvent();
@@ -201,19 +209,16 @@ export class Combat {
         env = y < h.emberY + 6 ? 'depths' : y < 45 ? 'deep' : 'cave';
       }
       if (h.safeZone(x, y, z)) continue;
-      // Blood Moon: most surface spawns come from the event's own roster.
-      if (ev?.kind === 'blood_moon' && env === 'surface' && Math.random() < 0.7) {
-        const def = pick(Object.values(CREATURES).filter(c => c.event?.kind === 'blood_moon'), c => c.event!.weight);
+      // Sporefall: most surface spawns come from the event's own roster.
+      if (ev?.kind === 'sporefall' && env === 'surface' && Math.random() < 0.7) {
+        const def = pick(Object.values(CREATURES).filter(c => c.event?.kind === 'sporefall'), c => c.event!.weight);
         const c = this.spawn(def, x, y + (def.ai === 'flyer' ? 2.5 : 0), z);
-        c.event = 'blood_moon';
+        c.event = 'sporefall';
         return;
       }
       const biome = h.biomeAt(x, z);
       const shroom = env !== 'surface' && h.mushroomAt(x, y, z);
-      let options = Object.values(CREATURES).filter(c => c.spawn && (c.spawn.env === env || (env === 'deep' && c.spawn.env === 'cave')) &&
-        (c.spawn.time === 'any' || (c.spawn.time === 'night') === night) &&
-        (!c.spawn.biomes || env !== 'surface' || c.spawn.biomes.includes(biome)) &&
-        (!c.spawn.zone || shroom));
+      let options = this.spawnTable(env, biome, night, shroom);
       // Mushroom caverns are mostly home to their own creatures.
       if (shroom && Math.random() < 0.75) options = options.filter(c => c.spawn!.zone === 'mushroom');
       if (!options.length) return;
@@ -234,7 +239,7 @@ export class Combat {
     c.knock(fromX, fromZ, knock);
     this.hooks.damageNumber(c.cx, c.y + c.def.height + 0.3, c.cz, String(dmg), crit ? '#ff9a3a' : '#ffffff');
     this.hooks.particles(c.cx, c.cy, c.cz, 0, 0.6, 0, c.def.color, 6, 3);
-    this.hooks.sound(c.def.id.includes('glob') ? 'splat' : 'hit', c.cx, c.cy, c.cz);
+    this.hooks.sound(c.def.id.includes('burrling') ? 'splat' : 'hit', c.cx, c.cy, c.cz);
     if (c.hp <= 0) this.kill(c);
     return dmg;
   }

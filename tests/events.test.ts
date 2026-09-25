@@ -17,7 +17,7 @@ function cycle(ev: WorldEvents, n: number, extra: Partial<EventWorld> = {}) {
 }
 
 describe('world events', () => {
-  it('the first night is never a Blood Moon', () => {
+  it('the first night is never a Sporefall', () => {
     const ev = new WorldEvents(() => 0);
     ev.update(1, world(1));
     const s = ev.update(1, world(0));
@@ -25,14 +25,14 @@ describe('world events', () => {
     expect(ev.kind).toBeNull();
   });
 
-  it('a later night can bring the Blood Moon, which ends at dawn', () => {
+  it('a later night can bring the Sporefall, which ends at dawn', () => {
     const ev = new WorldEvents(() => 0);
     cycle(ev, 1);
     const start = ev.update(1, world(0));
-    expect(start).toEqual([{ type: 'start', kind: 'blood_moon' }]);
-    expect(ev.kind).toBe('blood_moon');
+    expect(start).toEqual([{ type: 'start', kind: 'sporefall' }]);
+    expect(ev.kind).toBe('sporefall');
     const end = ev.update(1, world(1));
-    expect(end[0]).toEqual({ type: 'end', kind: 'blood_moon', won: true });
+    expect(end[0]).toEqual({ type: 'end', kind: 'sporefall', won: true });
     expect(ev.kind).toBeNull();
   });
 
@@ -43,7 +43,7 @@ describe('world events', () => {
   });
 
   it('raids need the boss defeated and a town with two residents', () => {
-    const ev = new WorldEvents(() => 0.2); // above the Blood Moon odds, below the raid odds
+    const ev = new WorldEvents(() => 0.2); // above the Sporefall odds, below the raid odds
     expect(cycle(ev, 3, { bossDefeated: false })).toEqual([]);
     expect(cycle(ev, 3, { bossDefeated: true, town: { x: 100, z: 100, npcs: 1 } })).toEqual([]);
     const s = cycle(ev, 1, { bossDefeated: true });
@@ -68,10 +68,16 @@ describe('world events', () => {
     expect(s).toEqual([{ type: 'end', kind: 'raid', won: false }]);
   });
 
-  it('a Blood Moon loaded in daylight ends straight away', () => {
+  it('a Sporefall loaded in daylight ends straight away', () => {
     const ev = new WorldEvents(() => 0.99);
-    ev.load({ kind: 'blood_moon', progress: 0, goal: 0, target: null, nights: 3 });
-    expect(ev.update(1, world(1))).toEqual([{ type: 'end', kind: 'blood_moon', won: true }]);
+    ev.load({ kind: 'sporefall', progress: 0, goal: 0, target: null, nights: 3 });
+    expect(ev.update(1, world(1))).toEqual([{ type: 'end', kind: 'sporefall', won: true }]);
+  });
+
+  it('saves from before the retheme load their Blood Moon as a Sporefall', () => {
+    const ev = new WorldEvents(() => 0.99);
+    ev.load({ kind: 'blood_moon' as never, progress: 0, goal: 0, target: null, nights: 3 });
+    expect(ev.kind).toBe('sporefall');
   });
 
   it('round-trips through a save', () => {

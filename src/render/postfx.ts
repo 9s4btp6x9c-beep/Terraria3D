@@ -18,7 +18,7 @@ uniform vec2 uLineFade;
 uniform vec3 uOutline;
 uniform float uUnderground;
 uniform float uNight;
-uniform float uBlood;
+uniform float uSpore;
 uniform float uWater;
 uniform float uTime;
 varying vec2 vUv;
@@ -62,9 +62,9 @@ void main() {
   col = mix(col, col * vec3(0.9, 0.95, 1.1), uUnderground * 0.5);
   // Moonlit nights: cooler, slightly desaturated.
   float ln = dot(col, vec3(0.299, 0.587, 0.114));
-  col = mix(col, mix(vec3(ln), col, 0.6) * vec3(0.82, 0.92, 1.18), uNight * (1.0 - uUnderground) * 0.8 * (1.0 - uBlood * 0.8));
-  // Blood Moon: crimson grade outdoors.
-  col = mix(col, vec3(ln * 1.25, ln * 0.55, ln * 0.5) + col * vec3(0.25, 0.1, 0.1), uBlood * (1.0 - uUnderground) * 0.55);
+  col = mix(col, mix(vec3(ln), col, 0.6) * vec3(0.82, 0.92, 1.18), uNight * (1.0 - uUnderground) * 0.8 * (1.0 - uSpore * 0.8));
+  // Sporefall: a sickly teal-green grade outdoors.
+  col = mix(col, vec3(ln * 0.55, ln * 1.2, ln * 1.02) + col * vec3(0.08, 0.2, 0.16), uSpore * (1.0 - uUnderground) * 0.55);
 
   // Under water: tint toward deep blue.
   col = mix(col, col * vec3(0.55, 0.85, 1.1) + vec3(0.0, 0.03, 0.07), uWater * 0.8);
@@ -107,7 +107,7 @@ export class PostFX {
         uOutline: { value: new THREE.Color(0x14121c) },
         uUnderground: { value: 0 },
         uNight: { value: 0 },
-        uBlood: { value: 0 },
+        uSpore: { value: 0 },
         uWater: { value: 0 },
         uTime: { value: 0 },
       },
@@ -127,8 +127,8 @@ export class PostFX {
     this.mat.uniforms.uNight.value = v;
   }
 
-  setBlood(v: number) {
-    this.mat.uniforms.uBlood.value = v;
+  setSpore(v: number) {
+    this.mat.uniforms.uSpore.value = v;
   }
 
   setWater(v: number) {

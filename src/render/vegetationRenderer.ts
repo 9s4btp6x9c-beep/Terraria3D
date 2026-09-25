@@ -30,23 +30,23 @@ function jitter(g: THREE.BufferGeometry, rand: () => number, amt: number) {
   }
 }
 
-function blob(rand: () => number, sx: number, sy: number, sz: number, x: number, y: number, z: number, detail = 1) {
+function blob(rand: () => number, sx: number, sy: number, sz: number, x: number, y: number, z: number, detail = 1, layer: Parameters<typeof layerOf>[0] = 'leaves') {
   const g = new THREE.IcosahedronGeometry(1, detail);
   jitter(g, rand, 0.28);
   g.scale(sx, sy, sz);
   g.rotateY(rand() * Math.PI);
   g.translate(x, y, z);
   g.computeVertexNormals();
-  return tagLayer(g, layerOf('leaves'));
+  return tagLayer(g, layerOf(layer));
 }
 
-function trunk(r0: number, r1: number, h: number, x = 0, y = 0, z = 0, tiltX = 0, tiltZ = 0, sides = 6) {
+function trunk(r0: number, r1: number, h: number, x = 0, y = 0, z = 0, tiltX = 0, tiltZ = 0, sides = 6, layer: Parameters<typeof layerOf>[0] = 'bark') {
   const g = new THREE.CylinderGeometry(r1, r0, h, sides, 1, true);
   g.translate(0, h / 2, 0);
   g.rotateX(tiltX);
   g.rotateZ(tiltZ);
   g.translate(x, y, z);
-  return tagLayer(g, layerOf('bark'));
+  return tagLayer(g, layerOf(layer));
 }
 
 /** Build a tree of unit height (scaled per instance by tree.height). */
@@ -73,6 +73,43 @@ function buildTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
       parts.push(blob(rand, 0.26 + rand() * 0.08, 0.2, 0.26, Math.cos(a) * 0.18, H * (0.72 + rand() * 0.12), Math.sin(a) * 0.18));
     }
     parts.push(blob(rand, 0.3, 0.24, 0.3, 0, H * 0.92, 0));
+  } else if (kind === 'amber') {
+    // Amberwood: a broad, low crown in burnt orange with resin beads on the bark.
+    parts.push(trunk(0.055, 0.035, H * 0.62, 0, 0, 0, 0, 0, 6, 'rootbark'));
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + rand();
+      parts.push(trunk(0.02, 0.012, 0.22, 0, H * 0.5, 0, Math.sin(a) * 0.9, -Math.cos(a) * 0.9, 5, 'rootbark'));
+      parts.push(blob(rand, 0.22 + rand() * 0.06, 0.13, 0.22, Math.cos(a) * 0.2, H * (0.7 + rand() * 0.06), Math.sin(a) * 0.2, 1, 'amberleaves'));
+    }
+    parts.push(blob(rand, 0.28, 0.17, 0.28, 0, H * 0.84, 0, 1, 'amberleaves'));
+    for (let i = 0; i < 3; i++) {
+      const a = rand() * Math.PI * 2, y = 0.15 + rand() * 0.35;
+      parts.push(tagLayer(new THREE.OctahedronGeometry(0.018, 0).scale(1, 1.6, 1).translate(Math.cos(a) * 0.045, y, Math.sin(a) * 0.045), layerOf('amber')));
+    }
+  } else if (kind === 'gnarl') {
+    // Rootwold: a squat, twisting trunk on flared roots under heavy moss.
+    let x = 0, z = 0;
+    const lean = rand() * Math.PI * 2;
+    for (let i = 0; i < 4; i++) {
+      const y0 = i * 0.16, r0 = 0.07 - i * 0.012;
+      const a = lean + i * 1.3;
+      parts.push(trunk(r0, r0 - 0.012, 0.18, x, y0, z, Math.sin(a) * 0.25, -Math.cos(a) * 0.25, 6, 'rootbark'));
+      x += Math.cos(a) * 0.04; z += Math.sin(a) * 0.04;
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + rand() * 0.6;
+      parts.push(trunk(0.03, 0.012, 0.16, Math.cos(a) * 0.02, 0.1, Math.sin(a) * 0.02, Math.sin(a) * 1.9, -Math.cos(a) * 1.9, 5, 'rootbark'));
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + rand();
+      parts.push(blob(rand, 0.2 + rand() * 0.07, 0.11, 0.2, x + Math.cos(a) * 0.17, H * (0.62 + rand() * 0.1), z + Math.sin(a) * 0.17, 1, 'mossleaves'));
+    }
+    parts.push(blob(rand, 0.24, 0.14, 0.24, x, H * 0.76, z, 1, 'mossleaves'));
+    // Hanging moss strands.
+    for (let i = 0; i < 5; i++) {
+      const a = rand() * Math.PI * 2, r = 0.18 + rand() * 0.1;
+      parts.push(tagLayer(new THREE.ConeGeometry(0.02, 0.16 + rand() * 0.1, 4).rotateX(Math.PI).translate(x + Math.cos(a) * r, H * 0.52, z + Math.sin(a) * r), layerOf('mossleaves')));
+    }
   } else if (kind === 'cactus') {
     const c = (g: THREE.BufferGeometry) => tagLayer(g, layerOf('cactus'));
     const col = (r: number, h: number, x: number, y: number, z: number) => {
@@ -93,8 +130,10 @@ function buildTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
     parts.push(tagLayer(new THREE.OctahedronGeometry(0.05, 0).scale(1, 0.6, 1).translate(0.03, 0.99, 0), layerOf('red')));
   } else if (kind === 'mushroom') {
     return buildMushroom(rand, 7);
-  } else if (kind === 'dead') {
-    const bark = (g: THREE.BufferGeometry) => tagLayer(g, layerOf('deadbark'));
+  } else if (kind === 'dead' || kind === 'bleached') {
+    // Riftlands: dead trees hung with crystal; Ossuary: bare, sun-bleached snags.
+    const bleached = kind === 'bleached';
+    const bark = (g: THREE.BufferGeometry) => tagLayer(g, layerOf(bleached ? 'bone' : 'deadbark'));
     const t = new THREE.CylinderGeometry(0.02, 0.045, H, 5, 1, true);
     t.translate(0, H / 2, 0);
     parts.push(bark(t));
@@ -105,13 +144,13 @@ function buildTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
       b.rotateY(a);
       b.translate(0, y, 0);
       parts.push(bark(b));
-      if (rand() < 0.6) {
+      if (!bleached && rand() < 0.6) {
         const g = new THREE.IcosahedronGeometry(1, 0);
         jitter(g, rand, 0.3);
         g.scale(0.07, 0.05, 0.07);
         g.translate(Math.cos(a) * len * 0.8, y + len * 0.5, -Math.sin(a) * len * 0.8);
         g.computeVertexNormals();
-        parts.push(tagLayer(g, layerOf('blightleaves')));
+        parts.push(tagLayer(g, layerOf('riftleaves')));
       }
     }
   } else {
@@ -173,7 +212,13 @@ function buildFarTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
   } else if (kind === 'round') {
     parts.push(trunk(0.07, 0.05, 0.7, 0, 0, 0, 0, 0, 4));
     parts.push(blob(rand, 0.38, 0.28, 0.38, 0, 0.85, 0, 0));
-  } else if (kind === 'cactus' || kind === 'dead') {
+  } else if (kind === 'amber') {
+    parts.push(trunk(0.06, 0.04, 0.65, 0, 0, 0, 0, 0, 4, 'rootbark'));
+    parts.push(blob(rand, 0.4, 0.2, 0.4, 0, 0.78, 0, 0, 'amberleaves'));
+  } else if (kind === 'gnarl') {
+    parts.push(trunk(0.07, 0.035, 0.62, 0, 0, 0, 0, 0, 4, 'rootbark'));
+    parts.push(blob(rand, 0.34, 0.18, 0.34, 0, 0.7, 0, 0, 'mossleaves'));
+  } else if (kind === 'cactus' || kind === 'dead' || kind === 'bleached') {
     return buildTree(kind, variant);
   } else if (kind === 'mushroom') {
     return buildMushroom(rand, 5);

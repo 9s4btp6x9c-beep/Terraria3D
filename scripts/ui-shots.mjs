@@ -53,6 +53,17 @@ try {
   const slot = await page.locator('#inventory .grid .slot').first().boundingBox();
   await page.mouse.move(slot.x + 20, slot.y + 20);
   await shot('7-inventory');
+  // Every item icon from the retheme and the new biomes.
+  await page.evaluate(() => {
+    const g = __game;
+    g.toggleInventory(false);
+    for (const id of ['coin', 'life_crystal', 'fallen_star', 'mana_crystal', 'mana_potion', 'healing_potion', 'gel', 'wyrm_bait', 'blood_shard',
+      'sanguine_blade', 'heartstone', 'rootwood', 'salt', 'fossil', 'bramble_maul', 'heartwood_bow', 'titanbone_pickaxe', 'hearth', 'salt_lamp',
+      'amber_lantern', 'houndfang_charm', 'blightstone', 'bat_wing']) g.inventory.add(id, 3);
+    g.toggleInventory(true);
+  });
+  await frame();
+  await shot('7b-items');
   await page.evaluate(() => { __game.toggleInventory(false); __game.input.locked = true; __game.vitals.damage(9999, NaN, NaN, 0); });
   await frame();
   await shot('8-death');

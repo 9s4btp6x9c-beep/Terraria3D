@@ -3,13 +3,15 @@
 // identical results.
 
 import type { WorldConfig } from './config';
-import { WorldGenerator } from './generator';
+import { type GeneratorColumns, WorldGenerator } from './generator';
 import { type TerrainJob, type TerrainResult, runChunkJob, runLodJob } from './terrainJobs';
 
 let gen: WorldGenerator | null = null;
 
-self.onmessage = (e: MessageEvent<{ cfg: WorldConfig; job: TerrainJob }>) => {
-  const { cfg, job } = e.data;
+self.onmessage = (e: MessageEvent<{ cfg: WorldConfig; job?: TerrainJob; columns?: GeneratorColumns }>) => {
+  const { cfg, job, columns } = e.data;
+  if (columns) { gen = new WorldGenerator(cfg, columns); return; }
+  if (!job) return;
   if (!gen || gen.cfg.seed !== cfg.seed || gen.size.x !== cfg.chunksX * 32) gen = new WorldGenerator(cfg);
   const res: TerrainResult = job.kind === 'chunk' ? runChunkJob(gen, job) : runLodJob(gen, job);
   const transfer: Transferable[] = [];

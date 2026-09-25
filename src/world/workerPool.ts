@@ -41,6 +41,8 @@ export class TerrainWorkerPool {
           this.pump();
         };
         w.onerror = () => this.disableWorkers();
+        // Hand over the heightfield so the worker needn't recompute it.
+        w.postMessage({ cfg, columns: gen.columns() });
         this.workers.push(slot);
       }
     } catch {

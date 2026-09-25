@@ -20,7 +20,24 @@ export interface Cabin { x: number; y: number; z: number; cx: number; cz: number
 
 export const CABIN_WALL = 2.5;
 
-export const enum Biome { Forest = 0, Desert = 1, Snow = 2, Blight = 3 }
+export const enum Biome { Forest = 0, Desert = 1, Snow = 2, Rift = 3, Rootwold = 4, Ossuary = 5, Amberwood = 6 }
+
+/** In-world names, shown when the player crosses into a biome. */
+export const BIOME_NAMES = ['Greenhollow', 'Sunscar Dunes', 'Frostmere', 'The Riftlands', 'The Rootwold', 'Ossuary Flats', 'Amberwood'];
+
+/** Weights of every non-forest biome at a column, each 0..1 with soft borders. */
+export interface BiomeWeights { desert: number; snow: number; rift: number; root: number; ossuary: number; amber: number }
+
+/**
+ * A large terrain feature: a tapered capsule (radius ra at a, rb at b) that
+ * adds solid rock of its own material. Chains of them make the Rootwold's
+ * arching roots, the Ossuary's ribcages and Amberwood's resin nodules.
+ */
+export interface Feature { ax: number; ay: number; az: number; bx: number; by: number; bz: number; ra: number; rb: number; mat: number }
+const FEATURE_CELL = 16;
+
+/** The expensive per-column part of generation (heightfield, mountains, biomes). */
+export interface GeneratorColumns { heights: Float32Array; mountainMask: Float32Array; biomes: Uint8Array }
 /** Below this height the world becomes the Ember Depths. */
 export const EMBER_Y = 21;
 /** Mushroom caverns stay above the Ember Depths. */
@@ -47,6 +64,11 @@ export class WorldGenerator {
   private biomeNoise: SimplexNoise;
   private blightNoise: SimplexNoise;
   private shroomNoise: SimplexNoise;
+  private wildNoise: SimplexNoise;
+  /** Large terrain features, bucketed on a 16 m grid of columns. */
+  readonly features: Feature[] = [];
+  private featureGrid: Feature[][] = [];
+  private featureGw = 0;
   /** Per-column biome id (see Biome). */
   private biomes: Uint8Array;
   readonly entrance: Capsule[] = [];
@@ -58,7 +80,11 @@ export class WorldGenerator {
   private entranceBounds = [0, 0, 0, 0, 0, 0];
   spawn = { x: 0, y: 0, z: 0 };
 
-  constructor(readonly cfg: WorldConfig) {
+  /**
+   * `pre` lets terrain workers reuse the main thread's column data (see
+   * `columns()`) instead of recomputing the heightfield themselves.
+   */
+  constructor(readonly cfg: WorldConfig, pre?: GeneratorColumns) {
     const s = cfg.seed;
     this.size = worldSize(cfg);
     this.hills = new SimplexNoise(s + 1);
@@ -73,66 +99,94 @@ export class WorldGenerator {
     this.biomeNoise = new SimplexNoise(s + 10);
     this.blightNoise = new SimplexNoise(s + 11);
     this.shroomNoise = new SimplexNoise(s + 12);
+    this.wildNoise = new SimplexNoise(s + 13);
 
     const w = this.size.x + 1, d = this.size.z + 1;
-    this.heights = new Float32Array(w * d);
-    this.mountainMask = new Float32Array(w * d);
-    this.biomes = new Uint8Array(w * d);
-    for (let z = 0; z < d; z++)
-      for (let x = 0; x < w; x++) {
-        const [h, m, b] = this.computeHeight(x, z);
-        this.heights[x + z * w] = h;
-        this.mountainMask[x + z * w] = m;
-        this.biomes[x + z * w] = b;
-      }
+    if (pre && pre.heights.length === w * d) {
+      this.heights = pre.heights; this.mountainMask = pre.mountainMask; this.biomes = pre.biomes;
+    } else {
+      this.heights = new Float32Array(w * d);
+      this.mountainMask = new Float32Array(w * d);
+      this.biomes = new Uint8Array(w * d);
+      for (let z = 0; z < d; z++)
+        for (let x = 0; x < w; x++) {
+          const [h, m, b] = this.computeHeight(x, z);
+          this.heights[x + z * w] = h;
+          this.mountainMask[x + z * w] = m;
+          this.biomes[x + z * w] = b;
+        }
+    }
     this.placeSpawnAndEntrance();
     this.placeLakes();
     this.placeIslands();
     this.placeCabins();
+    this.placeFeatures();
+  }
+
+  /** Per-column data, shareable with workers (see constructor). */
+  columns(): GeneratorColumns {
+    return { heights: this.heights, mountainMask: this.mountainMask, biomes: this.biomes };
   }
 
   // ---------------------------------------------------------------- landforms
 
   /**
-   * Biome weights at a column: [desert, snow, blight], each 0..1 with soft
-   * borders. The centre of the world (spawn) is always forest.
+   * Biome weights at a column. Two broad noise fields act as climate: `t`
+   * (heat) splits scorched, temperate and frozen land, `u` (age) splits each
+   * band further (dunes vs salt flats, root-choked vs autumn forest). The
+   * Riftlands tear through everything on a noise field of their own. The
+   * centre of the world (spawn) is always Greenhollow.
    */
-  biomeWeights(x: number, z: number): [number, number, number] {
+  biomeWeights(x: number, z: number): BiomeWeights {
     const cx = this.size.x / 2, cz = this.size.z / 2;
     const fromCenter = smoothstep(70, 130, Math.hypot(x - cx, z - cz));
     const t = this.biomeNoise.fbm2(x / 260 + 5, z / 260 - 3, 2) + this.biomeNoise.noise2(x / 40, z / 40) * 0.04;
-    const desert = smoothstep(0.18, 0.3, t) * fromCenter;
+    const u = this.wildNoise.fbm2(x / 210 - 11, z / 210 + 7, 2) + this.wildNoise.noise2(x / 38, z / 38) * 0.04;
+    const hot = smoothstep(0.18, 0.3, t) * fromCenter;
     const snow = smoothstep(-0.18, -0.3, t) * fromCenter;
+    const flats = smoothstep(-0.02, -0.14, u);
+    const desert = hot * (1 - flats), ossuary = hot * flats;
+    const mild = fromCenter * (1 - hot) * (1 - snow);
+    const root = mild * smoothstep(-0.12, -0.24, u);
+    const amber = mild * smoothstep(0.14, 0.26, u);
     const bl = this.blightNoise.fbm2(x / 190 + 40, z / 190 - 20, 2) + this.blightNoise.noise2(x / 35, z / 35) * 0.05;
-    const blight = smoothstep(0.26, 0.36, bl) * fromCenter * (1 - desert) * (1 - snow);
-    return [desert, snow, blight];
+    const rift = smoothstep(0.26, 0.36, bl) * fromCenter * (1 - hot) * (1 - snow);
+    const keep = 1 - rift;
+    return { desert, snow, rift, root: root * keep, ossuary, amber: amber * keep };
   }
 
   private computeHeight(x: number, z: number): [number, number, number] {
     const { x: W, z: D } = this.size;
     const sea = this.cfg.seaLevel;
-    const [desert, snow, blight] = this.biomeWeights(x, z);
+    const { desert, snow, rift, root, ossuary, amber } = this.biomeWeights(x, z);
     let h = 70 + this.hills.fbm2(x / 150, z / 150, 4) * 9 + this.hills.fbm2(x / 40 + 31, z / 40, 2) * 2.5;
     let m = smoothstep(0.05, 0.45, this.mask.fbm2(x / 230 + 17, z / 230 - 9, 3));
-    m = Math.max(m * (1 - desert * 0.85), snow * 0.55);
+    m = Math.max(m * (1 - desert * 0.85) * (1 - ossuary) * (1 - root * 0.8) * (1 - amber * 0.65), snow * 0.55);
     const r = this.ridges.ridged2(x / 120, z / 120, 4);
     h += m * Math.pow(r, 2.2) * 62;
     // Desert dunes: long, soft ridges.
     const dune = 1 - Math.abs(this.hills.noise2(x / 34 + 9, z / 90));
     h += desert * (dune * dune * 7 - 1);
-    h += snow * 5 - blight * 3 + blight * this.hills.noise2(x / 18, z / 18) * 2.5;
-    // Soft terracing gives cliff bands on hillsides (not on dunes).
+    h += snow * 5 - rift * 3 + rift * this.hills.noise2(x / 18, z / 18) * 2.5;
+    // Rootwold: knotted mounds heaved up by the roots below.
+    h += root * (2 + Math.abs(this.hills.noise2(x / 22 - 4, z / 22 + 8)) * 5);
+    // Amberwood: soft, rolling rises.
+    h += amber * (1.5 + this.hills.noise2(x / 60 + 2, z / 60) * 2);
+    // Soft terracing gives cliff bands on hillsides (not on dunes or flats).
     const step = 7;
     const t = Math.floor(h / step) * step;
     const frac = (h - t) / step;
-    const terr = 0.4 * (1 - desert);
+    const terr = 0.4 * (1 - desert) * (1 - ossuary);
     h = h * (1 - terr) + (t + smoothstep(0.35, 0.65, frac) * step) * terr;
+    // Ossuary Flats: a dead, level salt pan with the faintest swell.
+    h += (67.5 + this.hills.noise2(x / 70, z / 70) * 0.8 - h) * ossuary * 0.94;
     // Ocean ring around the island-shaped world.
     const nx = (x / W) * 2 - 1, nz = (z / D) * 2 - 1;
     const edge = smoothstep(0.72, 0.97, Math.max(Math.abs(nx), Math.abs(nz)) + this.mask.noise2(x / 60, z / 60) * 0.05);
     h = h * (1 - edge) + (sea - 14) * edge;
     const j = this.detail.noise2(x / 7, z / 7) * 0.12; // dithered borders
-    const biome = desert + j > 0.5 ? Biome.Desert : snow + j > 0.5 ? Biome.Snow : blight + j > 0.5 ? Biome.Blight : Biome.Forest;
+    const biome = desert + j > 0.5 ? Biome.Desert : snow + j > 0.5 ? Biome.Snow : rift + j > 0.5 ? Biome.Rift
+      : ossuary + j > 0.5 ? Biome.Ossuary : root + j > 0.5 ? Biome.Rootwold : amber + j > 0.5 ? Biome.Amberwood : Biome.Forest;
     return [h, m * (1 - edge), biome];
   }
 
@@ -227,7 +281,7 @@ export class WorldGenerator {
     for (let tries = 0; this.lakes.length < want && tries < 600; tries++) {
       const x = m + rand() * (this.size.x - 2 * m), z = m + rand() * (this.size.z - 2 * m);
       const b = this.biomeAt(x, z);
-      if (b === Biome.Desert || b === Biome.Blight) continue;
+      if (b === Biome.Desert || b === Biome.Rift || b === Biome.Ossuary) continue;
       const r = 7 + rand() * 7;
       if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < r + 30) continue;
       if (this.lakes.some(l => Math.hypot(l.x - x, l.z - z) < l.r + r + 24)) continue;
@@ -282,6 +336,163 @@ export class WorldGenerator {
     }
   }
 
+  // ----------------------------------------------------------------- features
+
+  private placeFeatures() {
+    const rand = mulberry32(this.cfg.seed ^ 0xf3a7);
+    const area = (this.size.x * this.size.z) / (512 * 512);
+    const clearOf = (x: number, z: number, r: number) =>
+      Math.hypot(x - this.spawn.x, z - this.spawn.z) > r + 40 && !this.lakes.some(l => Math.hypot(l.x - x, l.z - z) < l.r * 1.8 + r);
+    const inBiome = (b: Biome, pts: [number, number][]) => pts.every(([x, z]) => this.biomeAt(x, z) === b && this.height(x, z) > this.cfg.seaLevel + 2);
+    // Rootwold: colossal petrified roots arching out of the moss.
+    let roots = 0;
+    for (let tries = 0; roots < Math.round(area * 34) && tries < 3000; tries++) {
+      const x = rand() * this.size.x, z = rand() * this.size.z;
+      const yaw = rand() * Math.PI * 2, span = 20 + rand() * 26, lift = 9 + rand() * 15;
+      const dx = Math.cos(yaw) * span / 2, dz = Math.sin(yaw) * span / 2;
+      if (!inBiome(Biome.Rootwold, [[x, z], [x - dx, z - dz], [x + dx, z + dz]]) || !clearOf(x, z, span / 2)) continue;
+      // Arches span open ground, not mountainsides.
+      if (Math.abs(this.height(x - dx, z - dz) - this.height(x + dx, z + dz)) > 5 || this.height(x, z) > Math.max(this.height(x - dx, z - dz), this.height(x + dx, z + dz)) + 4) continue;
+      if (this.features.some(f => f.mat === Mat.Rootwood && Math.hypot((f.ax + f.bx) / 2 - x, (f.az + f.bz) / 2 - z) < 14)) continue;
+      const rEnd = 2.4 + rand() * 1.2, rMid = 1.3 + rand() * 0.7, wob = (rand() - 0.5) * 8;
+      const path: [number, number, number][] = [];
+      const n = 9;
+      for (let i = 0; i <= n; i++) {
+        const s = i / n, px = x - dx + dx * 2 * s - Math.sin(yaw) * Math.sin(Math.PI * s) * wob, pz = z - dz + dz * 2 * s + Math.cos(yaw) * Math.sin(Math.PI * s) * wob;
+        path.push([px, this.height(px, pz) - 2.5 + Math.sin(Math.PI * s) * lift, pz]);
+      }
+      this.chain(path, s => rMid + (rEnd - rMid) * (1 - Math.sin(Math.PI * s)), Mat.Rootwood);
+      // Buttress roots splaying from each foot into the ground.
+      for (const end of [0, n]) {
+        const [fx, , fz] = path[end];
+        for (let k = 0; k < 2; k++) {
+          const a = yaw + (end ? 0 : Math.PI) + (rand() - 0.5) * 2.2, len = 6 + rand() * 7;
+          const ex = fx + Math.cos(a) * len, ez = fz + Math.sin(a) * len;
+          this.chain([[fx, this.height(fx, fz) + 0.5, fz], [(fx + ex) / 2, this.height((fx + ex) / 2, (fz + ez) / 2) - 0.2, (fz + ez) / 2], [ex, this.height(ex, ez) - 1.2, ez]],
+            s => (rEnd * 0.7) * (1 - s * 0.6), Mat.Rootwood);
+        }
+      }
+      roots++;
+    }
+    // Ossuary Flats: the half-sunk skeletons of long-dead titans.
+    let bones = 0;
+    for (let tries = 0; bones < Math.round(area * 5) && tries < 2000; tries++) {
+      const x = rand() * this.size.x, z = rand() * this.size.z;
+      const yaw = rand() * Math.PI * 2, len = 30 + rand() * 22;
+      const fx = Math.cos(yaw), fz = Math.sin(yaw), sx = -fz, sz = fx;
+      const tail: [number, number] = [x - fx * len / 2, z - fz * len / 2], head: [number, number] = [x + fx * len / 2, z + fz * len / 2];
+      if (!inBiome(Biome.Ossuary, [[x, z], tail, head]) || !clearOf(x, z, len / 2 + 6)) continue;
+      if (this.features.some(f => f.mat === Mat.Fossil && Math.hypot(f.ax - x, f.az - z) < len + 20)) continue;
+      const ground = this.height(x, z);
+      // Spine: a sagging chain of vertebrae, thicker at the shoulders.
+      const spine: [number, number, number][] = [];
+      for (let i = 0; i <= 10; i++) {
+        const s = i / 10;
+        spine.push([tail[0] + fx * len * s, ground + 0.4 + Math.sin(Math.PI * s) * 1.6 - (1 - s) * 1.2, tail[1] + fz * len * s]);
+      }
+      this.chain(spine, s => 0.8 + s * 1.2, Mat.Fossil);
+      // Ribs: pairs curling up and inward, largest over the chest.
+      const ribs = Math.floor(len * 0.55 / 4.2);
+      for (let i = 0; i < ribs; i++) {
+        const s = 0.25 + (i / Math.max(1, ribs - 1)) * 0.55;
+        const bx = tail[0] + fx * len * s, bz = tail[1] + fz * len * s, by = ground + 0.4 + Math.sin(Math.PI * s) * 1.6;
+        const R = (6 + len * 0.12) * (0.55 + Math.sin(Math.PI * (s - 0.1)) * 0.45);
+        for (const side of [1, -1]) {
+          const pts: [number, number, number][] = [];
+          for (let k = 0; k <= 6; k++) {
+            const phi = (k / 6) * 2.55;
+            const out = Math.sin(phi) * R, up = (1 - Math.cos(phi)) * R * 0.95;
+            pts.push([bx + sx * side * out, by + up, bz + sz * side * out]);
+          }
+          this.chain(pts, q => 0.85 - q * 0.45, Mat.Fossil);
+        }
+      }
+      // Skull and a pair of sweeping tusks at the head end.
+      const hx = head[0] + fx * 3, hz = head[1] + fz * 3, hy = this.height(hx, hz) + 1.5;
+      this.features.push({ ax: hx - fx * 2, ay: hy, az: hz - fz * 2, bx: hx + fx * 3, by: hy - 0.8, bz: hz + fz * 3, ra: 4.2, rb: 2.6, mat: Mat.Fossil });
+      for (const side of [1, -1]) {
+        const pts: [number, number, number][] = [];
+        for (let k = 0; k <= 5; k++) {
+          const q = k / 5;
+          pts.push([hx + fx * (2 + q * 11) + sx * side * (2.2 + Math.sin(q * 2.2) * 4), hy - 1 + Math.sin(q * 2.6) * 6, hz + fz * (2 + q * 11) + sz * side * (2.2 + Math.sin(q * 2.2) * 4)]);
+        }
+        this.chain(pts, q => 1.1 - q * 0.8, Mat.Fossil);
+      }
+      bones++;
+    }
+    // Amberwood: glowing resin nodules welling up through the leaf litter.
+    let nodules = 0;
+    for (let tries = 0; nodules < Math.round(area * 70) && tries < 4000; tries++) {
+      const x = rand() * this.size.x, z = rand() * this.size.z;
+      if (!inBiome(Biome.Amberwood, [[x, z]]) || !clearOf(x, z, 3)) continue;
+      const r = 0.7 + rand() * 1.1, y = this.height(x, z) - r * 0.35;
+      const lean = rand() * Math.PI * 2;
+      this.features.push({ ax: x, ay: y, az: z, bx: x + Math.cos(lean) * r * 0.5, by: y + r * (0.8 + rand() * 0.9), bz: z + Math.sin(lean) * r * 0.5, ra: r, rb: r * 0.35, mat: Mat.Amber });
+      nodules++;
+    }
+    // Bucket features by the columns they cover.
+    const gw = Math.ceil(this.size.x / FEATURE_CELL) + 1, gd = Math.ceil(this.size.z / FEATURE_CELL) + 1;
+    this.featureGw = gw;
+    this.featureGrid = Array.from({ length: gw * gd }, () => []);
+    for (const f of this.features) {
+      const r = Math.max(f.ra, f.rb) + 1.5;
+      const x0 = Math.max(0, Math.floor((Math.min(f.ax, f.bx) - r) / FEATURE_CELL)), x1 = Math.min(gw - 1, Math.floor((Math.max(f.ax, f.bx) + r) / FEATURE_CELL));
+      const z0 = Math.max(0, Math.floor((Math.min(f.az, f.bz) - r) / FEATURE_CELL)), z1 = Math.min(gd - 1, Math.floor((Math.max(f.az, f.bz) + r) / FEATURE_CELL));
+      for (let gz = z0; gz <= z1; gz++) for (let gx = x0; gx <= x1; gx++) this.featureGrid[gx + gz * gw].push(f);
+    }
+  }
+
+  /** Tapered capsules along a polyline; `radius(s)` gives the radius at s in 0..1. */
+  private chain(pts: [number, number, number][], radius: (s: number) => number, mat: number) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, ay, az] = pts[i], [bx, by, bz] = pts[i + 1];
+      this.features.push({ ax, ay, az, bx, by, bz, ra: radius(i / (pts.length - 1)), rb: radius((i + 1) / (pts.length - 1)), mat });
+    }
+  }
+
+  private featureCell(x: number, z: number): Feature[] | null {
+    if (!this.features.length) return null;
+    const gx = Math.floor(x / FEATURE_CELL), gz = Math.floor(z / FEATURE_CELL);
+    if (gx < 0 || gz < 0 || gx >= this.featureGw) return null;
+    const list = this.featureGrid[gx + gz * this.featureGw];
+    return list && list.length ? list : null;
+  }
+
+  /**
+   * Signed density of the features at a point (positive inside) and the
+   * material of the one that claims it, or null when none is near.
+   */
+  featureAt(x: number, y: number, z: number): { d: number; mat: number } | null {
+    const list = this.featureCell(x, z);
+    if (!list) return null;
+    let best = -Infinity, mat = 0;
+    for (const f of list) {
+      const r = f.ra > f.rb ? f.ra : f.rb;
+      if (y < Math.min(f.ay, f.by) - r - 1 || y > Math.max(f.ay, f.by) + r + 1) continue;
+      const bax = f.bx - f.ax, bay = f.by - f.ay, baz = f.bz - f.az;
+      const pax = x - f.ax, pay = y - f.ay, paz = z - f.az;
+      const t = Math.max(0, Math.min(1, (pax * bax + pay * bay + paz * baz) / (bax * bax + bay * bay + baz * baz || 1)));
+      const ex = pax - bax * t, ey = pay - bay * t, ez = paz - baz * t;
+      const d = f.ra + (f.rb - f.ra) * t - Math.sqrt(ex * ex + ey * ey + ez * ez);
+      if (d > best) { best = d; mat = f.mat; }
+    }
+    if (best === -Infinity) return null;
+    // Gnarled, weathered surfaces.
+    if (best > -2) best += this.detail.noise3(x / 2.2, y / 2.2, z / 2.2) * (mat === Mat.Amber ? 0.12 : 0.35);
+    return { d: best, mat };
+  }
+
+  /** Highest point of any feature over the column box [x0,x1]x[z0,z1]. */
+  featureTop(x0: number, z0: number, x1: number, z1: number): number {
+    let top = -Infinity;
+    for (let gz = Math.floor(z0 / FEATURE_CELL); gz <= Math.floor(z1 / FEATURE_CELL); gz++)
+      for (let gx = Math.floor(x0 / FEATURE_CELL); gx <= Math.floor(x1 / FEATURE_CELL); gx++) {
+        const list = this.featureCell(gx * FEATURE_CELL, gz * FEATURE_CELL);
+        if (list) for (const f of list) top = Math.max(top, f.ay + f.ra, f.by + f.rb);
+      }
+    return top;
+  }
+
   // ------------------------------------------------------------------ density
 
   /** Density at a point (positive = solid). Pure function of the seed. */
@@ -309,7 +520,7 @@ export class WorldGenerator {
     }
     if (y < 4) d = Math.max(d, 4 - y); // bedrock floor stays solid
     // Blight chasms: narrow fissures plunging deep underground.
-    if (y > 24 && this.biomeAt(x, z) === Biome.Blight) {
+    if (y > 24 && this.biomeAt(x, z) === Biome.Rift) {
       const n = Math.abs(this.blightNoise.noise2(x / 46, z / 46));
       const width = 0.035 + this.detail.noise2(x / 20, z / 20) * 0.012;
       if (n < width + 0.06) d = Math.min(d, (n - width) * 55 + Math.max(0, 30 - y) * 0.3);
@@ -321,6 +532,8 @@ export class WorldGenerator {
       for (const c of this.entrance) tunnel = Math.min(tunnel, capsuleDist(x, y, z, c) - c.r);
     if (tunnel < 3) d = Math.min(d, tunnel - this.detail.noise3(x / 5, y / 5, z / 5) * 0.8);
     for (const isl of this.islands) d = Math.max(d, this.islandDensity(x, y, z, isl));
+    const feat = this.featureAt(x, y, z);
+    if (feat) d = Math.max(d, feat.d);
     for (const c of this.cabins) {
       // Carve the room (slightly rounded box) so the cabin sits in open space.
       const w = c.cx * 2, dd = c.cz * 2;
@@ -389,6 +602,12 @@ export class WorldGenerator {
     const h = this.height(x, z);
     const depth = h - y;
     if (y < 3 + this.detail.noise2(x / 5, z / 5) * 1.5) return Mat.Bedrock;
+    const feat = this.featureAt(x, y, z);
+    if (feat && feat.d > -0.9) {
+      // Moss creeps over the tops of the Rootwold's roots.
+      if (feat.mat === Mat.Rootwood && normalY > 0.62 && exposure < 1.2 && this.detail.noise2(x / 3, z / 3) > -0.3) return Mat.Moss;
+      return feat.mat;
+    }
     const biome = this.biomeAt(x, z);
     const sky = y > this.size.y - 40;
     const nearSurface = depth < 8 || sky;
@@ -399,24 +618,29 @@ export class WorldGenerator {
         // Cliff faces: rock with bands of strata.
         const band = Math.sin(y * 0.7 + this.detail.noise2(x / 30, z / 30) * 3);
         if (biome === Biome.Desert && !sky) return band > 0.3 ? Mat.Sandstone : Mat.Sand;
-        if (biome === Biome.Blight && !sky) return band > 0.85 ? Mat.Dirt : Mat.Blightstone;
+        if (biome === Biome.Rift && !sky) return band > 0.85 ? Mat.Dirt : Mat.Riftstone;
         if (biome === Biome.Snow && !sky && band > 0.6) return Mat.Ice;
+        if (biome === Biome.Ossuary && !sky) return band > 0.5 ? Mat.Salt : Mat.Sandstone;
         return band > 0.8 ? Mat.Dirt : band < -0.93 ? Mat.Clay : Mat.Stone;
       }
       if (y < this.cfg.seaLevel + 2.5 && !sky) return Mat.Sand;
       if (!sky) {
         if (biome === Biome.Desert) return Mat.Sand;
         if (biome === Biome.Snow) return Mat.Snow;
-        if (biome === Biome.Blight) return Mat.Blightgrass;
+        if (biome === Biome.Rift) return Mat.Riftmoss;
+        if (biome === Biome.Ossuary) return Mat.Salt;
+        if (biome === Biome.Rootwold) return Mat.Moss;
+        if (biome === Biome.Amberwood) return this.detail.noise2(x / 11, z / 11) > 0.3 ? Mat.Grass : Mat.Leaflitter;
       }
       if (y > 108 + this.detail.noise2(x / 20, z / 20) * 6 && !sky) return Mat.Snow;
-      if (normalY < 0.75 && this.detail.noise2(x / 6, z / 6) > 0.35) return biome === Biome.Blight ? Mat.Blightstone : Mat.Stone;
+      if (normalY < 0.75 && this.detail.noise2(x / 6, z / 6) > 0.35) return biome === Biome.Rift ? Mat.Riftstone : Mat.Stone;
       return Mat.Grass;
     }
     const dirtDepth = 3 + this.detail.noise2(x / 18, z / 18) * 2;
     if (nearSurface && exposure < dirtDepth) {
       if (y < this.cfg.seaLevel + 1.5 || biome === Biome.Desert) return Mat.Sand;
       if (biome === Biome.Snow) return exposure < 1.5 ? Mat.Snow : this.detail.noise3(x / 9, y / 9, z / 9) > 0.3 ? Mat.Ice : Mat.Dirt;
+      if (biome === Biome.Ossuary) return exposure < 2 ? Mat.Salt : Mat.Sandstone;
       return Mat.Dirt;
     }
     // Sky islands: stone cores threaded with glowing aerite.
@@ -434,7 +658,12 @@ export class WorldGenerator {
     }
     if (depth > 5 && depth < 25 && this.detail.noise3(x / 25, y / 12, z / 25) > 0.55) return biome === Biome.Desert ? Mat.Sandstone : Mat.Clay;
     if (biome === Biome.Desert && depth < 30) return Mat.Sandstone;
-    if (biome === Biome.Blight && y > 30) return Mat.Blightstone;
+    if (biome === Biome.Ossuary && depth < 26) return this.ore.noise3(x / 5 + 60, y / 5, z / 5) > 0.6 ? Mat.Fossil : Mat.Sandstone;
+    // Rootwold: petrified taproots plunge through the rock.
+    if (biome === Biome.Rootwold && y > 30 && Math.abs(this.detail.noise3(x / 9, y / 22, z / 9)) < 0.05) return Mat.Rootwood;
+    // Amberwood: pockets of glowing resin in the shallow rock.
+    if (biome === Biome.Amberwood && depth > 3 && y > 34 && this.ore.noise3(x / 4 - 70, y / 4, z / 4) > 0.64) return Mat.Amber;
+    if (biome === Biome.Rift && y > 30) return Mat.Riftstone;
     if (biome === Biome.Snow && depth < 20 && this.detail.noise3(x / 12, y / 12, z / 12) > 0.45) return Mat.Ice;
     const deep = 30 + this.detail.noise2(x / 40, z / 40) * 5;
     return y < deep ? Mat.Deepstone : Mat.Stone;
@@ -457,7 +686,7 @@ export class WorldGenerator {
     const yTop = oy + (ny - 1) * s;
     const islandHere = this.islands.some(i => yTop > i.y - i.depth - 6 && oy < i.y + 8 &&
       i.x + i.r + 8 > ox && i.x - i.r - 8 < x1 && i.z + i.r + 8 > oz && i.z - i.r - 8 < z1);
-    if (oy > maxH + 16 && !islandHere) {
+    if (oy > maxH + 16 && !islandHere && oy > this.featureTop(ox, oz, x1, z1) + 2) {
       dens.fill(-DENSITY_CLAMP);
       mat.fill(Mat.Air);
       return false;

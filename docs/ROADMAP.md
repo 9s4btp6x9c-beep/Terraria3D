@@ -69,10 +69,12 @@ a minimap, particles, and a held-item viewmodel.
 | M9 Mushroom caverns | Underground zone with wide halls, luminous mushroom grass over mud, giant glowing mushrooms with real point lights, teal cave tint, Sporelings and Glowmoths, glowcaps, Glowcap Lamp, glowcap mana potions; far-away furniture and buried mushrooms culled | cavern e2e checks |
 | M10 Water | Liquid grid (fall, spread, level out, flood from the sea below sea level), lakes and cave pools, swimming, breath and drowning, underwater view, buckets, creatures float; the sea plane is limited to the real ocean | `tests/water.test.ts`, water e2e checks |
 | M11 Interface | Title screen over the live world (orbiting camera), loading screen with tips, new world, settings, controls, pause and death screens; bundled pixel fonts, a pixel icon set replacing all emoji, one panel style across HUD, inventory and dialogue | `scripts/ui-shots.mjs`, e2e suites |
+| M12 Hollowdeep identity | Retheme away from genre conventions: Vigor/Glim gauges, Amber currency, Heartroots, drifting Starseeds and Glim Vessels, Hearth-based homes and draughts, Burrlings, Rootwalkers, Drifters, the Sporefall and the Hollow March; three new biomes (the Rootwold's petrified root arches, the Ossuary Flats' titan skeletons, the Amberwood's resin) built from a generic terrain-feature system, the Riftlands recolour, biome titles; world grown to 768 m with legacy saves kept at 512 m | `tests/biomes.test.ts`, `scripts/biome-shots.mjs`, `scripts/creature-shots.mjs`, e2e suites |
 
 ## Next phases
 
-1. **Fishing and water creatures**, lava in the Ember Depths.
+1. **Fishing and water creatures**, lava in the Ember Depths, brine pools
+   on the Ossuary Flats.
 2. **Hardmode-style world shift** after a final boss: new ores seeded into
    the existing world, harder variants of every biome.
 3. **More NPCs** unlocked by progress (a smith who reforges gear, a guide

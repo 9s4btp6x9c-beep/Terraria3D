@@ -1,5 +1,5 @@
 // Liquid water on a 1 m grid (the terrain itself stays a smooth field; only
-// the water is cellular, like Terraria's liquids). Each cell holds a level in
+// the water is cellular). Each cell holds a level in
 // 0..1. Water falls, then spreads sideways and levels out; the ocean is an
 // infinite source/sink below sea level, so tunnels dug from the coast flood.
 //

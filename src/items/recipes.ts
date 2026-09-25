@@ -28,11 +28,17 @@ export const RECIPES: Recipe[] = [
   R('wooden_arrow', 10, 'workbench', ['wood', 1], ['stone', 1]),
   R('furnace', 1, 'workbench', ['stone', 20], ['wood', 4], ['torch', 3]),
   R('anvil', 1, 'workbench', ['iron_bar', 5]),
-  R('healing_potion', 1, 'workbench', ['gel', 2], ['red_cap', 1], ['glass_bottle', 1]),
-  R('mana_potion', 2, 'workbench', ['fallen_star', 1], ['gel', 2], ['glass_bottle', 2]),
-  R('mana_crystal', 1, 'workbench', ['fallen_star', 5]),
-  R('mana_potion', 1, 'workbench', ['glowcap', 2], ['glass_bottle', 1]),
+  R('hearth', 1, 'workbench', ['stone', 15], ['wood', 6], ['torch', 2]),
   R('glowcap_lamp', 1, 'workbench', ['glowcap', 3], ['wood', 2]),
+  R('salt_lamp', 1, 'workbench', ['salt', 6], ['torch', 1]),
+  R('amber_lantern', 1, 'workbench', ['rootwood', 4], ['coin', 12], ['torch', 1]),
+  R('heartwood_bow', 1, 'workbench', ['rootwood', 14], ['gel', 4]),
+  // hearth: draughts brew over the fire
+  R('healing_potion', 1, 'hearth', ['gel', 2], ['red_cap', 1], ['glass_bottle', 1]),
+  R('healing_potion', 2, 'hearth', ['salt', 2], ['red_cap', 1], ['glass_bottle', 2]),
+  R('mana_potion', 2, 'hearth', ['fallen_star', 1], ['gel', 2], ['glass_bottle', 2]),
+  R('mana_potion', 1, 'hearth', ['glowcap', 2], ['glass_bottle', 1]),
+  R('mana_crystal', 1, 'hearth', ['fallen_star', 5], ['glass_bottle', 1]),
   // furnace
   R('copper_bar', 1, 'furnace', ['copper_ore', 3]),
   R('iron_bar', 1, 'furnace', ['iron_ore', 3]),
@@ -55,18 +61,20 @@ export const RECIPES: Recipe[] = [
   R('iron_greaves', 1, 'anvil', ['iron_bar', 12]),
   R('bomb', 3, 'anvil', ['gel', 2], ['iron_bar', 1]),
   R('bucket', 1, 'anvil', ['iron_bar', 3]),
+  R('bramble_maul', 1, 'anvil', ['rootwood', 20], ['iron_bar', 4]),
+  R('titanbone_pickaxe', 1, 'anvil', ['fossil', 14], ['iron_bar', 4], ['wood', 3]),
   R('grappling_hook', 1, 'anvil', ['barbed_hook', 1], ['iron_bar', 4]),
-  R('wyrm_bait', 1, 'anvil', ['lumite', 5], ['gel', 6], ['bat_wing', 2]),
+  R('wyrm_bait', 1, 'anvil', ['lumite', 5], ['stone', 10], ['bat_wing', 2]),
   // Sky tier: aerite from the floating islands, feathers from their creatures.
   R('aerite_helmet', 1, 'anvil', ['aerite_bar', 10], ['sky_feather', 4]),
   R('aerite_breastplate', 1, 'anvil', ['aerite_bar', 14], ['sky_feather', 6]),
   R('aerite_greaves', 1, 'anvil', ['aerite_bar', 12], ['sky_feather', 4]),
   R('gale_bow', 1, 'anvil', ['aerite_bar', 9], ['sky_feather', 5]),
   R('gale_idol', 1, 'anvil', ['aerite_bar', 5], ['sky_feather', 10], ['lumite', 3]),
-  // Blood Moon spoils.
-  R('heartstone', 1, 'anvil', ['blood_shard', 10], ['iron_bar', 3], ['red_cap', 2]),
+  // Sporefall spoils.
+  R('heartstone', 1, 'anvil', ['blood_shard', 10], ['iron_bar', 3], ['glowcap', 2]),
   R('sanguine_blade', 1, 'anvil', ['blood_shard', 14], ['iron_bar', 8]),
-  // Calls the Hollow Raid once the Deepwyrm's scales are in hand.
+  // Calls the Hollow March once the Deepwyrm's scales are in hand.
   R('hollow_horn', 1, 'anvil', ['wyrm_scale', 3], ['iron_bar', 5], ['bat_wing', 2]),
   // The Lumite Forge needs scales from the Deepwyrm: defeating the boss opens lumite gear.
   R('forge', 1, 'anvil', ['lumite', 12], ['iron_bar', 8], ['wyrm_scale', 6]),
@@ -84,7 +92,7 @@ export const RECIPES: Recipe[] = [
 ];
 
 export const STATION_NAMES: Record<StationId, string> = {
-  workbench: 'Workbench', furnace: 'Furnace', anvil: 'Anvil', forge: 'Lumite Forge',
+  workbench: 'Workbench', furnace: 'Furnace', anvil: 'Anvil', forge: 'Lumite Forge', hearth: 'Hearth',
 };
 
 export function canCraft(r: Recipe, inv: Inventory, stations: Set<StationId>): boolean {

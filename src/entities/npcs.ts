@@ -33,42 +33,46 @@ export interface NpcContext {
 
 export const NPCS: NpcDef[] = [
   {
-    id: 'surveyor', name: 'Aldo', title: 'the Surveyor',
+    id: 'surveyor', name: 'Aldo', title: 'the Lamplighter',
     canArrive: () => true,
     colors: { shirt: 0x4a8a5a, pants: 0x5a4a3a, hair: 0x6a4a2a },
     lines: ctx => {
       const t: string[] = [];
-      if (!ctx.hasStation('workbench')) t.push('Punch-drunk on wood? Craft a Workbench from 10 wood (Tab opens crafting), then place it.');
-      else if (!ctx.hasStation('furnace')) t.push('Stone, wood and three torches make a Furnace. Smelt ore into bars in it.');
+      if (!ctx.hasStation('workbench')) t.push('First light, then everything else. Ten wood makes a Workbench — Tab opens crafting.');
+      else if (!ctx.hasStation('hearth')) t.push('Stone, wood and two torches make a Hearth. No settler stays where there is no fire to sit by.');
+      else if (!ctx.hasStation('furnace')) t.push('Stone, wood and three torches make a Furnace. Smelt your ore into bars.');
       else if (!ctx.hasStation('anvil')) t.push('Iron ore glints pale in the rock. Five iron bars make an Anvil for real tools and armor.');
-      if (ctx.inv.count('gel') === 0) t.push('Globs drop gel. Gel and wood make torches — you will want lots of those underground.');
-      t.push('Copper and iron can be mined with your starter pickaxe. Deepstone and glowing lumite need an Iron Pickaxe.');
-      t.push('Deep in the caves grow Life Crystals — glowing red hearts. Break one and use it to grow stronger.');
-      t.push('Stars fall on clear nights. Five make a Mana Crystal; one, with gel and bottles, makes mana potions.');
+      if (ctx.inv.count('gel') === 0) t.push('Burrlings ooze sap when you pop them. Sap and wood make torches, and you will want a lot of torches.');
+      t.push('I keep the lamps lit so folk can find their way home. A room with a door, a Hearth and a bed is a home.');
+      t.push('Heartroots grow in the caves: roots curled round a little ember. Break one open and the warmth stays with you.');
+      t.push('On clear nights the stars shed seeds of light. They drift slow — run and catch them before they fade at dawn.');
+      t.push('West of here the roots of something enormous rise out of the moss. The Rootwold. Their wood rings like stone.');
+      t.push('Out on the salt flats lie the bones of titans. Nobody knows what killed them. Bring me a rib and I\'ll sleep worse.');
+      t.push('The Amberwood bleeds resin that glows. Pell pays in amber, so you could say money grows on trees there.');
+      t.push('Stay clear of the Riftlands at dusk. The ground is split to the bone, and the light down there is the wrong colour.');
       t.push('Old cabins are buried under the hills. Their chests hold boots, charms and other trinkets.');
-      t.push('Those floating islands up high? Someone built shrines up there. Maybe a grappling hook would help.');
-      t.push('The islands are laced with aerite — pale blue ore, light as air. Smelt it and forge armor that lets you leap like the wind.');
-      if (!ctx.rocDefeated) t.push('Gale Swifts nest on the islands. Enough of their feathers and some aerite make an idol — they say a great bird answers it.');
+      t.push('The islands up high are laced with aerite — pale blue ore, light as air. A grappling hook helps you reach them.');
+      if (!ctx.rocDefeated) t.push('Gale Swifts nest on the islands. Enough of their feathers and some aerite make an idol, and a great bird answers it.');
       else t.push('You brought down the Tempest Roc! With its wings you can finally reach every island.');
-      t.push('Hollow Miners in the deep caves sometimes carry a barbed hook. With iron bars, that makes a grappling hook (press F).');
-      if (ctx.isNight) t.push('Shamblers roam the surface at night. A house with a door keeps the worst of them away.');
-      if (ctx.event === 'Blood Moon') t.push('The moon is bleeding! Stay indoors — or go out and collect the shards those horrors drop.');
-      else t.push('Some nights the moon turns red and every horror in the land comes out. Their shards make fine trinkets at an anvil.');
-      if (!ctx.bossDefeated) t.push('Something enormous burrows beneath us. Wyrm Bait from the anvil will call it — if you dare, and at night.');
+      if (ctx.isNight) t.push('Rootwalkers pull themselves out of the soil after dark, and Drifters come down from the clouds. Keep a lamp burning.');
+      if (ctx.event === 'Sporefall') t.push('Spores! Breathe through your sleeve. The things that walk in this light drop Sporeglass, if you are brave.');
+      else t.push('Some nights the sky turns green and spores fall like snow. Everything that walks in it has gone to rot.');
+      if (!ctx.bossDefeated) t.push('Something vast burrows beneath us. Drive a Tremor Totem into the ground at night and it will come.');
       else t.push('You beat the Deepwyrm! Its scales can be forged into gear that bites through the Ember Depths.');
-      if (ctx.bossDefeated && !ctx.raidDefeated) t.push('The Hollowfolk will have heard the Deepwyrm fall. Expect them to march on this town — or call them yourself with a war horn.');
-      if (ctx.event === 'The Hollow Raid') t.push('Raiders! Hold the line — they\'ll give up once enough of them fall.');
+      if (ctx.bossDefeated && !ctx.raidDefeated) t.push('The Hollowfolk will have felt the Deepwyrm fall. Expect them to march on this town, or call them with a war horn.');
+      if (ctx.event === 'The Hollow March') t.push('They\'re marching! Hold the line. They lose heart once enough of them fall.');
       return t;
     },
   },
   {
-    id: 'merchant', name: 'Pell', title: 'the Merchant',
+    id: 'merchant', name: 'Pell', title: 'the Wayfarer',
     canArrive: ctx => ctx.inv.count('coin') >= 30,
     colors: { shirt: 0x6a3a8a, pants: 0x3a3048, hair: 0xd8d0c0, hat: 0x3a2a4a },
     lines: () => [
-      'Coins, coins, coins! Show me some and I will show you my wares.',
-      'Torches, potions, arrows — everything an adventurer needs. At a fair price, of course.',
-      'I once sold a bomb to a Glob. Never again.',
+      'Amber, friend. Real amber, with the spark still in it. Show me some and I\'ll show you my pack.',
+      'Torches, draughts, arrows. I walked them here from three biomes away, so the price is the price.',
+      'I once traded a bomb to a Burrling. It ate it. We were both disappointed.',
+      'Salt from the Flats keeps meat and mends wounds. Brew it at a Hearth with a red cap if you don\'t believe me.',
     ],
     shop: [
       { item: 'torch', count: 5, price: 3 },
@@ -78,16 +82,17 @@ export const NPCS: NpcDef[] = [
       { item: 'glass_bottle', count: 2, price: 2 },
       { item: 'red_cap', count: 1, price: 4 },
       { item: 'gel', count: 5, price: 5 },
+      { item: 'salt_lamp', count: 1, price: 20 },
       { item: 'grappling_hook', count: 1, price: 150 },
     ],
   },
   {
-    id: 'tinkerer', name: 'Wren', title: 'the Tinkerer',
+    id: 'tinkerer', name: 'Wren', title: 'the Clockwright',
     canArrive: ctx => ctx.raidDefeated,
     colors: { shirt: 0xc07a2a, pants: 0x4a4a58, hair: 0xa84a2a },
     lines: ctx => [
-      'I followed the raiders here to see who could beat them. Turns out it was you!',
-      'Boots, jars, charms — I fix up whatever the Hollowfolk drop. For a price.',
+      'I followed the Hollow March here to see who could turn it back. Turns out it was you.',
+      'Boots, jars, charms. I rebuild whatever the Hollowfolk leave behind, springs and all. For a price.',
       'A Delver\'s Band and Burrowing Claws together? You\'d dig faster than the Deepwyrm.',
       ctx.isNight ? 'Night work is the best work. Fewer interruptions — mostly.' : 'Have you tried jumping twice? No? Then you need an Updraft Jar.',
     ],

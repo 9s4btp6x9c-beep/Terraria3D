@@ -21,14 +21,17 @@ export interface MenuHooks {
 
 const TIPS = [
   ['Mining', 'Copper and iron yield to your first pickaxe. Deepstone and glowing lumite need iron.'],
-  ['Shelter', 'A room with walls, a door, a light, a chair and a table is a home. Townsfolk move into homes.'],
-  ['Life Crystals', 'Red hearts glow on cave floors. Break one and use it to raise your maximum life.'],
-  ['Fallen Stars', 'Stars fall on clear nights. Five of them make a Mana Crystal.'],
-  ['The Blood Moon', 'Some nights the moon turns red. Stay inside, or hunt the horrors for Sanguine Shards.'],
+  ['Hearth and home', 'An enclosed room with a door, a lit Hearth and a bed or chair is a home. Settlers move into homes.'],
+  ['Heartroots', 'Root cages with an ember core grow on cave floors. Break one and use it to raise your Vigor.'],
+  ['Starseeds', 'On clear nights seeds of light drift down from the stars. Catch five to seal a Glim Vessel.'],
+  ['The Sporefall', 'Some nights glowing spores rain from a green sky and fungal horrors walk. Their Sporeglass makes fine gear.'],
+  ['The Rootwold', 'Petrified roots arch over the moss. Their wood is stone-hard: carve it into mauls and longbows.'],
+  ['Ossuary Flats', 'Titans died on the salt pan long ago. Their bones make a pickaxe that bites fast and deep.'],
+  ['Amberwood', 'The autumn forest bleeds glowing resin. Amber is the coin of Hollowdeep, so dig it out.'],
   ['Water', 'Tunnels dug from the coast below sea level will flood. Buckets carry water where you need it.'],
-  ['The Deepwyrm', 'Something vast burrows beneath the world. Wyrm Bait, used at night or underground, calls it.'],
+  ['The Deepwyrm', 'Something vast burrows beneath the world. A Tremor Totem, used at night or underground, calls it.'],
   ['Sky Islands', 'The floating islands hold aerite ore and old shrines. A grappling hook helps you reach them.'],
-  ['Mushroom Caverns', 'Deep halls glow blue with giant mushrooms. Their glowcaps brew mana potions.'],
+  ['Mushroom Caverns', 'Deep halls glow blue with giant mushrooms. Their glowcaps brew Glim Draughts.'],
   ['Breath', 'Watch the bubbles when you swim under water. Surface before they run out.'],
   ['Flight', 'Roc Wings let you fly while you hold jump, then glide down safely.'],
 ];
@@ -82,7 +85,7 @@ export class Menu {
         <button class="menu-item" data-a="settings">Settings</button>
         <button class="menu-item" data-a="controls">Controls</button>
       </nav>
-      <div class="menu-foot"><span>Build 0.12</span><span class="keys"><span><kbd>Up</kbd><kbd>Down</kbd> choose</span><span><kbd>Enter</kbd> select</span></span></div>`);
+      <div class="menu-foot"><span>Build 0.13</span><span class="keys"><span><kbd>Up</kbd><kbd>Down</kbd> choose</span><span><kbd>Enter</kbd> select</span></span></div>`);
     this.bindActions(title);
 
     add('ready', `${logo}<div class="press">${this.hooks.isTouch ? 'Tap' : 'Click'} to enter the world</div>`).onclick = () => this.hooks.play();

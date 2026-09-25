@@ -1,5 +1,5 @@
-// Player life, mana, defense, regeneration, i-frames, fall damage, death and
-// respawn. Numbers follow Terraria's feel: 100 life to start, natural regen
+// Player Vigor (life), Glim (mana), defense, regeneration, i-frames, fall damage, death and
+// respawn. Numbers: 100 Vigor to start, natural regen
 // that ramps up while not taking damage, defense subtracts half its value.
 
 export interface DamageEvent { amount: number; fromX: number; fromZ: number; knockback: number }

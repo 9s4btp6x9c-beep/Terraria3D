@@ -12,7 +12,7 @@ import { Mat } from './materials';
 import type { SkyMap } from './skymap';
 import type { TerrainField } from './terrain';
 
-export type TreeKind = 'tall' | 'round' | 'pine' | 'cactus' | 'dead' | 'mushroom';
+export type TreeKind = 'tall' | 'round' | 'pine' | 'cactus' | 'dead' | 'mushroom' | 'amber' | 'gnarl' | 'bleached';
 
 export interface Tree {
   id: number;
@@ -28,7 +28,7 @@ export interface Tree {
 export interface Tuft { x: number; y: number; z: number; rot: number; scale: number; flower: boolean }
 
 export const TREE_VARIANTS = 4;
-export const TREE_KINDS: TreeKind[] = ['tall', 'round', 'pine', 'cactus', 'dead', 'mushroom'];
+export const TREE_KINDS: TreeKind[] = ['tall', 'round', 'pine', 'cactus', 'dead', 'mushroom', 'amber', 'gnarl', 'bleached'];
 export const TUFT_CELL = 8;
 
 export class Vegetation {
@@ -56,21 +56,27 @@ export class Vegetation {
         let dens = this.forest.fbm2(x / 90, z / 90, 3) * 0.5 + 0.5;
         if (biome === Biome.Desert) dens = 0.28;
         if (biome === Biome.Snow) dens *= 0.8;
+        if (biome === Biome.Ossuary) dens = 0.2;
+        if (biome === Biome.Amberwood) dens = Math.max(dens, 0.55);
+        if (biome === Biome.Rootwold) dens *= 0.75;
         if (r3 > dens * 1.05 - 0.2) continue;
         if (Math.hypot(x - spawn.x, z - spawn.z) < 5) continue;
         if (gen.lakeAt(x, z)) continue;
         const h = gen.height(x, z);
         if (h < sea + 1.5) continue;
         const surf = gen.surfaceAt(x, z);
-        const ground = { [Mat.Grass]: true, [Mat.Sand]: biome === Biome.Desert, [Mat.Snow]: biome === Biome.Snow, [Mat.Blightgrass]: true } as Record<number, boolean>;
+        const ground = { [Mat.Grass]: true, [Mat.Sand]: biome === Biome.Desert, [Mat.Snow]: biome === Biome.Snow, [Mat.Riftmoss]: true, [Mat.Moss]: true, [Mat.Leaflitter]: true, [Mat.Salt]: true } as Record<number, boolean>;
         if (!surf || !ground[surf.mat] || surf.ny < 0.82 || surf.y < sea + 1.5) continue;
+        // Keep trunks and crowns clear of root arches, ribs and resin.
+        if (surf.y > h + 3 || [2, 6, 10].some(dy => (gen.featureAt(x, surf.y + dy, z)?.d ?? -9) > -3)) continue;
         const r4 = hash3(gx, gz, 4, s);
-        const kind: TreeKind = biome === Biome.Desert ? 'cactus' : biome === Biome.Blight ? 'dead'
+        const kind: TreeKind = biome === Biome.Desert ? 'cactus' : biome === Biome.Rift ? 'dead' : biome === Biome.Ossuary ? 'bleached'
+          : biome === Biome.Amberwood ? (r4 < 0.8 ? 'amber' : 'tall') : biome === Biome.Rootwold ? 'gnarl'
           : surf.y > 100 || biome === Biome.Snow ? 'pine' : dens > 0.62 ? 'tall' : r4 < 0.5 ? 'round' : 'tall';
-        const height = { tall: 12 + r4 * 8, pine: 8 + r4 * 5, round: 6 + r4 * 3, cactus: 3 + r4 * 2.5, dead: 7 + r4 * 5 }[kind];
+        const height = { tall: 12 + r4 * 8, pine: 8 + r4 * 5, round: 6 + r4 * 3, cactus: 3 + r4 * 2.5, dead: 7 + r4 * 5, bleached: 4 + r4 * 4, amber: 8 + r4 * 4, gnarl: 9 + r4 * 5, mushroom: 5 }[kind];
         const tree: Tree = {
           id: id++, x, y: surf.y - 0.3, z, kind, variant: Math.floor(hash3(gx, gz, 5, s) * TREE_VARIANTS),
-          height, radius: kind === 'round' ? 0.45 : kind === 'cactus' ? 0.3 : 0.35, hp: kind === 'cactus' ? 3 : 5, alive: true,
+          height, radius: kind === 'round' || kind === 'amber' ? 0.45 : kind === 'gnarl' ? 0.6 : kind === 'cactus' ? 0.3 : 0.35, hp: kind === 'cactus' ? 3 : 5, alive: true,
         };
         this.trees.push(tree);
         const key = this.key(x, z, 8);
@@ -151,7 +157,7 @@ export class Vegetation {
         const x = x0 + (i + r1) * step, z = z0 + (j + r2) * step;
         if (this.forest.noise2(x / 14 + 9, z / 14) < -0.35) continue;
         const surf = this.surface(x, z);
-        if (!surf || surf.material !== Mat.Grass || surf.ny < 0.7 || surf.y < sea + 1) continue;
+        if (!surf || (surf.material !== Mat.Grass && surf.material !== Mat.Moss) || surf.ny < 0.7 || surf.y < sea + 1) continue;
         out.push({ x, y: surf.y - 0.05, z, rot: r3 * Math.PI * 2, scale: 0.7 + r3 * 0.6, flower: r3 > 0.94 });
       }
     this.tuftCells.set(k, out);

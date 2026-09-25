@@ -1,6 +1,6 @@
 // Dropped items: small spinning copies of the item model that pop out of
 // mined terrain, felled trees and defeated creatures, bounce on the ground
-// and fly into the player's inventory when near (Terraria-style magnet).
+// and fly into the player's inventory when near (a gentle magnet).
 
 import * as THREE from 'three';
 import type { Inventory } from '../items/inventory';

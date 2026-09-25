@@ -14,8 +14,12 @@ export interface WorldConfig {
   seaLevel: number;
 }
 
-export function defaultConfig(seed = 1337): WorldConfig {
-  return { seed, chunksX: 16, chunksY: 5, chunksZ: 16, seaLevel: 62 };
+/** New worlds are 768 x 768 m. Saves remember their size (older ones were 512). */
+export const WORLD_CHUNKS = 24;
+export const LEGACY_CHUNKS = 16;
+
+export function defaultConfig(seed = 1337, chunks = WORLD_CHUNKS): WorldConfig {
+  return { seed, chunksX: chunks, chunksY: 5, chunksZ: chunks, seaLevel: 62 };
 }
 
 export function worldSize(cfg: WorldConfig) {

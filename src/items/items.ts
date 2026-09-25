@@ -5,9 +5,9 @@
 import { Mat } from '../world/materials';
 
 export type PieceShape = 'floor' | 'wall' | 'pillar' | 'stairs' | 'roof';
-export type StationId = 'workbench' | 'furnace' | 'anvil' | 'forge';
-export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed' | 'life_crystal' | 'glowcap_lamp';
-export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal' | 'emberMetal' | 'bone' | 'bloodMetal' | 'aeriteMetal';
+export type StationId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'hearth';
+export type FurnitureId = 'workbench' | 'furnace' | 'anvil' | 'forge' | 'chair' | 'table' | 'door' | 'torch' | 'chest' | 'bed' | 'life_crystal' | 'glowcap_lamp' | 'hearth' | 'salt_lamp' | 'amber_lantern';
+export type MetalLayer = 'copper' | 'iron' | 'lumiteMetal' | 'gold' | 'planks' | 'metal' | 'emberMetal' | 'bone' | 'bloodMetal' | 'aeriteMetal' | 'sporeMetal' | 'rootbark';
 
 export interface ToolDef {
   type: 'pickaxe' | 'axe';
@@ -62,7 +62,7 @@ export type ModelSpec =
   | { type: 'pickaxe' | 'axe' | 'sword' | 'bow' | 'staff' | 'hook'; head: MetalLayer }
   | { type: 'ore' | 'bar' | 'crystal' | 'nugget'; layer: string; tint?: number }
   | { type: 'block'; layer: string }
-  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' | 'star' | 'mana_crystal' | 'mana_potion' | 'glowcap' | 'bucket' | 'water_bucket' }
+  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' | 'starseed' | 'glim_vessel' | 'glim_draught' | 'mending_draught' | 'glowcap' | 'bucket' | 'water_bucket' | 'amber' | 'sap' | 'totem' | 'maul' | 'heartroot' }
   | { type: 'armor'; slot: ArmorDef['slot']; layer: MetalLayer }
   | { type: 'boots' | 'jar' | 'charm' | 'band'; layer: string }
   | { type: 'furniture'; id: FurnitureId };
@@ -85,9 +85,9 @@ export interface ItemDef {
   build?: 'planks' | 'bricks';
   furniture?: FurnitureId;
   heal?: number;
-  /** Mana restored when used. */
+  /** Glim restored when used. */
   mana?: number;
-  /** Permanent max life / mana increase (crystals). */
+  /** Permanent max vigor / glim increase (Heartroot, Glim Vessel). */
   grow?: { life?: number; mana?: number };
   rarity?: 0 | 1 | 2 | 3;
   description?: string;
@@ -107,6 +107,7 @@ const list: ItemDef[] = [
   T('copper_axe', 'Copper Axe', 'copper', 'axe', 0, 1.0, 0.4, 5, '#c0703a', 'Fells trees for wood.'),
   T('iron_pickaxe', 'Iron Pickaxe', 'iron', 'pickaxe', 1, 1.5, 0.27, 6, '#d6d0ca', 'Strong enough for deepstone and lumite crystals.'),
   T('iron_axe', 'Iron Axe', 'iron', 'axe', 1, 1.6, 0.34, 8, '#d6d0ca', 'Chops faster.'),
+  T('titanbone_pickaxe', 'Titanbone Pickaxe', 'bone', 'pickaxe', 1, 1.9, 0.25, 8, '#e0d4b4', 'Carved from a giant\'s rib. Bites deep and fast.'),
   T('lumite_pickaxe', 'Lumite Pickaxe', 'lumiteMetal', 'pickaxe', 2, 2.2, 0.22, 10, '#6ae6ff', 'Hums with light. Digs anything.'),
 
   // ---- weapons
@@ -119,7 +120,9 @@ const list: ItemDef[] = [
   { id: 'ember_blade', name: 'Ember Blade', kind: 'weapon', maxStack: 1, color: '#ff8a30', rarity: 3, model: { type: 'sword', head: 'emberMetal' }, weapon: { type: 'melee', damage: 44, speed: 0.36, knockback: 8, reach: 3.6 }, description: 'Sets the air ablaze with every swing.' },
   { id: 'wyrmfang_staff', name: 'Wyrmfang Staff', kind: 'weapon', maxStack: 1, color: '#c8d890', rarity: 3, model: { type: 'staff', head: 'bone' }, weapon: { type: 'magic', damage: 26, speed: 0.4, knockback: 4, projectileSpeed: 26, manaCost: 8 }, description: 'Fires a boring fang that tunnels through rock.' },
   { id: 'lumite_staff', name: 'Lumite Staff', kind: 'weapon', maxStack: 1, color: '#6ae6ff', rarity: 2, model: { type: 'staff', head: 'lumiteMetal' }, weapon: { type: 'magic', damage: 22, speed: 0.35, knockback: 3, projectileSpeed: 34, manaCost: 6 }, description: 'Fires seeking bolts of light.' },
-  { id: 'sanguine_blade', name: 'Sanguine Blade', kind: 'weapon', maxStack: 1, color: '#e8444c', rarity: 2, model: { type: 'sword', head: 'bloodMetal' }, weapon: { type: 'melee', damage: 24, speed: 0.38, knockback: 6, reach: 3.2, lifesteal: 0.1 }, description: 'Forged under a Blood Moon. Heals you for part of the damage it deals.' },
+  { id: 'sanguine_blade', name: 'Sporecleaver', kind: 'weapon', maxStack: 1, color: '#5ad8b0', rarity: 2, model: { type: 'sword', head: 'sporeMetal' }, weapon: { type: 'melee', damage: 24, speed: 0.38, knockback: 6, reach: 3.2, lifesteal: 0.1 }, description: 'Grown from Sporeglass. Draws vigor from every cut.' },
+  { id: 'bramble_maul', name: 'Bramble Maul', kind: 'weapon', maxStack: 1, color: '#8a7058', rarity: 1, model: { type: 'maul' }, weapon: { type: 'melee', damage: 27, speed: 0.58, knockback: 13, reach: 3.1 }, description: 'A knot of petrified root. Heavy enough to stagger a Mossback.' },
+  { id: 'heartwood_bow', name: 'Heartwood Longbow', kind: 'weapon', maxStack: 1, color: '#9a8068', rarity: 1, model: { type: 'bow', head: 'rootbark' }, weapon: { type: 'bow', damage: 16, speed: 0.55, knockback: 3, projectileSpeed: 54, ammo: 'wooden_arrow' }, description: 'Strung from Rootwold sinew. Arrows fly far and hit hard.' },
   { id: 'bonebreaker', name: 'Bonebreaker', kind: 'weapon', maxStack: 1, color: '#e6dcc0', rarity: 2, model: { type: 'club' }, weapon: { type: 'melee', damage: 36, speed: 0.62, knockback: 15, reach: 3.0 }, description: 'A Hollow Brute\'s club. Slow, but sends foes flying.' },
   { id: 'gale_bow', name: 'Gale Bow', kind: 'weapon', maxStack: 1, color: '#a8e4ff', rarity: 2, model: { type: 'bow', head: 'aeriteMetal' }, weapon: { type: 'bow', damage: 15, speed: 0.42, knockback: 3, projectileSpeed: 58, ammo: 'wooden_arrow', multishot: 2 }, description: 'Looses two arrows at once.' },
   { id: 'tempest_staff', name: 'Tempest Staff', kind: 'weapon', maxStack: 1, color: '#d8f0ff', rarity: 3, model: { type: 'staff', head: 'aeriteMetal' }, weapon: { type: 'magic', damage: 34, speed: 0.5, knockback: 16, projectileSpeed: 30, manaCost: 10 }, description: 'Hurls a piercing gale that scatters everything it passes through.' },
@@ -147,8 +150,8 @@ const list: ItemDef[] = [
   { id: 'miners_band', name: "Delver's Band", kind: 'accessory', maxStack: 1, color: '#e0b030', rarity: 1, model: { type: 'band', layer: 'gold' }, accessory: { miningSpeed: 0.35 }, description: '+35% mining speed.' },
   { id: 'glow_charm', name: 'Glowmoth Charm', kind: 'accessory', maxStack: 1, color: '#7af0ff', rarity: 1, model: { type: 'charm', layer: 'lumiteMetal' }, accessory: { lightRadius: 1 }, description: 'Your lantern shines much further.' },
   { id: 'burrowing_claws', name: 'Burrowing Claws', kind: 'accessory', maxStack: 1, color: '#c8d890', rarity: 3, model: { type: 'charm', layer: 'bone' }, accessory: { miningSpeed: 0.6 }, description: 'From the Deepwyrm. +60% mining speed.' },
-  { id: 'heartstone', name: 'Heartstone Amulet', kind: 'accessory', maxStack: 1, color: '#e8444c', rarity: 2, model: { type: 'charm', layer: 'bloodMetal' }, accessory: { regen: 1.5 }, description: 'Beats softly. Faster health regeneration.' },
-  { id: 'houndfang_charm', name: 'Houndfang Charm', kind: 'accessory', maxStack: 1, color: '#f0e0c8', rarity: 2, model: { type: 'fang' }, accessory: { moveSpeed: 0.15, jumps: 1 }, description: 'Taken from a Gorehound. +15% speed and a double jump.' },
+  { id: 'heartstone', name: 'Mycelheart Amulet', kind: 'accessory', maxStack: 1, color: '#5ad8b0', rarity: 2, model: { type: 'charm', layer: 'sporeMetal' }, accessory: { regen: 1.5 }, description: 'Pulses with a slow fungal warmth. Faster vigor regeneration.' },
+  { id: 'houndfang_charm', name: 'Rotfang Charm', kind: 'accessory', maxStack: 1, color: '#f0e0c8', rarity: 2, model: { type: 'fang' }, accessory: { moveSpeed: 0.15, jumps: 1 }, description: 'Pulled from a Rotfang\'s jaw. +15% speed and a double jump.' },
   { id: 'roc_wings', name: 'Roc Wings', kind: 'accessory', maxStack: 1, color: '#d8e4f4', rarity: 3, model: { type: 'wings' }, accessory: { flight: 2.4, noFallDamage: true }, description: 'Hold jump in the air to fly, then glide. From the Tempest Roc.' },
   { id: 'grappling_hook', name: 'Grappling Hook', kind: 'accessory', maxStack: 1, color: '#9a98a6', rarity: 1, model: { type: 'hook', head: 'iron' }, accessory: { hook: { range: 26, speed: 22 } }, description: 'Press F to fire. Latches onto any surface.' },
   { id: 'barbed_hook', name: 'Barbed Hook', kind: 'material', maxStack: 99, color: '#9a98a6', model: { type: 'hook', head: 'metal' }, description: 'Dropped by Hollow Miners. Craft into a grappling hook.' },
@@ -161,9 +164,12 @@ const list: ItemDef[] = [
   { id: 'snow', name: 'Snow', kind: 'material', maxStack: 999, color: '#eaf2f8', model: { type: 'block', layer: 'snow' }, terrain: Mat.Snow },
   { id: 'sandstone', name: 'Sandstone', kind: 'material', maxStack: 999, color: '#d4b070', model: { type: 'block', layer: 'sandstone' }, terrain: Mat.Sandstone },
   { id: 'ice', name: 'Ice', kind: 'material', maxStack: 999, color: '#a8d8f0', model: { type: 'block', layer: 'ice' }, terrain: Mat.Ice },
+  { id: 'rootwood', name: 'Petrified Root', kind: 'material', maxStack: 999, color: '#7a6250', model: { type: 'block', layer: 'rootwood' }, terrain: Mat.Rootwood, description: 'Wood turned to stone in the Rootwold. Tough and ring-grained.' },
+  { id: 'salt', name: 'Salt', kind: 'material', maxStack: 999, color: '#e8e2d6', model: { type: 'block', layer: 'salt' }, terrain: Mat.Salt, description: 'Crust from the Ossuary Flats. Glows softly when heated.' },
+  { id: 'fossil', name: 'Titan Bone', kind: 'material', maxStack: 999, color: '#e0d4b4', rarity: 1, model: { type: 'block', layer: 'fossil' }, terrain: Mat.Fossil, description: 'A shard of the giants that died on the salt flats.' },
   { id: 'mud', name: 'Mud', kind: 'material', maxStack: 999, color: '#4e4038', model: { type: 'block', layer: 'mud' }, terrain: Mat.Mud },
   { id: 'glowcap', name: 'Glowcap', kind: 'material', maxStack: 999, color: '#3aa0d0', rarity: 1, model: { type: 'glowcap' }, description: 'A luminous mushroom from the deep caverns.' },
-  { id: 'blightstone', name: 'Blightstone', kind: 'material', maxStack: 999, color: '#5a4a6e', model: { type: 'block', layer: 'blightstone' }, terrain: Mat.Blightstone },
+  { id: 'blightstone', name: 'Riftstone', kind: 'material', maxStack: 999, color: '#46506a', model: { type: 'block', layer: 'blightstone' }, terrain: Mat.Riftstone },
   { id: 'emberstone', name: 'Emberstone', kind: 'material', maxStack: 999, color: '#9a3a22', model: { type: 'block', layer: 'emberstone' }, terrain: Mat.Emberstone, description: 'Warm to the touch.' },
   { id: 'emberite', name: 'Emberite Ore', kind: 'material', maxStack: 999, color: '#ff8a30', rarity: 2, model: { type: 'ore', layer: 'emberite' }, description: 'Found only in the Ember Depths.' },
   { id: 'ember_bar', name: 'Ember Bar', kind: 'material', maxStack: 999, color: '#ff8a30', rarity: 2, model: { type: 'bar', layer: 'emberMetal' } },
@@ -173,9 +179,9 @@ const list: ItemDef[] = [
   { id: 'sky_feather', name: 'Sky Feather', kind: 'material', maxStack: 999, color: '#e8f0fa', model: { type: 'feather' }, description: 'Drifts down from the creatures of the high sky.' },
   { id: 'roc_plume', name: 'Roc Plume', kind: 'material', maxStack: 999, color: '#f0e0a0', rarity: 2, model: { type: 'plume' }, description: 'A storm-charged feather from the Tempest Roc.' },
   { id: 'gale_idol', name: 'Gale Idol', kind: 'consumable', maxStack: 20, color: '#a8e4ff', rarity: 2, model: { type: 'idol' }, description: 'Calls the Tempest Roc. Use high in the sky.' },
-  { id: 'blood_shard', name: 'Sanguine Shard', kind: 'material', maxStack: 999, color: '#e8444c', rarity: 1, model: { type: 'crystal', layer: 'bloodMetal' }, description: 'Falls from creatures of the Blood Moon.' },
+  { id: 'blood_shard', name: 'Sporeglass', kind: 'material', maxStack: 999, color: '#5ad8b0', rarity: 1, model: { type: 'crystal', layer: 'spore' }, description: 'Spores gone hard as glass. Shed by creatures of the Sporefall.' },
   { id: 'hollow_horn', name: 'Hollow War Horn', kind: 'consumable', maxStack: 20, color: '#e6dcc0', rarity: 2, model: { type: 'horn' }, description: 'Sounds a challenge to the Hollowfolk. Use near your town.' },
-  { id: 'wyrm_bait', name: 'Wyrm Bait', kind: 'consumable', maxStack: 20, color: '#b04a6a', rarity: 1, model: { type: 'bait' }, description: 'Summons the Deepwyrm. Use at night or underground.' },
+  { id: 'wyrm_bait', name: 'Tremor Totem', kind: 'consumable', maxStack: 20, color: '#6ae6ff', rarity: 1, model: { type: 'totem' }, description: 'Drive it into the ground to call the Deepwyrm. Use at night or underground.' },
   { id: 'wood', name: 'Wood', kind: 'material', maxStack: 999, color: '#a8744a', model: { type: 'log' }, build: 'planks' },
   { id: 'copper_ore', name: 'Copper Ore', kind: 'material', maxStack: 999, color: '#e0874a', model: { type: 'ore', layer: 'copper' } },
   { id: 'iron_ore', name: 'Iron Ore', kind: 'material', maxStack: 999, color: '#c8b4a6', model: { type: 'ore', layer: 'iron' } },
@@ -183,20 +189,20 @@ const list: ItemDef[] = [
   { id: 'copper_bar', name: 'Copper Bar', kind: 'material', maxStack: 999, color: '#c0703a', model: { type: 'bar', layer: 'copper' } },
   { id: 'iron_bar', name: 'Iron Bar', kind: 'material', maxStack: 999, color: '#d6d0ca', model: { type: 'bar', layer: 'iron' } },
   { id: 'lumite_bar', name: 'Lumite Bar', kind: 'material', maxStack: 999, color: '#6ae6ff', model: { type: 'bar', layer: 'lumiteMetal' } },
-  { id: 'gel', name: 'Gel', kind: 'material', maxStack: 999, color: '#4ec87a', model: { type: 'gel' }, description: 'Sticky and flammable.' },
-  { id: 'red_cap', name: 'Red Cap', kind: 'material', maxStack: 99, color: '#d83a3a', model: { type: 'mushroom' }, description: 'A forest mushroom. Used in potions.' },
+  { id: 'gel', name: 'Sap', kind: 'material', maxStack: 999, color: '#b8c84e', model: { type: 'sap' }, description: 'Sticky and flammable. Oozes from Burrlings.' },
+  { id: 'red_cap', name: 'Red Cap', kind: 'material', maxStack: 99, color: '#d83a3a', model: { type: 'mushroom' }, description: 'A forest mushroom. Brewed into draughts at a Hearth.' },
   { id: 'glass_bottle', name: 'Glass Bottle', kind: 'material', maxStack: 99, color: '#9ad8f0', model: { type: 'bottle' } },
-  { id: 'bat_wing', name: 'Bat Wing', kind: 'material', maxStack: 99, color: '#5a4a5e', model: { type: 'wing' }, description: 'Leathery. Dropped by cave bats.' },
-  { id: 'coin', name: 'Coin', kind: 'material', maxStack: 9999, color: '#e0b030', model: { type: 'coin' }, description: 'Merchants love these.' },
+  { id: 'bat_wing', name: 'Duskwing Membrane', kind: 'material', maxStack: 99, color: '#5a4a5e', model: { type: 'wing' }, description: 'Leathery. Dropped by Duskwings and Cinder Bats.' },
+  { id: 'coin', name: 'Amber', kind: 'material', maxStack: 9999, color: '#f0a028', model: { type: 'amber' }, description: 'Hardened resin with a spark trapped inside. Hollowdeep\'s currency.' },
 
   // ---- consumables
-  { id: 'life_crystal', name: 'Life Crystal', kind: 'consumable', maxStack: 99, color: '#ff4a5a', rarity: 2, model: { type: 'furniture', id: 'life_crystal' }, grow: { life: 20 }, description: 'Permanently raises max life by 20 (up to 400).' },
-  { id: 'fallen_star', name: 'Fallen Star', kind: 'material', maxStack: 999, color: '#ffe060', rarity: 1, model: { type: 'star' }, description: 'Falls from the sky on clear nights.' },
-  { id: 'mana_crystal', name: 'Mana Crystal', kind: 'consumable', maxStack: 99, color: '#5a8aff', rarity: 2, model: { type: 'mana_crystal' }, grow: { mana: 20 }, description: 'Permanently raises max mana by 20 (up to 200).' },
-  { id: 'mana_potion', name: 'Mana Potion', kind: 'consumable', maxStack: 30, color: '#4a7aff', model: { type: 'mana_potion' }, mana: 100, description: 'Restores 100 mana.' },
+  { id: 'life_crystal', name: 'Heartroot', kind: 'consumable', maxStack: 99, color: '#ff8a3a', rarity: 2, model: { type: 'heartroot' }, grow: { life: 20 }, description: 'A knot of living root around a warm ember core. Permanently raises max Vigor by 20 (up to 400).' },
+  { id: 'fallen_star', name: 'Starseed', kind: 'material', maxStack: 999, color: '#bfe8ff', rarity: 1, model: { type: 'starseed' }, description: 'Drifts down on clear nights like a seed on the wind. Catch it before dawn.' },
+  { id: 'mana_crystal', name: 'Glim Vessel', kind: 'consumable', maxStack: 99, color: '#4ab8ff', rarity: 2, model: { type: 'glim_vessel' }, grow: { mana: 20 }, description: 'Starseeds sealed in glass. Permanently raises max Glim by 20 (up to 200).' },
+  { id: 'mana_potion', name: 'Glim Draught', kind: 'consumable', maxStack: 30, color: '#4ab8ff', model: { type: 'glim_draught' }, mana: 100, description: 'Restores 100 Glim.' },
   { id: 'bucket', name: 'Empty Bucket', kind: 'consumable', maxStack: 1, color: '#b4aca6', model: { type: 'bucket' }, description: 'Use on water to scoop some up.' },
   { id: 'water_bucket', name: 'Water Bucket', kind: 'consumable', maxStack: 1, color: '#3a86d8', model: { type: 'water_bucket' }, description: 'Use to pour the water out.' },
-  { id: 'healing_potion', name: 'Healing Potion', kind: 'consumable', maxStack: 30, color: '#d83a3a', model: { type: 'potion' }, heal: 50, description: 'Restores 50 health. [RMB] / use to drink.' },
+  { id: 'healing_potion', name: 'Mending Draught', kind: 'consumable', maxStack: 30, color: '#ff8a3a', model: { type: 'mending_draught' }, heal: 50, description: 'Restores 50 Vigor. [RMB] / use to drink.' },
 
   // ---- placeables
   { id: 'workbench', name: 'Workbench', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'workbench' }, furniture: 'workbench', description: 'The first crafting station.' },
@@ -208,7 +214,10 @@ const list: ItemDef[] = [
   { id: 'door', name: 'Wooden Door', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'door' }, furniture: 'door', description: 'Snaps into wall slots. [RMB] to open.' },
   { id: 'torch', name: 'Torch', kind: 'placeable', maxStack: 99, color: '#ffb030', model: { type: 'furniture', id: 'torch' }, furniture: 'torch', description: 'Place on floors or walls.' },
   { id: 'chest', name: 'Chest', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'chest' }, furniture: 'chest', description: 'Stores 20 stacks. [RMB] to open.' },
-  { id: 'glowcap_lamp', name: 'Glowcap Lamp', kind: 'placeable', maxStack: 99, color: '#3aa0d0', model: { type: 'furniture', id: 'glowcap_lamp' }, furniture: 'glowcap_lamp', description: 'A cool, steady light. Counts as a light for housing.' },
+  { id: 'glowcap_lamp', name: 'Glowcap Lamp', kind: 'placeable', maxStack: 99, color: '#3aa0d0', model: { type: 'furniture', id: 'glowcap_lamp' }, furniture: 'glowcap_lamp', description: 'A cool, steady light.' },
+  { id: 'salt_lamp', name: 'Salt Lamp', kind: 'placeable', maxStack: 99, color: '#ffb890', model: { type: 'furniture', id: 'salt_lamp' }, furniture: 'salt_lamp', description: 'A carved block of salt around a coal. Warm, rosy light.' },
+  { id: 'amber_lantern', name: 'Amber Lantern', kind: 'placeable', maxStack: 99, color: '#ffc050', rarity: 1, model: { type: 'furniture', id: 'amber_lantern' }, furniture: 'amber_lantern', description: 'Resin-glass panes in a rootwood frame. Bright and golden.' },
+  { id: 'hearth', name: 'Hearth', kind: 'placeable', maxStack: 99, color: '#ff8a3a', model: { type: 'furniture', id: 'hearth' }, furniture: 'hearth', description: 'The heart of a home. Settlers need one to move in, and it brews draughts.' },
   { id: 'bed', name: 'Bed', kind: 'placeable', maxStack: 99, color: '#b03a36', model: { type: 'furniture', id: 'bed' }, furniture: 'bed', description: '[RMB] to set your spawn point.' },
 ];
 

@@ -77,7 +77,7 @@ async function shot(name) {
 try {
   const t0 = Date.now();
   await boot('?new&seed=1337');
-  console.log(`world loaded in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`world loaded in ${((Date.now() - t0) / 1000).toFixed(1)}s`, JSON.stringify(await page.evaluate(() => window.__loadPhases)));
 
   // 1. Organic terrain + walking.
   await shot('01-spawn');
@@ -276,7 +276,7 @@ try {
   await shot('12-inventory');
   await page.evaluate(() => { __game.toggleInventory(false); __game.input.locked = true; });
 
-  // Melee combat: a Glob in front of the player, killed with the sword.
+  // Melee combat: a Burrling in front of the player, killed with the sword.
   const fight = await page.evaluate(() => {
     const g = __game;
     g.combat.spawning = false;
@@ -284,32 +284,49 @@ try {
     const sw = g.inventory.slots.findIndex(s => s && s.id === 'wooden_sword');
     g.inventory.swap(sw, 5); g.inventory.select(5);
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw);
-    const c = g.spawnCreature('glob', g.player.x + fx * 2.2, g.player.y + 0.3, g.player.z + fz * 2.2);
+    const c = g.spawnCreature('burrling', g.player.x + fx * 2.2, g.player.y + 0.3, g.player.z + fz * 2.2);
     g.player.pitch = -0.3;
     return { gel: g.inventory.count('gel'), hp: c.hp, kills: g.combat.kills };
   });
   await act(() => { __game.input.lmb = true; }, 4);
   await page.evaluate(() => __game.simulate(1.5));
   const after2 = await page.evaluate(() => ({ kills: __game.combat.kills, gel: __game.inventory.count('gel'), drops: __game.pickups.count, hp: __game.vitals.hp }));
-  check('sword kills a Glob and it drops gel', after2.kills > fight.kills && (after2.gel > fight.gel || after2.drops > 0), `kills ${after2.kills}, gel ${fight.gel} -> ${after2.gel}, pickups ${after2.drops}, player hp ${after2.hp.toFixed(0)}`);
+  check('sword kills a Burrling and it drops sap', after2.kills > fight.kills && (after2.gel > fight.gel || after2.drops > 0), `kills ${after2.kills}, gel ${fight.gel} -> ${after2.gel}, pickups ${after2.drops}, player hp ${after2.hp.toFixed(0)}`);
 
   // Creature lineup for visual review.
   await page.evaluate(() => {
     const g = __game;
     g.combat.clear();
-    const ids = ['glob', 'deep_glob', 'shambler', 'gloomwisp', 'duskwing', 'rockmite', 'hollow_miner'];
+    const ids = ['burrling', 'deep_burrling', 'rootwalker', 'drifter', 'duskwing', 'rockmite', 'hollow_miner'];
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw), sx = -fz, sz = fx;
     ids.forEach((id, i) => {
       const o = (i - 3) * 1.6;
       const x = g.player.x + fx * 6 + sx * o, z = g.player.z + fz * 6 + sz * o;
       const top = g.sky.raw[Math.floor(x) + Math.floor(z) * g.sky.w];
-      const c = g.spawnCreature(id, x, top + (id === 'gloomwisp' || id === 'duskwing' ? 1.2 : 0.2), z);
+      const c = g.spawnCreature(id, x, top + (id === 'drifter' || id === 'duskwing' ? 1.2 : 0.2), z);
       c.yaw = Math.atan2(-fx, -fz);
     });
     g.player.pitch = -0.12;
   });
   await page.evaluate(() => { for (const c of __game.combat.creatures) { c.cooldown = 5; } __game.simulate(0.1); });
   await shot('13-creatures');
+  // Lineup of the biome natives and the Sporefall roster.
+  await page.evaluate(() => {
+    const g = __game;
+    g.combat.clear();
+    const ids = ['moss_burrling', 'mossback', 'bonepicker', 'salt_crawler', 'amber_burrling', 'leafwing', 'rotfang', 'sporebound', 'spore_drifter'];
+    const fly = new Set(['bonepicker', 'leafwing', 'spore_drifter']);
+    const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw), sx = -fz, sz = fx;
+    ids.forEach((id, i) => {
+      const o = (i - 4) * 1.7;
+      const x = g.player.x + fx * 8 + sx * o, z = g.player.z + fz * 8 + sz * o;
+      const top = g.sky.raw[Math.floor(x) + Math.floor(z) * g.sky.w];
+      const c = g.spawnCreature(id, x, top + (fly.has(id) ? 1.4 : 0.2), z);
+      c.yaw = Math.atan2(-fx, -fz);
+    });
+  });
+  await page.evaluate(() => { for (const c of __game.combat.creatures) { c.cooldown = 5; } __game.simulate(0.1); });
+  await shot('13b-creatures-new');
 
   // Night with torches.
   await page.evaluate(() => { const g = __game; g.combat.clear(); g.atmosphere.timeOfDay = 0.93; });
@@ -342,9 +359,8 @@ try {
       g.structures.add({ shape: 'wall', texture: 'planks', x: x0 + 6, y: y + 0.25, z: z0 + j * 2 + 1, rot: 1 });
     }
     g.furniture.add({ type: 'door', x: x0 + 3, y: y + 0.25, z: z0, rot: 0 });
-    g.furniture.add({ type: 'torch', x: x0 + 0.3, y: y + 1.5, z: z0 + 2, rot: 0, wall: [1, 0, 0] });
-    g.furniture.add({ type: 'chair', x: x0 + 4.6, y: y + 0.25, z: z0 + 3, rot: 2 });
-    g.furniture.add({ type: 'table', x: x0 + 3, y: y + 0.25, z: z0 + 3, rot: 0 });
+    g.furniture.add({ type: 'hearth', x: x0 + 2.4, y: y + 0.25, z: z0 + 3.4, rot: 2 });
+    g.furniture.add({ type: 'chair', x: x0 + 4.6, y: y + 0.25, z: z0 + 2.6, rot: 2 });
     g.player.teleport(x0 + 1.5, y + 0.4, z0 + 1.5);
     g.player.yaw = -2.4; g.player.pitch = -0.1;
     return { x0, z0, y };
@@ -413,8 +429,16 @@ try {
     if (ok) await shot(name);
     return ok;
   };
-  const biomes = [await biomeSpot(1, '16-desert'), await biomeSpot(2, '17-snow'), await biomeSpot(3, '18-blight')];
-  check('world has desert, snow and blight biomes', biomes.every(Boolean), JSON.stringify(biomes));
+  const biomes = [await biomeSpot(1, '16-dunes'), await biomeSpot(2, '17-frostmere'), await biomeSpot(3, '18-riftlands'),
+    await biomeSpot(4, '18b-rootwold'), await biomeSpot(5, '18c-ossuary'), await biomeSpot(6, '18d-amberwood')];
+  check('world has all six outer biomes around Greenhollow', biomes.every(Boolean), JSON.stringify(biomes));
+  // Each new biome has its own natives in the spawn tables.
+  const natives = await page.evaluate(() => {
+    const g = __game, out = {};
+    for (const b of [4, 5, 6]) out[b] = g.combat.spawnTable('surface', b).map(d => d.id);
+    return out;
+  });
+  check('Rootwold, Ossuary and Amberwood have their own creatures', [4, 5, 6].every(b => natives[b].length >= 2), JSON.stringify(natives));
   const depths = await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;
     for (let r = 0; r < 120; r += 4) for (let a = 0; a < 6.28; a += 0.5) {
@@ -497,13 +521,13 @@ try {
     const g = __game;
     g.player.pitch = -0.12;
     g.simulate(0.1);
-    const ids = ['blood_glob', 'gorehound', 'vein_shambler', 'bloodwisp', 'hollow_brute', 'hollow_sapper', 'raid_miner'];
+    const ids = ['spore_burrling', 'rotfang', 'sporebound', 'spore_drifter', 'hollow_brute', 'hollow_sapper', 'raid_miner'];
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw), sx = -fz, sz = fx;
     ids.forEach((id, i) => {
       const o = (i - 3) * 1.7;
       const x = g.player.x + fx * 7 + sx * o, z = g.player.z + fz * 7 + sz * o;
       const top = g.sky.raw[Math.floor(x) + Math.floor(z) * g.sky.w];
-      const c = g.spawnCreature(id, x, top + (id === 'bloodwisp' ? 1.2 : 0.2), z);
+      const c = g.spawnCreature(id, x, top + (id === 'spore_drifter' ? 1.2 : 0.2), z);
       c.yaw = Math.atan2(-fx, -fz);
       c.cooldown = 5;
     });
@@ -519,12 +543,12 @@ try {
     g.vitals.hp = g.vitals.maxHp = 400;
     g.atmosphere.timeOfDay = 0.9;
     g.simulate(0.5);
-    g.startEvent('blood_moon');
+    g.startEvent('sporefall');
     let spawned = 0;
-    for (let i = 0; i < 12; i++) { g.vitals.hp = 400; g.simulate(2); spawned = Math.max(spawned, g.combat.creatures.filter(c => c.event === 'blood_moon').length); }
-    return { kind: g.events.kind, spawned, blood: g.atmosphere.bloodVisible, bar: getComputedStyle(document.querySelector('#eventbar')).display };
+    for (let i = 0; i < 12; i++) { g.vitals.hp = 400; g.simulate(2); spawned = Math.max(spawned, g.combat.creatures.filter(c => c.event === 'sporefall').length); }
+    return { kind: g.events.kind, spawned, blood: g.atmosphere.sporeVisible, bar: getComputedStyle(document.querySelector('#eventbar')).display };
   });
-  check('the Blood Moon brings its own creatures and a red sky', blood.kind === 'blood_moon' && blood.spawned > 0 && blood.blood > 0.5 && blood.bar === 'block', JSON.stringify({ spot: bloodSpot, ...blood }));
+  check('the Sporefall brings its own creatures and a green sky', blood.kind === 'sporefall' && blood.spawned > 0 && blood.blood > 0.5 && blood.bar === 'block', JSON.stringify({ spot: bloodSpot, ...blood }));
   await page.evaluate(() => {
     const g = __game;
     // Look toward the moon with a Gorehound on the prowl.
@@ -535,11 +559,11 @@ try {
     g.player.yaw = Math.atan2(-dx, -dz); g.player.pitch = 0.3;
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw);
     const x = g.player.x + fx * 7, z = g.player.z + fz * 7;
-    const c = g.spawnCreature('gorehound', x, g.sky.raw[Math.floor(x) + Math.floor(z) * g.sky.w] + 0.3, z);
+    const c = g.spawnCreature('rotfang', x, g.sky.raw[Math.floor(x) + Math.floor(z) * g.sky.w] + 0.3, z);
     c.yaw = Math.atan2(-fx, -fz); c.cooldown = 5;
     g.simulate(0.05);
   });
-  await shot('23-blood-moon');
+  await shot('23-sporefall');
   const dawn = await page.evaluate(() => {
     const g = __game;
     g.combat.clear();
@@ -548,9 +572,9 @@ try {
     g.simulate(0.2);
     return { kind: g.events.kind, bar: getComputedStyle(document.querySelector('#eventbar')).display };
   });
-  check('the Blood Moon ends at dawn', dawn.kind === null && dawn.bar === 'none', JSON.stringify(dawn));
+  check('the Sporefall ends at dawn', dawn.kind === null && dawn.bar === 'none', JSON.stringify(dawn));
 
-  // Hollow Raid: sound the war horn in town, watch raiders march, repel them.
+  // Hollow March: sound the war horn in town, watch raiders march, repel them.
   await page.evaluate(h => { const g = __game; g.player.teleport(h.x0 + 3, h.y + 0.5, h.z0 - 3); g.player.yaw = 0; }, house);
   await settle();
   const horn = await page.evaluate(() => {
@@ -559,7 +583,7 @@ try {
     const started = g['consume']({ id: 'hollow_horn' });
     return { started, kind: g.events.kind, goal: g.events.goal, town: g.townInfo(), player: [g.player.x, g.player.z], msgs: [...document.querySelectorAll('#messages div')].map(e => e.textContent).slice(-3) };
   });
-  check('the war horn starts the Hollow Raid near town', horn.started && horn.kind === 'raid' && horn.goal > 0, JSON.stringify(horn));
+  check('the war horn starts the Hollow March near town', horn.started && horn.kind === 'raid' && horn.goal > 0, JSON.stringify(horn));
   const march = await page.evaluate(() => {
     const g = __game;
     let first = null, closest = Infinity, count = 0;
@@ -657,7 +681,7 @@ try {
     g.combat.spawning = false;
     return [...seen];
   }, island);
-  check('sky creatures live around the islands', skySpawns.some(id => id === 'gale_swift' || id === 'cloud_glob'), skySpawns.join(', '));
+  check('sky creatures live around the islands', skySpawns.some(id => id === 'gale_swift' || id === 'cloud_burrling'), skySpawns.join(', '));
   await page.evaluate(() => {
     const g = __game;
     const c = g.combat.creatures.find(c => c.def.id === 'gale_swift') ?? g.spawnCreature('gale_swift', g.player.x + 3, g.player.y + 3, g.player.z - 5);
@@ -719,7 +743,7 @@ try {
     g.player.pitch = 0;
     g.simulate(0.05);
     const fx = -Math.sin(g.player.yaw), fz = -Math.cos(g.player.yaw);
-    const targets = [3, 5.5].map(d => g.spawnCreature('shambler', g.player.x + fx * d, g.player.y + 0.2, g.player.z + fz * d));
+    const targets = [3, 5.5].map(d => g.spawnCreature('rootwalker', g.player.x + fx * d, g.player.y + 0.2, g.player.z + fz * d));
     targets.forEach(t => { t.hp = 999; t.cooldown = 9; });
     g.simulate(0.3);
     // Aim through both (the ground may slope).
@@ -776,7 +800,7 @@ try {
     if (got) g['consume']({ id: 'life_crystal', grow: { life: 20 } }) && g.inventory.remove('life_crystal', 1);
     return { broken: !g.furniture.items.has(c.uid), got, before, after: g.vitals.maxHp, saved: g.snapshot().extra.maxHp };
   }, crystal);
-  check('Life Crystals grow in caves and raise max life', crystal.count >= 10 && grown.broken && grown.got === 1 && grown.after === grown.before + 20 && grown.saved === grown.after, JSON.stringify({ count: crystal.count, ...grown }));
+  check('Heartroots grow in caves and raise max Vigor', crystal.count >= 10 && grown.broken && grown.got === 1 && grown.after === grown.before + 20 && grown.saved === grown.after, JSON.stringify({ count: crystal.count, ...grown }));
   const star = await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;
     g.player.teleport(s.x, s.y + 0.5, s.z);
@@ -784,10 +808,12 @@ try {
     g.simulate(0.5);
     g.dropStar();
     let landed = false;
-    for (let i = 0; i < 50 && !landed; i++) { g.simulate(0.1); landed = g.pickups.serialize().some(p => p.id === 'fallen_star'); }
+    const got0 = g.inventory.count('fallen_star');
+    for (let i = 0; i < 400 && !landed; i++) { g.simulate(0.1); landed = g.pickups.serialize().some(p => p.id === 'fallen_star') || g.inventory.count('fallen_star') > got0; }
     g.inventory.add('fallen_star', 5);
     const st = g.furniture.stationsNear(g.player.x, g.player.y + 1, g.player.z);
-    g.furniture.add({ type: 'workbench', x: g.player.x + 1.5, y: g.player.y, z: g.player.z, rot: 0 });
+    g.inventory.add('glass_bottle', 1);
+    g.furniture.add({ type: 'hearth', x: g.player.x + 1.5, y: g.player.y, z: g.player.z, rot: 0 });
     const crafted = g.craftItem('mana_crystal');
     const before = g.vitals.maxMana;
     g['consume']({ id: 'mana_crystal', grow: { mana: 20 } });
@@ -795,21 +821,25 @@ try {
     g.simulate(0.2);
     return { landed, crafted, before, after: g.vitals.maxMana };
   });
-  check('fallen stars land at night and craft into Mana Crystals', star.landed && star.crafted && star.after === star.before + 20, JSON.stringify(star));
+  check('Starseeds drift down at night and seal into Glim Vessels', star.landed && star.crafted && star.after === star.before + 20, JSON.stringify(star));
 
   // ------------------------------------------------------- mushroom caverns
   const cavern = await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;
     const shrooms = g.veg.trees.filter(t => t.kind === 'mushroom' && t.alive);
     if (!shrooms.length) return { count: 0 };
-    const t = shrooms.sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))[0];
-    // Stand a few metres from the stem on open floor.
-    for (let k = 0; k < 48; k++) {
-      const r = [7, 5.5, 4, 3.2][Math.floor(k / 12)];
-      const a = (k % 12) * 0.52, x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r;
-      if (g.gen.densityAt(x, t.y + 1, z) < -0.4 && g.gen.densityAt(x, t.y + 1.8, z) < -0.4 && g.gen.densityAt(x, t.y - 0.8, z) > 0) {
-        g.player.teleport(x, t.y + 0.6, z);
-        break;
+    shrooms.sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z));
+    // Stand a few metres from a stem on open cavern floor (nearest mushroom with room).
+    let t = shrooms[0];
+    search: for (const m of shrooms.slice(0, 20)) {
+      for (let k = 0; k < 48; k++) {
+        const r = [7, 5.5, 4, 3.2][Math.floor(k / 12)];
+        const a = (k % 12) * 0.52, x = m.x + Math.cos(a) * r, z = m.z + Math.sin(a) * r;
+        if (g.gen.densityAt(x, m.y + 1, z) < -0.4 && g.gen.densityAt(x, m.y + 1.8, z) < -0.4 && g.gen.densityAt(x, m.y - 0.8, z) > 0 && g.gen.mushroomAt(x, m.y, z)) {
+          g.player.teleport(x, m.y + 0.6, z);
+          t = m;
+          break search;
+        }
       }
     }
     return { count: shrooms.length, x: t.x, y: t.y, z: t.z, h: t.height, id: t.id };

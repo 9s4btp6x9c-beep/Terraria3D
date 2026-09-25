@@ -1,4 +1,4 @@
-// DOM HUD: hotbar, held-item label, vitals (health/mana), message feed,
+// DOM HUD: hotbar, held-item label, vitals (Vigor/Glim), message feed,
 // interaction prompt, damage flash and debug readout.
 
 import { HOTBAR, type Inventory } from '../items/inventory';
@@ -65,23 +65,21 @@ export class Hud {
     } else this.itemName.innerHTML = '';
   }
 
-  /** Health as hearts (20 hp each) and mana as stars, Terraria-style. */
+  /**
+   * Vigor (health) as a segmented ember gauge and Glim (the light that fuels
+   * staves) as a thinner gauge beneath it. Each notch is 20 points, so the
+   * gauges visibly lengthen as Heartroots and Glim Vessels are used.
+   */
   setVitals(hp: number, maxHp: number, mana: number, maxMana: number, defense: number) {
     const key = `${Math.ceil(hp)}/${maxHp}/${Math.floor(mana)}/${maxMana}/${defense}`;
     if (key === this.lastVitals) return;
     this.lastVitals = key;
-    const hearts: string[] = [];
-    for (let i = 0; i < maxHp / 20; i++) {
-      const f = Math.max(0, Math.min(1, (hp - i * 20) / 20));
-      hearts.push(`<span class="heart" style="--f:${f}"></span>`);
-    }
-    const stars: string[] = [];
-    for (let i = 0; i < maxMana / 20; i++) {
-      const f = Math.max(0, Math.min(1, (mana - i * 20) / 20));
-      stars.push(`<span class="star" style="--f:${f}"></span>`);
-    }
-    this.vitals.innerHTML = `<div class="label"><span>Life <span class="num">${Math.ceil(hp)}/${maxHp}</span></span>${defense ? `<span class="def">${icon('shield')}${defense}</span>` : ''}</div>` +
-      `<div class="hearts">${hearts.join('')}</div>` + (maxMana > 0 ? `<div class="stars">${stars.join('')}</div>` : '');
+    const gauge = (cls: string, v: number, max: number, per: number) =>
+      `<div class="gauge ${cls}" style="--w:${Math.round(40 + max * per)}px;--n:${Math.max(1, max / 20)}"><div class="fill" style="width:${(100 * Math.max(0, v) / max).toFixed(1)}%"></div><div class="notches"></div></div>`;
+    this.vitals.innerHTML =
+      `<div class="label"><span class="vig">${icon('flame')}Vigor <span class="num">${Math.ceil(hp)}/${maxHp}</span></span>${defense ? `<span class="def">${icon('shield')}${defense}</span>` : ''}</div>` +
+      gauge('vigor', hp, maxHp, 0.7) +
+      (maxMana > 0 ? `<div class="label glim-label"><span class="glm">${icon('drop')}Glim <span class="num">${Math.floor(mana)}/${maxMana}</span></span></div>` + gauge('glim', mana, maxMana, 0.9) : '');
   }
 
   setBoss(name: string | null, hp = 0, max = 1) {
@@ -114,6 +112,17 @@ export class Hud {
   }
 
   /** Wing flight meter under the crosshair (null hides it). */
+  private biomeTimer = 0;
+  /** Show the name of the land the player just entered, then fade it out. */
+  showBiome(name: string) {
+    const el = document.querySelector<HTMLElement>('#biome-title');
+    if (!el) return;
+    el.innerHTML = `<div class="name">${name}</div><div class="rule"></div>`;
+    el.classList.add('show');
+    clearTimeout(this.biomeTimer);
+    this.biomeTimer = window.setTimeout(() => el.classList.remove('show'), 3200);
+  }
+
   setFlight(f: number | null) {
     const v = f === null ? -1 : Math.round(f * 40) / 40;
     if (v === this.flightShown) return;

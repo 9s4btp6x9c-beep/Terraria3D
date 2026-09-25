@@ -1,7 +1,8 @@
 // SkyMap: per-column height of the topmost "ground" surface, blurred. Shaders
 // compare a fragment's height against it to decide how much open sky it sees,
 // which makes caves and overhangs dark without any per-vertex baking.
-// Floating islands are skipped so the ground beneath them stays lit.
+// Floating islands and thin overhead features (root arches, giant ribs) are
+// skipped so the ground beneath them stays lit.
 
 import type { TerrainField } from './terrain';
 
@@ -21,7 +22,8 @@ export class SkyMap {
    * `approxTop` seeds every column (e.g. the generator's landform height);
    * exact values are computed from the field as chunk columns stream in.
    */
-  constructor(private field: TerrainField, approxTop: (x: number, z: number) => number) {
+  constructor(private field: TerrainField, approxTop: (x: number, z: number) => number,
+    private overhead: (x: number, y: number, z: number) => boolean = () => false) {
     this.w = field.sx; this.d = field.sz;
     this.raw = new Float32Array(this.w * this.d);
     this.blurred = new Float32Array(this.w * this.d);
@@ -35,18 +37,20 @@ export class SkyMap {
     const f = this.field;
     let y = f.sy - 1;
     while (y > 0) {
-      if (f.density(x, y, z) > 0) {
+      if (f.density(x, y, z) > 0 && !this.overhead(x, y, z)) {
         // Solid run; if it is a floating island (high, with a big air gap below) skip it.
         let bottom = y;
-        while (bottom > 0 && f.density(x, bottom - 1, z) > 0) bottom--;
+        while (bottom > 0 && f.density(x, bottom - 1, z) > 0 && !this.overhead(x, bottom - 1, z)) bottom--;
         if (y >= ISLAND_MIN_Y && bottom > 1) {
           let gap = 0;
           while (gap < 8 && bottom - 1 - gap > 0 && f.density(x, bottom - 1 - gap, z) <= 0) gap++;
           if (gap >= 8) { y = bottom - 1; continue; }
         }
         // Surface height inside the cell, for smooth values.
-        const a = f.density(x, y, z), b = f.density(x, y + 1, z);
-        return y + a / Math.max(1e-3, a - b);
+        const a = f.density(x, y, z);
+        let b = f.density(x, y + 1, z);
+        if (b > 0) b = this.overhead(x, y + 1, z) ? -0.5 : 0;
+        return y + Math.min(1, a / Math.max(1e-3, a - b));
       }
       y--;
     }

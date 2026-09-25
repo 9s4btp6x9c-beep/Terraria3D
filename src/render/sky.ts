@@ -14,7 +14,7 @@ export class Sky {
   private moonMat: THREE.MeshBasicMaterial;
   private sunMat: THREE.MeshBasicMaterial;
   private moonBase = new THREE.Color(0xe8ecf8);
-  private bloodMoon = new THREE.Color(0xff3a30);
+  private sporeMoon = new THREE.Color(0x8af8d0);
   readonly uniforms = {
     uTop: { value: new THREE.Color(0x3f63c8) },
     uHorizon: { value: new THREE.Color(0xa9c6ee) },
@@ -111,18 +111,18 @@ export class Sky {
 
   /**
    * Place the sun (by day) or moon (by night) along `dir` from the camera.
-   * @param blood 0..1 how red the moon is (Blood Moon)
+   * @param spore 0..1 how green and swollen the moon is (Sporefall)
    */
-  setCelestial(cam: THREE.Vector3, dir: THREE.Vector3, day: boolean, fade: number, blood: number) {
+  setCelestial(cam: THREE.Vector3, dir: THREE.Vector3, day: boolean, fade: number, spore: number) {
     const body = day ? this.sun : this.moon;
     this.sun.visible = day && fade > 0.01;
     this.moon.visible = !day && fade > 0.01;
     body.position.copy(cam).addScaledVector(dir, 820);
     body.lookAt(cam);
-    this.moonMat.color.copy(this.moonBase).lerp(this.bloodMoon, blood).multiplyScalar(0.35 + 0.65 * fade);
-    (this.moon.userData.crater as THREE.MeshBasicMaterial).color.setRGB(0.72, 0.74, 0.8).lerp(new THREE.Color(0x9a1a18), blood).multiplyScalar(0.35 + 0.65 * fade);
+    this.moonMat.color.copy(this.moonBase).lerp(this.sporeMoon, spore).multiplyScalar(0.35 + 0.65 * fade);
+    (this.moon.userData.crater as THREE.MeshBasicMaterial).color.setRGB(0.72, 0.74, 0.8).lerp(new THREE.Color(0x1a8a6a), spore).multiplyScalar(0.35 + 0.65 * fade);
     this.sunMat.color.setRGB(1, 0.95 * fade + 0.5 * (1 - fade), 0.7 * fade + 0.3 * (1 - fade));
-    this.moon.scale.setScalar(1 + blood * 0.35);
+    this.moon.scale.setScalar(1 + spore * 0.35);
   }
 
   /** Dim/tint clouds for night and dusk. */

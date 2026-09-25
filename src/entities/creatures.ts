@@ -42,38 +42,38 @@ export interface CreatureDef {
 }
 
 export const CREATURES: Record<string, CreatureDef> = {
-  glob: {
-    id: 'glob', name: 'Glob', hp: 18, damage: 8, defense: 0, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0,
+  burrling: {
+    id: 'burrling', name: 'Burrling', hp: 18, damage: 8, defense: 0, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'coin', min: 1, max: 2, chance: 0.6 }],
-    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [0] }, color: 0x4ec87a,
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [0] }, color: 0x8aaa4e,
   },
-  sand_glob: {
-    id: 'sand_glob', name: 'Sand Glob', hp: 26, damage: 11, defense: 2, speed: 5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'glob', tint: 0xf0d070,
+  dune_burrling: {
+    id: 'dune_burrling', name: 'Dune Burrling', hp: 26, damage: 11, defense: 2, speed: 5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'burrling', tint: 0xf0d070,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'sand', min: 2, max: 4, chance: 0.5 }, { item: 'coin', min: 1, max: 3, chance: 0.7 }],
     spawn: { env: 'surface', time: 'any', weight: 6, biomes: [1] }, color: 0xe0c060,
   },
-  frost_glob: {
-    id: 'frost_glob', name: 'Frost Glob', hp: 28, damage: 11, defense: 3, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'glob', tint: 0xb8ecff,
+  frost_burrling: {
+    id: 'frost_burrling', name: 'Frost Burrling', hp: 28, damage: 11, defense: 3, speed: 4.5, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'burrling', tint: 0xb8ecff,
     drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'ice', min: 1, max: 3, chance: 0.5 }, { item: 'coin', min: 1, max: 3, chance: 0.7 }],
     spawn: { env: 'surface', time: 'any', weight: 6, biomes: [2] }, color: 0xa8d8f0,
   },
-  blight_glob: {
-    id: 'blight_glob', name: 'Blight Glob', hp: 42, damage: 16, defense: 5, speed: 5.5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.2, model: 'glob', tint: 0xc080f0,
+  rift_burrling: {
+    id: 'rift_burrling', name: 'Rift Burrling', hp: 42, damage: 16, defense: 5, speed: 5.5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.2, model: 'burrling', skin: 'riftleaves', tint: 0xd0f0ff,
     drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'coin', min: 2, max: 5, chance: 1 }],
-    spawn: { env: 'surface', time: 'any', weight: 5, biomes: [3] }, color: 0x9a5ac0,
+    spawn: { env: 'surface', time: 'any', weight: 5, biomes: [3] }, color: 0x4ab8c8,
   },
   dune_crawler: {
     id: 'dune_crawler', name: 'Dune Crawler', hp: 42, damage: 15, defense: 8, speed: 2.8, ai: 'crawler', radius: 0.55, height: 0.7, kbResist: 0.5, model: 'rockmite', tint: 0xf0d8a0,
     drops: [{ item: 'sandstone', min: 2, max: 5, chance: 1 }, { item: 'coin', min: 2, max: 4, chance: 1 }, { item: 'swift_boots', min: 1, max: 1, chance: 0.02 }],
     spawn: { env: 'surface', time: 'any', weight: 3, biomes: [1] }, color: 0xd8b880,
   },
-  rotwing: {
-    id: 'rotwing', name: 'Rotwing', hp: 38, damage: 18, defense: 4, speed: 6, ai: 'flyer', radius: 0.5, height: 1, kbResist: 0.2, model: 'gloomwisp', tint: 0xc080ff,
+  rift_drifter: {
+    id: 'rift_drifter', name: 'Riftdrifter', hp: 38, damage: 18, defense: 4, speed: 6, ai: 'flyer', radius: 0.5, height: 1, kbResist: 0.2, model: 'drifter', tint: 0x7af0ff,
     drops: [{ item: 'coin', min: 2, max: 5, chance: 1 }, { item: 'bat_wing', min: 1, max: 1, chance: 0.3 }],
-    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [3] }, color: 0x8a4ab0,
+    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [3] }, color: 0x4ad8e8,
   },
-  ember_glob: {
-    id: 'ember_glob', name: 'Ember Glob', hp: 75, damage: 26, defense: 12, speed: 6, ai: 'hopper', radius: 0.65, height: 0.9, kbResist: 0.3, model: 'glob', tint: 0xff8040,
+  cinder_burrling: {
+    id: 'cinder_burrling', name: 'Cinder Burrling', hp: 75, damage: 26, defense: 12, speed: 6, ai: 'hopper', radius: 0.65, height: 0.9, kbResist: 0.3, model: 'burrling', skin: 'ember', tint: 0xffffff,
     drops: [{ item: 'gel', min: 3, max: 5, chance: 1 }, { item: 'emberite', min: 1, max: 3, chance: 0.5 }, { item: 'coin', min: 4, max: 9, chance: 1 }],
     spawn: { env: 'depths', time: 'any', weight: 5 }, color: 0xff6a2a,
   },
@@ -82,20 +82,20 @@ export const CREATURES: Record<string, CreatureDef> = {
     drops: [{ item: 'bat_wing', min: 1, max: 2, chance: 0.6 }, { item: 'coin', min: 3, max: 6, chance: 1 }],
     spawn: { env: 'depths', time: 'any', weight: 4 }, color: 0xff7030,
   },
-  deep_glob: {
-    id: 'deep_glob', name: 'Deep Glob', hp: 34, damage: 13, defense: 2, speed: 5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.1,
+  deep_burrling: {
+    id: 'deep_burrling', name: 'Deep Burrling', hp: 34, damage: 13, defense: 2, speed: 5, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.1, model: 'burrling', tint: 0x80a8ff,
     drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'coin', min: 1, max: 3, chance: 0.8 }],
     spawn: { env: 'cave', time: 'any', weight: 4 }, color: 0x3a8ae8,
   },
-  shambler: {
-    id: 'shambler', name: 'Shambler', hp: 45, damage: 14, defense: 4, speed: 2.6, ai: 'walker', radius: 0.4, height: 1.8, kbResist: 0.4,
+  rootwalker: {
+    id: 'rootwalker', name: 'Rootwalker', hp: 45, damage: 14, defense: 4, speed: 2.6, ai: 'walker', radius: 0.4, height: 1.8, kbResist: 0.4,
     drops: [{ item: 'coin', min: 2, max: 5, chance: 1 }, { item: 'red_cap', min: 1, max: 1, chance: 0.2 }, { item: 'feather_charm', min: 1, max: 1, chance: 0.02 }],
-    spawn: { env: 'surface', time: 'night', weight: 7 }, color: 0x7a2a2a,
+    spawn: { env: 'surface', time: 'night', weight: 7 }, color: 0x6a5238,
   },
-  gloomwisp: {
-    id: 'gloomwisp', name: 'Gloomwisp', hp: 30, damage: 16, defense: 2, speed: 5.5, ai: 'flyer', radius: 0.5, height: 1, kbResist: 0.2,
+  drifter: {
+    id: 'drifter', name: 'Drifter', hp: 30, damage: 16, defense: 2, speed: 5.5, ai: 'flyer', radius: 0.5, height: 1, kbResist: 0.2,
     drops: [{ item: 'coin', min: 2, max: 4, chance: 1 }, { item: 'glass_bottle', min: 1, max: 1, chance: 0.2 }],
-    spawn: { env: 'surface', time: 'night', weight: 3 }, color: 0xb02030,
+    spawn: { env: 'surface', time: 'night', weight: 3 }, color: 0x9a8aff,
   },
   duskwing: {
     id: 'duskwing', name: 'Duskwing', hp: 16, damage: 11, defense: 2, speed: 6.5, ai: 'flyer', radius: 0.35, height: 0.7, kbResist: 0,
@@ -122,8 +122,8 @@ Object.assign(CREATURES, {
     drops: [{ item: 'sky_feather', min: 1, max: 3, chance: 0.85 }, { item: 'coin', min: 2, max: 5, chance: 1 }],
     spawn: { env: 'sky', time: 'any', weight: 5 }, aggro: 50, color: 0xdce4ee,
   },
-  cloud_glob: {
-    id: 'cloud_glob', name: 'Cloud Glob', hp: 38, damage: 14, defense: 4, speed: 5, ai: 'hopper', radius: 0.58, height: 0.85, kbResist: 0.1, model: 'glob', skin: 'glass', tint: 0xf4faff,
+  cloud_burrling: {
+    id: 'cloud_burrling', name: 'Cloud Burrling', hp: 38, damage: 14, defense: 4, speed: 5, ai: 'hopper', radius: 0.58, height: 0.85, kbResist: 0.1, model: 'burrling', skin: 'glass', tint: 0xf4faff,
     drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'aerite_ore', min: 1, max: 2, chance: 0.35 }, { item: 'coin', min: 1, max: 3, chance: 0.8 }],
     spawn: { env: 'sky', time: 'any', weight: 4 }, color: 0xe8f4ff,
   },
@@ -143,29 +143,63 @@ Object.assign(CREATURES, {
   },
 } satisfies Record<string, CreatureDef>);
 
+// ---- Rootwold (4), Ossuary Flats (5) and Amberwood (6)
+Object.assign(CREATURES, {
+  moss_burrling: {
+    id: 'moss_burrling', name: 'Moss Burrling', hp: 32, damage: 12, defense: 3, speed: 4.2, ai: 'hopper', radius: 0.6, height: 0.85, kbResist: 0.15, model: 'burrling', skin: 'mossleaves', tint: 0xffffff,
+    drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'rootwood', min: 1, max: 2, chance: 0.4 }, { item: 'coin', min: 1, max: 3, chance: 0.8 }],
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [4] }, color: 0x6a8a3e,
+  },
+  mossback: {
+    id: 'mossback', name: 'Mossback', hp: 70, damage: 17, defense: 12, speed: 2.2, ai: 'crawler', radius: 0.75, height: 0.9, kbResist: 0.7,
+    drops: [{ item: 'rootwood', min: 3, max: 6, chance: 1 }, { item: 'coin', min: 3, max: 6, chance: 1 }, { item: 'red_cap', min: 1, max: 2, chance: 0.3 }],
+    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [4] }, color: 0x5e7a36,
+  },
+  bonepicker: {
+    id: 'bonepicker', name: 'Bonepicker', hp: 40, damage: 17, defense: 5, speed: 8, ai: 'flyer', radius: 0.45, height: 0.8, kbResist: 0.1, model: 'gale_swift', skin: 'bone', tint: 0xfff0d8,
+    drops: [{ item: 'fossil', min: 1, max: 3, chance: 0.8 }, { item: 'coin', min: 2, max: 4, chance: 1 }, { item: 'feather_charm', min: 1, max: 1, chance: 0.02 }],
+    spawn: { env: 'surface', time: 'any', weight: 4, biomes: [5] }, aggro: 45, color: 0xe6dcc0,
+  },
+  salt_crawler: {
+    id: 'salt_crawler', name: 'Saltback Crawler', hp: 48, damage: 15, defense: 10, speed: 2.9, ai: 'crawler', radius: 0.55, height: 0.7, kbResist: 0.5, model: 'rockmite', tint: 0xfff8f0,
+    drops: [{ item: 'salt', min: 2, max: 5, chance: 1 }, { item: 'fossil', min: 1, max: 2, chance: 0.4 }, { item: 'coin', min: 2, max: 4, chance: 1 }],
+    spawn: { env: 'surface', time: 'any', weight: 4, biomes: [5] }, color: 0xf0ece4,
+  },
+  amber_burrling: {
+    id: 'amber_burrling', name: 'Amber Burrling', hp: 30, damage: 11, defense: 3, speed: 4.8, ai: 'hopper', radius: 0.55, height: 0.8, kbResist: 0.1, model: 'burrling', skin: 'amber', tint: 0xffffff,
+    drops: [{ item: 'gel', min: 1, max: 3, chance: 1 }, { item: 'coin', min: 3, max: 7, chance: 1 }],
+    spawn: { env: 'surface', time: 'any', weight: 6, biomes: [6] }, color: 0xffb040,
+  },
+  leafwing: {
+    id: 'leafwing', name: 'Leafwing', hp: 28, damage: 13, defense: 2, speed: 6.5, ai: 'flyer', radius: 0.45, height: 0.8, kbResist: 0.1, model: 'glowmoth', skin: 'amberleaves', tint: 0xffffff,
+    drops: [{ item: 'coin', min: 2, max: 4, chance: 1 }, { item: 'red_cap', min: 1, max: 1, chance: 0.25 }],
+    spawn: { env: 'surface', time: 'any', weight: 3, biomes: [6] }, color: 0xd8702a,
+  },
+} satisfies Record<string, CreatureDef>);
+
 const EVENT_DROPS: Drop[] = [{ item: 'blood_shard', min: 1, max: 2, chance: 0.45 }];
 
 // ---- world-event creatures (see entities/events.ts)
 Object.assign(CREATURES, {
-  blood_glob: {
-    id: 'blood_glob', name: 'Blood Glob', hp: 40, damage: 15, defense: 4, speed: 6, ai: 'hopper', radius: 0.62, height: 0.9, kbResist: 0.15, model: 'glob', skin: 'bloodgel',
+  spore_burrling: {
+    id: 'spore_burrling', name: 'Spore Burrling', hp: 40, damage: 15, defense: 4, speed: 6, ai: 'hopper', radius: 0.62, height: 0.9, kbResist: 0.15, model: 'burrling', skin: 'spore',
     drops: [{ item: 'gel', min: 2, max: 4, chance: 1 }, { item: 'coin', min: 2, max: 4, chance: 1 }, ...EVENT_DROPS],
-    spawn: null, event: { kind: 'blood_moon', weight: 5 }, aggro: 55, color: 0xc02030,
+    spawn: null, event: { kind: 'sporefall', weight: 5 }, aggro: 55, color: 0x3ac8a0,
   },
-  gorehound: {
-    id: 'gorehound', name: 'Gorehound', hp: 60, damage: 18, defense: 6, speed: 7.5, ai: 'pouncer', radius: 0.5, height: 1.0, kbResist: 0.3,
+  rotfang: {
+    id: 'rotfang', name: 'Rotfang', hp: 60, damage: 18, defense: 6, speed: 7.5, ai: 'pouncer', radius: 0.5, height: 1.0, kbResist: 0.3,
     drops: [{ item: 'coin', min: 3, max: 6, chance: 1 }, { item: 'houndfang_charm', min: 1, max: 1, chance: 0.04 }, ...EVENT_DROPS],
-    spawn: null, event: { kind: 'blood_moon', weight: 4 }, aggro: 60, color: 0x9a2020,
+    spawn: null, event: { kind: 'sporefall', weight: 4 }, aggro: 60, color: 0x3ac8a0,
   },
-  vein_shambler: {
-    id: 'vein_shambler', name: 'Vein Shambler', hp: 80, damage: 17, defense: 8, speed: 3.2, ai: 'walker', radius: 0.42, height: 1.85, kbResist: 0.5, model: 'shambler', tint: 0xff8a8a,
+  sporebound: {
+    id: 'sporebound', name: 'Sporebound', hp: 80, damage: 17, defense: 8, speed: 3.2, ai: 'walker', radius: 0.42, height: 1.85, kbResist: 0.5, model: 'rootwalker', skin: 'spore', tint: 0xb8e0d0,
     drops: [{ item: 'coin', min: 3, max: 7, chance: 1 }, { item: 'red_cap', min: 1, max: 2, chance: 0.4 }, ...EVENT_DROPS],
-    spawn: null, event: { kind: 'blood_moon', weight: 5 }, aggro: 55, color: 0x8a1a1a,
+    spawn: null, event: { kind: 'sporefall', weight: 5 }, aggro: 55, color: 0x3ac8a0,
   },
-  bloodwisp: {
-    id: 'bloodwisp', name: 'Bloodwisp', hp: 45, damage: 16, defense: 4, speed: 6.5, ai: 'flyer', radius: 0.5, height: 1, kbResist: 0.2, model: 'gloomwisp', tint: 0xff7070,
+  spore_drifter: {
+    id: 'spore_drifter', name: 'Spore Drifter', hp: 45, damage: 16, defense: 4, speed: 6.5, ai: 'flyer', radius: 0.5, height: 1, kbResist: 0.2, model: 'drifter', skin: 'spore', tint: 0xb0ffe0,
     drops: [{ item: 'coin', min: 2, max: 5, chance: 1 }, ...EVENT_DROPS],
-    spawn: null, event: { kind: 'blood_moon', weight: 3 }, aggro: 60, color: 0xd02030,
+    spawn: null, event: { kind: 'sporefall', weight: 3 }, aggro: 60, color: 0x3ac8a0,
   },
   raid_miner: {
     id: 'raid_miner', name: 'Hollow Raider', hp: 90, damage: 20, defense: 10, speed: 2.8, ai: 'thrower', radius: 0.4, height: 1.8, kbResist: 0.3, model: 'hollow_miner',

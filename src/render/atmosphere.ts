@@ -15,8 +15,8 @@ const C = (hex: number) => new THREE.Color(hex);
 // Keyframes over time of day (0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset).
 const SKY_TOP = [[0, C(0x070a1c)], [0.2, C(0x0d1430)], [0.27, C(0x4a62b0)], [0.35, C(0x3f63c8)], [0.65, C(0x3f63c8)], [0.73, C(0x5a4e9a)], [0.8, C(0x0d1430)], [1, C(0x070a1c)]] as const;
 const SKY_HORIZON = [[0, C(0x10183a)], [0.2, C(0x1c2448)], [0.26, C(0xf0a070)], [0.33, C(0xa9c6ee)], [0.67, C(0xa9c6ee)], [0.74, C(0xf08a5a)], [0.8, C(0x1c2448)], [1, C(0x10183a)]] as const;
-const BLOOD_TOP = C(0x2a0508);
-const BLOOD_HORIZON = C(0x6a1212);
+const SPORE_TOP = C(0x05241f);
+const SPORE_HORIZON = C(0x1e6a52);
 const CAVE_FOG = C(0x0b0a12);
 const EMBER_FOG = C(0x2a0c08);
 const CAVE_AMBIENT = C(0x1a1726);
@@ -87,11 +87,11 @@ export class Atmosphere {
   underwater = 0;
   private oceanMask = { value: null as THREE.DataTexture | null };
   private oceanSize = { value: new THREE.Vector2(1, 1) };
-  /** Blood Moon strength (smoothed toward `bloodTarget`). */
-  blood = 0;
-  bloodTarget = 0;
-  /** Blood Moon tint as currently visible (0 by day). */
-  bloodVisible = 0;
+  /** Sporefall strength (smoothed toward `sporeTarget`). */
+  spore = 0;
+  sporeTarget = 0;
+  /** Sporefall tint as currently visible (0 by day). */
+  sporeVisible = 0;
   cycle = true;
   private tmp = new THREE.Color();
   private horizon = new THREE.Color();
@@ -199,10 +199,10 @@ export class Atmosphere {
 
     this.underground += ((1 - visibility) - this.underground) * Math.min(1, dt * 3);
     const ug = this.underground;
-    this.blood += (this.bloodTarget - this.blood) * Math.min(1, dt * 0.5);
+    this.spore += (this.sporeTarget - this.spore) * Math.min(1, dt * 0.5);
     // The red tint only shows at night (it fades out as the sun rises).
-    const bl = this.blood * (1 - THREE.MathUtils.smoothstep(sunUp, -0.1, 0.1));
-    this.bloodVisible = bl;
+    const bl = this.spore * (1 - THREE.MathUtils.smoothstep(sunUp, -0.1, 0.1));
+    this.sporeVisible = bl;
 
     // Light colours.
     const dusk = 1 - Math.min(1, Math.abs(sunUp) * 4);
@@ -218,8 +218,8 @@ export class Atmosphere {
     this.u.uHemiGround.value.setRGB(0.44 * d + 0.03, 0.37 * d + 0.03, 0.3 * d + 0.06);
 
     // Sky + fog.
-    sampleKeys(SKY_TOP, t, this.sky.uniforms.uTop.value).lerp(BLOOD_TOP, bl);
-    sampleKeys(SKY_HORIZON, t, this.horizon).lerp(BLOOD_HORIZON, bl * 0.85);
+    sampleKeys(SKY_TOP, t, this.sky.uniforms.uTop.value).lerp(SPORE_TOP, bl);
+    sampleKeys(SKY_HORIZON, t, this.horizon).lerp(SPORE_HORIZON, bl * 0.85);
     this.sky.uniforms.uHorizon.value.copy(this.horizon);
     this.sky.uniforms.uBottom.value.copy(this.horizon).multiplyScalar(0.8);
     this.shroom += (shroom - this.shroom) * Math.min(1, dt * 1.5);

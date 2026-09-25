@@ -69,8 +69,15 @@ async function boot() {
   const fresh = params.has('new') || !existing;
   if (params.has('new')) clearSave();
   const seed = Number(params.get('seed') ?? 1337);
+  // Seconds at which each loading phase began (read by the e2e scripts).
+  const phases: Record<string, number> = {};
+  const t0 = performance.now();
+  (window as unknown as { __loadPhases: typeof phases }).__loadPhases = phases;
   await game.load(seed, fresh ? null : existing, {
-    progress(f, label) { menu.setProgress(f, label); },
+    progress(f, label) {
+      phases[label] ??= Math.round(performance.now() - t0) / 1000;
+      menu.setProgress(f, label);
+    },
   });
   game.applySettings(settings);
   game.start();

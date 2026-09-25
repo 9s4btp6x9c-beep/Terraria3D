@@ -1,15 +1,16 @@
-// World events: the Blood Moon (a random night with deadlier spawns) and the
-// Hollow Raid (an army that marches on the town once the Deepwyrm is dead).
+// World events: the Sporefall (a random night when glowing spores rain down
+// and the fungal horrors walk) and the Hollow March (an army that marches on
+// the town once the Deepwyrm is dead).
 // Pure state machine — the game feeds it the time of day, town and player
 // position, and reacts to the transitions it reports.
 
-export type EventKind = 'blood_moon' | 'raid';
+export type EventKind = 'sporefall' | 'raid';
 
 export interface EventInfo { name: string; color: string; subtitle: string }
 
 export const EVENT_INFO: Record<EventKind, EventInfo> = {
-  blood_moon: { name: 'Blood Moon', color: '#ff6a6a', subtitle: 'Survive until dawn' },
-  raid: { name: 'The Hollow Raid', color: '#e6dcc0', subtitle: 'Defend the town' },
+  sporefall: { name: 'Sporefall', color: '#7af0c8', subtitle: 'Survive until dawn' },
+  raid: { name: 'The Hollow March', color: '#e6dcc0', subtitle: 'Defend the town' },
 };
 
 export interface EventWorld {
@@ -26,8 +27,8 @@ export type EventSignal =
   | { type: 'end'; kind: EventKind; won: boolean }
   | { type: 'progress'; kind: EventKind; progress: number; goal: number };
 
-/** Blood Moon odds per night (not on the first night). */
-export const BLOOD_MOON_CHANCE = 1 / 6;
+/** Sporefall odds per night (not on the first night). */
+export const SPOREFALL_CHANCE = 1 / 6;
 /** Raid odds per dawn once the boss is dead and at least two NPCs live in town. */
 export const RAID_CHANCE = 1 / 4;
 /** How far from the town the raid still counts as defended. */
@@ -84,16 +85,16 @@ export class WorldEvents {
     const out: EventSignal[] = [];
     const night = w.daylight < 0.3;
     const dusk = this.wasNight === false && night;
-    // A Blood Moon loaded from a save made at night ends if it is now day.
-    const dawn = (this.wasNight === true || (this.wasNight === null && this.kind === 'blood_moon')) && !night;
+    // A Sporefall loaded from a save made at night ends if it is now day.
+    const dawn = (this.wasNight === true || (this.wasNight === null && this.kind === 'sporefall')) && !night;
     this.wasNight = night;
 
     if (dusk) {
       this.nights++;
-      if (!this.kind && this.nights > 1 && this.rand() < BLOOD_MOON_CHANCE) out.push(...this.start('blood_moon', w));
+      if (!this.kind && this.nights > 1 && this.rand() < SPOREFALL_CHANCE) out.push(...this.start('sporefall', w));
     }
     if (dawn) {
-      if (this.kind === 'blood_moon') out.push(...this.end(true));
+      if (this.kind === 'sporefall') out.push(...this.end(true));
       const t = w.town;
       if (!this.kind && w.bossDefeated && t && t.npcs >= 2 && Math.hypot(w.px - t.x, w.pz - t.z) < 80 && this.rand() < RAID_CHANCE) {
         out.push(...this.start('raid', w));
@@ -113,7 +114,8 @@ export class WorldEvents {
 
   load(d: ReturnType<WorldEvents['serialize']> | undefined) {
     if (!d) return;
-    this.kind = d.kind;
+    // Saves from before the retheme called the Sporefall the 'blood_moon'.
+    this.kind = (d.kind as string) === 'blood_moon' ? 'sporefall' : d.kind;
     this.progress = d.progress;
     this.goal = d.goal;
     this.target = d.target;
