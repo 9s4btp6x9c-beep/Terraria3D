@@ -475,7 +475,7 @@ export class Game {
     }
     if (def.id === 'wyrm_bait') {
       const underground = this.sky.visibility(this.player.x, this.player.y + 1.5, this.player.z) < 0.4;
-      if (this.combat.boss) { this.hud.message('The Deepwyrm is already here!', '#ffb070'); return false; }
+      if (this.combat.boss) { this.hud.message(`${this.combat.boss.name} is already here!`, '#ffb070'); return false; }
       if (!underground && this.atmosphere.daylight > 0.3) { this.hud.message('Nothing answers in daylight. Try at night or underground.', '#ffb070'); return false; }
       this.combat.summonBoss(this.player.x + 12, Math.max(8, this.player.y - 26), this.player.z + 12);
       this.hud.message('The Deepwyrm stirs beneath you...', '#c89aff');

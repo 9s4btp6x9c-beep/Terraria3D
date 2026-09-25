@@ -68,6 +68,12 @@ describe('world events', () => {
     expect(s).toEqual([{ type: 'end', kind: 'raid', won: false }]);
   });
 
+  it('a Blood Moon loaded in daylight ends straight away', () => {
+    const ev = new WorldEvents(() => 0.99);
+    ev.load({ kind: 'blood_moon', progress: 0, goal: 0, target: null, nights: 3 });
+    expect(ev.update(1, world(1))).toEqual([{ type: 'end', kind: 'blood_moon', won: true }]);
+  });
+
   it('round-trips through a save', () => {
     const ev = new WorldEvents();
     ev.start('raid', { town: { x: 5, z: 6, npcs: 1 }, px: 0, pz: 0 });

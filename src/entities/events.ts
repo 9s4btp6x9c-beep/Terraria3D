@@ -84,7 +84,8 @@ export class WorldEvents {
     const out: EventSignal[] = [];
     const night = w.daylight < 0.3;
     const dusk = this.wasNight === false && night;
-    const dawn = this.wasNight === true && !night;
+    // A Blood Moon loaded from a save made at night ends if it is now day.
+    const dawn = (this.wasNight === true || (this.wasNight === null && this.kind === 'blood_moon')) && !night;
     this.wasNight = night;
 
     if (dusk) {
