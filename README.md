@@ -83,6 +83,10 @@ Touch devices start on the low quality preset.
 - **Sky tier:** the floating islands hold Aerite ore and are home to Gale
   Swifts and Cloud Globs. Aerite makes the Skyforged armor set (extra jump,
   speed, no fall damage and longer wing flight) and the two-arrow Gale Bow.
+- **Water:** lakes sit in carved bowls with sandy shores, and pools lie in
+  the caves. Water falls and spreads, and levels out in whatever you dig.
+  Tunnels dug from the coast below sea level flood. You can swim anywhere
+  (watch the breath bubbles), and buckets scoop water up and pour it out.
 - **World:** 512 m across with sky islands, a day/night cycle, and distant
   terrain drawn at lower detail so the whole map is visible from a high
   point.

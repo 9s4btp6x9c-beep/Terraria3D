@@ -62,7 +62,7 @@ export type ModelSpec =
   | { type: 'pickaxe' | 'axe' | 'sword' | 'bow' | 'staff' | 'hook'; head: MetalLayer }
   | { type: 'ore' | 'bar' | 'crystal' | 'nugget'; layer: string; tint?: number }
   | { type: 'block'; layer: string }
-  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' | 'star' | 'mana_crystal' | 'mana_potion' | 'glowcap' }
+  | { type: 'log' | 'gel' | 'arrow' | 'bomb' | 'potion' | 'bottle' | 'mushroom' | 'coin' | 'wing' | 'scale' | 'bait' | 'horn' | 'club' | 'fang' | 'feather' | 'plume' | 'wings' | 'idol' | 'star' | 'mana_crystal' | 'mana_potion' | 'glowcap' | 'bucket' | 'water_bucket' }
   | { type: 'armor'; slot: ArmorDef['slot']; layer: MetalLayer }
   | { type: 'boots' | 'jar' | 'charm' | 'band'; layer: string }
   | { type: 'furniture'; id: FurnitureId };
@@ -194,6 +194,8 @@ const list: ItemDef[] = [
   { id: 'fallen_star', name: 'Fallen Star', kind: 'material', maxStack: 999, color: '#ffe060', rarity: 1, model: { type: 'star' }, description: 'Falls from the sky on clear nights.' },
   { id: 'mana_crystal', name: 'Mana Crystal', kind: 'consumable', maxStack: 99, color: '#5a8aff', rarity: 2, model: { type: 'mana_crystal' }, grow: { mana: 20 }, description: 'Permanently raises max mana by 20 (up to 200).' },
   { id: 'mana_potion', name: 'Mana Potion', kind: 'consumable', maxStack: 30, color: '#4a7aff', model: { type: 'mana_potion' }, mana: 100, description: 'Restores 100 mana.' },
+  { id: 'bucket', name: 'Empty Bucket', kind: 'consumable', maxStack: 1, color: '#b4aca6', model: { type: 'bucket' }, description: 'Use on water to scoop some up.' },
+  { id: 'water_bucket', name: 'Water Bucket', kind: 'consumable', maxStack: 1, color: '#3a86d8', model: { type: 'water_bucket' }, description: 'Use to pour the water out.' },
   { id: 'healing_potion', name: 'Healing Potion', kind: 'consumable', maxStack: 30, color: '#d83a3a', model: { type: 'potion' }, heal: 50, description: 'Restores 50 health. [RMB] / use to drink.' },
 
   // ---- placeables

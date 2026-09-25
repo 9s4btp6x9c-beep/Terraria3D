@@ -44,6 +44,8 @@ export class Viewmodel {
    */
   constructor(camera: THREE.Camera, material: THREE.Material, private visibility: { value: number }) {
     material.depthTest = false;
+    // Drawn in the transparent pass (after water) so nothing washes over it.
+    material.transparent = true;
     material.depthWrite = true; // still write depth so the outline pass sees it
     this.itemMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
     this.arm = new THREE.Mesh(armGeometry(), material);

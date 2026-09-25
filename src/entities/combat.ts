@@ -46,6 +46,8 @@ export interface CombatHooks {
   isLoaded(x: number, z: number): boolean;
   /** Suppress spawns near safe zones (houses / NPC homes). */
   safeZone(x: number, y: number, z: number): boolean;
+  /** Is this point under water? */
+  inWater(x: number, y: number, z: number): boolean;
   /** Inside a glowing mushroom cavern? */
   mushroomAt(x: number, y: number, z: number): boolean;
   /** The running world event, if any (raids march on `target`). */
@@ -406,6 +408,12 @@ export class Combat {
       // Keep creatures inside loaded terrain; freeze them otherwise.
       if (!this.hooks.isLoaded(c.x, c.z)) { c.idle += dt; if (c.idle > 5) this.remove(c); continue; }
       think(c, ctx);
+      // Walkers and hoppers float up and are slowed in water.
+      if (c.def.ai !== 'flyer' && this.hooks.inWater(c.x, c.y + c.def.height * 0.5, c.z)) {
+        c.vy += 30 * dt;
+        c.vy *= Math.pow(0.15, dt);
+        c.vx *= Math.pow(0.35, dt); c.vz *= Math.pow(0.35, dt);
+      }
       if (c.y < -5 || c.idle > 12) { this.remove(c); continue; }
       // Contact damage.
       const dx = px - c.x, dz = pz - c.z;

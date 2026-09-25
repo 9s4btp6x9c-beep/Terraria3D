@@ -136,7 +136,7 @@ export function planStructures(gen: WorldGenerator): StructurePlan {
  * Scan up a column for a cave floor: solid below, at least 2.5 m of air
  * above and level ground around. Returns the floor height or null.
  */
-function caveFloor(gen: WorldGenerator, x: number, y0: number, z: number, y1: number): number | null {
+export function caveFloor(gen: WorldGenerator, x: number, y0: number, z: number, y1: number): number | null {
   for (let y = y0; y < y1; y++) {
     const d0 = gen.densityAt(x, y, z), d1 = gen.densityAt(x, y + 1, z);
     if (!(d0 > 0 && d1 < 0)) continue;

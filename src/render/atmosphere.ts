@@ -83,6 +83,10 @@ export class Atmosphere {
   daylight = 1;
   /** 0 outdoors .. 1 deep underground (smoothed). */
   underground = 0;
+  /** 1 while the camera is under water. */
+  underwater = 0;
+  private oceanMask = { value: null as THREE.DataTexture | null };
+  private oceanSize = { value: new THREE.Vector2(1, 1) };
   /** Blood Moon strength (smoothed toward `bloodTarget`). */
   blood = 0;
   bloodTarget = 0;
@@ -140,14 +144,17 @@ export class Atmosphere {
       shader.uniforms.uSkySize = this.u.uSkySize;
       shader.uniforms.uTime = this.u.uTime;
       shader.uniforms.uSea = { value: level };
+      shader.uniforms.uOcean = this.oceanMask;
+      shader.uniforms.uOceanSize = this.oceanSize;
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vWaterWorld;')
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWaterWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform sampler2D uSky; uniform vec2 uSkySize; uniform float uSea; uniform float uTime; varying vec3 vWaterWorld;')
+        .replace('#include <common>', '#include <common>\nuniform sampler2D uOcean; uniform vec2 uOceanSize; uniform float uSea; uniform float uTime; varying vec3 vWaterWorld;')
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-  vec2 suv = (vWaterWorld.xz + 0.5) / uSkySize;
-  if (suv.x > 0.0 && suv.y > 0.0 && suv.x < 1.0 && suv.y < 1.0 && texture2D(uSky, suv).r > uSea + 2.5) discard;`)
+  // Only the true ocean shows the sea plane (dug pits inland stay dry).
+  vec2 suv = (vWaterWorld.xz + 0.5) / uOceanSize;
+  if (suv.x > 0.0 && suv.y > 0.0 && suv.x < 1.0 && suv.y < 1.0 && texture2D(uOcean, suv).r < 0.5) discard;`)
         .replace('#include <color_fragment>', `#include <color_fragment>
   {
     vec2 p = floor(vWaterWorld.xz * 4.0) / 4.0;
@@ -160,6 +167,17 @@ export class Atmosphere {
     water.receiveShadow = true;
     water.renderOrder = 5;
     return water;
+  }
+
+  /** Mark ocean columns (the sea plane is hidden everywhere else). */
+  setOceanMask(w: number, d: number, ocean: (x: number, z: number) => boolean) {
+    const data = new Uint8Array(w * d);
+    for (let z = 0; z < d; z++) for (let x = 0; x < w; x++) data[x + z * w] = ocean(x + 0.5, z + 0.5) ? 255 : 0;
+    const tex = new THREE.DataTexture(data, w, d, THREE.RedFormat, THREE.UnsignedByteType);
+    tex.magFilter = tex.minFilter = THREE.NearestFilter;
+    tex.needsUpdate = true;
+    this.oceanMask.value = tex;
+    this.oceanSize.value.set(w, d);
   }
 
   /**
@@ -210,6 +228,11 @@ export class Atmosphere {
     this.u.uCaveAmbient.value.copy(CAVE_AMBIENT).lerp(SHROOM_AMBIENT, this.shroom).lerp(EMBER_AMBIENT, ember);
     this.fog.near = 90 - ug * 82;
     this.fog.far = 560 - ug * 480;
+    if (this.underwater > 0) {
+      // Murky blue water: short fog that also darkens in caves.
+      this.fog.color.setRGB(0.08, 0.26, 0.42).multiplyScalar(0.35 + 0.65 * (1 - ug));
+      this.fog.near = 0.5; this.fog.far = 26;
+    }
     this.renderer.setClearColor(this.fog.color);
     (this.stars.material as THREE.PointsMaterial).opacity = (1 - d) * (1 - ug) * (1 - bl * 0.6);
     this.stars.visible = d < 0.95 && ug < 0.95;

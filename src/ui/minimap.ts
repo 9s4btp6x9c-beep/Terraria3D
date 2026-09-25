@@ -12,8 +12,13 @@ export class Minimap {
   private img: ImageData;
 
   /** `approxMat` gives a surface material for columns whose terrain is not loaded. */
+  /**
+   * `waterTop` gives the water surface over a column (sea or lakes), or null;
+   * `approxMat` a surface material for columns whose terrain is not loaded.
+   */
   constructor(
     private canvas: HTMLCanvasElement, private field: TerrainField, private sky: SkyMap, private seaLevel: number,
+    private waterTop: (x: number, z: number, h: number) => number | null,
     private approxMat: (x: number, z: number, h: number) => number,
   ) {
     this.ctx = canvas.getContext('2d')!;
@@ -33,8 +38,9 @@ export class Minimap {
         const h = this.sky.raw[x + z * f.sx];
         const i = (x + z * f.sx) * 4;
         let r: number, g: number, b: number;
-        if (h < this.seaLevel) {
-          const deep = Math.min(1, (this.seaLevel - h) / 12);
+        const wt = this.waterTop(x + 0.5, z + 0.5, h);
+        if (wt !== null) {
+          const deep = Math.min(1, (wt - h) / 12);
           r = 60 - deep * 30; g = 120 - deep * 40; b = 200 - deep * 40;
         } else {
           const m = f.isResident(x, h, z) ? f.materialNear(x, h - 0.3, z) : this.approxMat(x, z, h);

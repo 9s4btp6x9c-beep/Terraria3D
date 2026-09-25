@@ -14,10 +14,13 @@ uniform sampler2D tDepth;
 uniform vec2 uTexel;
 uniform float uNear;
 uniform float uFar;
+uniform vec2 uLineFade;
 uniform vec3 uOutline;
 uniform float uUnderground;
 uniform float uNight;
 uniform float uBlood;
+uniform float uWater;
+uniform float uTime;
 varying vec2 vUv;
 
 float linearDepth(vec2 uv) {
@@ -33,7 +36,10 @@ float bayer4(vec2 p) {
 }
 
 void main() {
-  vec3 col = texture2D(tColor, vUv).rgb;
+  vec2 suv = vUv;
+  // Under water: a gentle pixel wobble.
+  suv += uWater * vec2(sin(vUv.y * 40.0 + uTime * 2.0), cos(vUv.x * 30.0 + uTime * 1.7)) * 0.0025;
+  vec3 col = texture2D(tColor, suv).rgb;
   float dc = linearDepth(vUv);
   float dl = linearDepth(vUv - vec2(uTexel.x, 0.0));
   float dr = linearDepth(vUv + vec2(uTexel.x, 0.0));
@@ -46,7 +52,7 @@ void main() {
   float wc = 1.0 / dc;
   float lap = (1.0 / dl + 1.0 / dr + 1.0 / du + 1.0 / dd) - 4.0 * wc;
   float rel = -lap / wc;
-  float line = smoothstep(0.12, 0.3, rel) * (1.0 - smoothstep(uFar * 0.55, uFar * 0.95, dc));
+  float line = smoothstep(0.12, 0.3, rel) * (1.0 - smoothstep(uLineFade.x, uLineFade.y, dc));
   col = mix(col, uOutline, line * 0.85);
 
   // Grading: gentle contrast + saturation, cooler shadows underground.
@@ -60,6 +66,8 @@ void main() {
   // Blood Moon: crimson grade outdoors.
   col = mix(col, vec3(ln * 1.25, ln * 0.55, ln * 0.5) + col * vec3(0.25, 0.1, 0.1), uBlood * (1.0 - uUnderground) * 0.55);
 
+  // Under water: tint toward deep blue.
+  col = mix(col, col * vec3(0.55, 0.85, 1.1) + vec3(0.0, 0.03, 0.07), uWater * 0.8);
   // Vignette.
   vec2 v = vUv - 0.5;
   col *= 1.0 - dot(v, v) * (0.35 + uUnderground * 0.5);
@@ -95,10 +103,13 @@ export class PostFX {
         uTexel: { value: new THREE.Vector2(1 / size.x, 1 / size.y) },
         uNear: { value: camera.near },
         uFar: { value: camera.far },
+        uLineFade: { value: new THREE.Vector2(camera.far * 0.55, camera.far * 0.95) },
         uOutline: { value: new THREE.Color(0x14121c) },
         uUnderground: { value: 0 },
         uNight: { value: 0 },
         uBlood: { value: 0 },
+        uWater: { value: 0 },
+        uTime: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -118,6 +129,14 @@ export class PostFX {
 
   setBlood(v: number) {
     this.mat.uniforms.uBlood.value = v;
+  }
+
+  setWater(v: number) {
+    this.mat.uniforms.uWater.value = v;
+    // Outlines fade out with the short underwater fog.
+    const far = this.camera.far;
+    this.mat.uniforms.uLineFade.value.set(v > 0 ? 8 : far * 0.55, v > 0 ? 22 : far * 0.95);
+    this.mat.uniforms.uTime.value = performance.now() / 1000;
   }
 
   resize() {

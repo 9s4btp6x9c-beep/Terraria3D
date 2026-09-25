@@ -13,6 +13,9 @@ import { DENSITY_CLAMP } from './edits';
 interface Capsule { ax: number; ay: number; az: number; bx: number; by: number; bz: number; r: number }
 interface Island { x: number; y: number; z: number; r: number; depth: number }
 /** Cabin room: min corner (x, z) on the 2 m build grid, floor base y, size in 2 m cells. */
+/** A surface lake: a bowl carved below `level`, filled with water at creation. */
+export interface Lake { x: number; z: number; r: number; depth: number; level: number }
+
 export interface Cabin { x: number; y: number; z: number; cx: number; cz: number; seed: number }
 
 export const CABIN_WALL = 2.5;
@@ -50,6 +53,7 @@ export class WorldGenerator {
   readonly islands: Island[] = [];
   /** Underground cabins: grid-aligned rooms carved out of the rock (x,z = min corner). */
   readonly cabins: Cabin[] = [];
+  readonly lakes: Lake[] = [];
   /** AABB (min xyz, max xyz) around the entrance tunnel, padded. */
   private entranceBounds = [0, 0, 0, 0, 0, 0];
   spawn = { x: 0, y: 0, z: 0 };
@@ -82,6 +86,7 @@ export class WorldGenerator {
         this.biomes[x + z * w] = b;
       }
     this.placeSpawnAndEntrance();
+    this.placeLakes();
     this.placeIslands();
     this.placeCabins();
   }
@@ -215,6 +220,49 @@ export class WorldGenerator {
     }
   }
 
+  private placeLakes() {
+    const rand = mulberry32(this.cfg.seed ^ 0x1a4e);
+    const want = Math.round((this.size.x * this.size.z) / (512 * 512) * 6);
+    const m = 60, sea = this.cfg.seaLevel;
+    for (let tries = 0; this.lakes.length < want && tries < 600; tries++) {
+      const x = m + rand() * (this.size.x - 2 * m), z = m + rand() * (this.size.z - 2 * m);
+      const b = this.biomeAt(x, z);
+      if (b === Biome.Desert || b === Biome.Blight) continue;
+      const r = 7 + rand() * 7;
+      if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < r + 30) continue;
+      if (this.lakes.some(l => Math.hypot(l.x - x, l.z - z) < l.r + r + 24)) continue;
+      let lo = Infinity, hi = -Infinity;
+      for (let a = 0; a < 16; a++) {
+        const h = this.height(x + Math.cos(a / 16 * Math.PI * 2) * r * 1.15, z + Math.sin(a / 16 * Math.PI * 2) * r * 1.15);
+        lo = Math.min(lo, h); hi = Math.max(hi, h);
+      }
+      if (hi - lo > 4 || this.height(x, z) > lo + 3) continue;
+      const level = Math.floor((lo - 0.8) * 4) / 4;
+      if (level < sea + 3 || level > 100) continue;
+      this.lakes.push({ x, z, r, depth: 2.5 + rand() * 2.5, level });
+    }
+  }
+
+  /** Horizontal radius of a lake bowl at height y (flares out above the water). */
+  lakeRadius(l: Lake, x: number, z: number, y: number) {
+    const shore = l.r * (1 + this.detail.noise2(x / 9 + l.x, z / 9) * 0.12);
+    if (y >= l.level) return shore * (1 + (y - l.level) * 0.35);
+    const t = (l.level - y) / l.depth;
+    return t >= 1 ? 0 : shore * Math.sqrt(1 - t * t);
+  }
+
+  /** The lake whose bowl contains the column, if any. */
+  lakeAt(x: number, z: number): Lake | null {
+    for (const l of this.lakes) if ((x - l.x) ** 2 + (z - l.z) ** 2 < (l.r * 1.2) ** 2) return l;
+    return null;
+  }
+
+  /** Original sea-bed height for ocean columns (null inland). */
+  oceanFloor(x: number, z: number): number | null {
+    const h = this.height(x, z);
+    return h < this.cfg.seaLevel - 0.5 ? h : null;
+  }
+
   private placeCabins() {
     const rand = mulberry32(this.cfg.seed ^ 0xcab1);
     const want = Math.round((this.size.x * this.size.z) / (512 * 512) * 12);
@@ -243,12 +291,21 @@ export class WorldGenerator {
     const h = this.height(x, z);
     let d = h - y;
     // Overhangs, spires and cliff breakup near the surface.
+    let lake: Lake | null = null, lakeFlat = 0;
+    for (const l of this.lakes) {
+      const hd = Math.hypot(x - l.x, z - l.z);
+      if (hd < l.r * 1.8 + 6) { lake = l; lakeFlat = smoothstep(l.r * 1.8 + 6, l.r * 1.2, hd); break; }
+    }
     if (Math.abs(d) < 14) {
       const mi = Math.floor(x) + Math.floor(z) * (W + 1);
       // Keep d(y) monotone-ish (vertical warp slope < 1) so the noise makes
-      // overhangs and spires but never loose floating rocks.
-      const amp = 2.5 + this.mountainMask[mi] * 6;
+      // overhangs and spires but never loose floating rocks. Lake shores stay calm.
+      const amp = (2.5 + this.mountainMask[mi] * 6) * (1 - lakeFlat * 0.85);
       d += this.warp.noise3(x / 22, y / 26, z / 22) * amp + this.warp.noise3(x / 7, y / 9, z / 7) * 0.5;
+    }
+    if (lake && y > lake.level - lake.depth - 1) {
+      const hd = Math.hypot(x - lake.x, z - lake.z);
+      d = Math.min(d, (hd - this.lakeRadius(lake, x, z, y)) * 0.8);
     }
     if (y < 4) d = Math.max(d, 4 - y); // bedrock floor stays solid
     // Blight chasms: narrow fissures plunging deep underground.
@@ -335,6 +392,8 @@ export class WorldGenerator {
     const biome = this.biomeAt(x, z);
     const sky = y > this.size.y - 40;
     const nearSurface = depth < 8 || sky;
+    const lk = !sky ? this.lakeAt(x, z) : null;
+    if (lk && y < lk.level + 1.2 && exposure < 2.5) return y > lk.level - 1.2 ? Mat.Sand : Mat.Clay;
     if (nearSurface && exposure < 1.5) {
       if (normalY < 0.55) {
         // Cliff faces: rock with bands of strata.

@@ -58,6 +58,7 @@ export class Vegetation {
         if (biome === Biome.Snow) dens *= 0.8;
         if (r3 > dens * 1.05 - 0.2) continue;
         if (Math.hypot(x - spawn.x, z - spawn.z) < 5) continue;
+        if (gen.lakeAt(x, z)) continue;
         const h = gen.height(x, z);
         if (h < sea + 1.5) continue;
         const surf = gen.surfaceAt(x, z);

@@ -846,6 +846,95 @@ try {
   }, cavern);
   check('Sporelings and Glowmoths haunt the caverns; mushrooms fell into glowcaps', shroomLife.seen.some(id => id === 'sporeling' || id === 'glowmoth') && shroomLife.felled && shroomLife.glowcaps > 0, JSON.stringify(shroomLife));
 
+  // ----------------------------------------------------------------- water
+  const lake = await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    const lakes = g.gen.lakes;
+    if (!lakes.length) return { lakes: 0 };
+    const l = [...lakes].sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))[0];
+    // Stand on the shore looking across the water.
+    const a = 0.7;
+    const sx = l.x + Math.cos(a) * (l.r + 3), sz = l.z + Math.sin(a) * (l.r + 3);
+    const surf = g.gen.surfaceAt(sx, sz);
+    g.player.teleport(sx, (surf ? surf.y : l.level + 2) + 0.5, sz);
+    g.player.yaw = Math.atan2(-(l.x - sx), -(l.z - sz)); g.player.pitch = -0.25;
+    g.atmosphere.timeOfDay = 0.42;
+    return { lakes: lakes.length, cells: g.water.cells.size, x: l.x, z: l.z, level: l.level, r: l.r };
+  });
+  await settle();
+  await shot('29-lake');
+  check('lakes are carved and filled with water', lake.lakes >= 3 && lake.cells > 500, JSON.stringify(lake));
+  const swim = await page.evaluate(l => {
+    const g = __game;
+    g.vitals.hp = g.vitals.maxHp;
+    g.player.teleport(l.x, l.level - 2.2, l.z);
+    g.simulate(0.3);
+    const inWater = g.player.inWater;
+    g.simulate(3);
+    const breath = g.breath;
+    const under = g.atmosphere.underwater;
+    g.input.keys.add('Space');
+    for (let i = 0; i < 40; i++) g.simulate(0.1);
+    g.input.keys.delete('Space');
+    return { inWater, breath: +breath.toFixed(1), under, surfaced: g.player.y + 1.62 > l.level - 0.3 };
+  }, lake);
+  check('you can swim in lakes, hold your breath and surface', swim.inWater && swim.breath < 11 && swim.under === 1 && swim.surfaced, JSON.stringify(swim));
+  await page.evaluate(l => { const g = __game; g.player.teleport(l.x + 1, l.level - 2.5, l.z + 1); g.player.pitch = 0.2; g.simulate(0.3); }, lake);
+  await shot('30-underwater');
+
+  const bucket = await page.evaluate(l => {
+    const g = __game;
+    g.inventory.add('bucket', 1);
+    // Scoop from the lake while standing on the shore.
+    const sx = l.x + Math.cos(0.7) * (l.r + 1.5), sz = l.z + Math.sin(0.7) * (l.r + 1.5);
+    g.player.teleport(sx, l.level + 1, sz);
+    g.simulate(0.5);
+    g.player.yaw = Math.atan2(-(l.x - g.player.x), -(l.z - g.player.z));
+    g.player.pitch = Math.atan2(l.level - 0.4 - (g.player.y + 1.62), 3);
+    g.simulate(0.05);
+    g.useBucket(false);
+    const scooped = g.inventory.count('water_bucket') === 1;
+    // Pour it on dry ground at spawn and let it spread.
+    const s = g.gen.spawn;
+    g.player.teleport(s.x, s.y + 0.5, s.z);
+    g.player.pitch = -0.8;
+    g.simulate(0.5);
+    const before = g.water.cells.size;
+    g.useBucket(true);
+    g.simulate(2);
+    return { scooped, poured: g.inventory.count('bucket') === 1, spread: g.water.cells.size - before };
+  }, lake);
+  check('buckets scoop water up and pour it out', bucket.scooped && bucket.poured && bucket.spread > 0, JSON.stringify(bucket));
+
+  const coast = await page.evaluate(() => {
+    const g = __game, sea = g.field.cfg.seaLevel;
+    // Find a coast: an ocean column with high ground 14 m inland.
+    for (let z = 40; z < g.field.sz - 40; z += 6) for (let x = 40; x < g.field.sx - 40; x += 6) {
+      if (g.gen.oceanFloor(x, z) === null || g.gen.oceanFloor(x, z) > sea - 3) continue;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ix = x + dx * 14, iz = z + dz * 14;
+        if (g.gen.height(ix, iz) < sea + 4 || g.gen.oceanFloor(ix, iz) !== null) continue;
+        g.player.teleport(ix, g.gen.height(ix, iz) + 1, iz);
+        return { x, z, dx, dz };
+      }
+    }
+    return null;
+  });
+  await settle();
+  const flood = await page.evaluate(c => {
+    if (!c) return { found: false };
+    const g = __game, y = g.field.cfg.seaLevel - 1.5;
+    for (let t = 0; t <= 14; t += 1) {
+      const px = c.x + c.dx * t, pz = c.z + c.dz * t;
+      g.log.commit(g.field, 'sub', px, y, pz, 1.4, 0, 99);
+      g['onTerrainEdited'](px, y, pz, 1.4);
+    }
+    for (let i = 0; i < 60; i++) g.simulate(0.2);
+    const mx = c.x + c.dx * 9, mz = c.z + c.dz * 9;
+    return { found: true, level: +g.water.level(Math.floor(mx), Math.floor(y), Math.floor(mz)).toFixed(2), swimLevel: g.waterLevelAt(mx, y, mz) };
+  }, coast);
+  check('a tunnel dug from the coast below sea level floods', flood.found && flood.level > 0.5, JSON.stringify(flood));
+
   // Far view over the world with the debug readout (LOD + draw stats).
   await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;

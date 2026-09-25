@@ -19,6 +19,8 @@ export class Hud {
   private bossKey = '';
   private eventbar = $('#eventbar');
   private flight = $('#flight');
+  private breath = $('#breath');
+  private breathShown = -1;
   private flightShown = -1;
   private eventKey = '';
   debugVisible = false;
@@ -92,6 +94,15 @@ export class Hud {
     const bar = goal > 0 ? `<div class="bar"><div style="width:${Math.min(100, (progress / goal) * 100).toFixed(1)}%"></div></div>` : '';
     this.eventbar.innerHTML = `<div class="name" style="color:${ev.color}">${ev.name}</div>` +
       `<div class="sub">${goal > 0 ? `${ev.subtitle} · ${progress} / ${goal}` : ev.subtitle}</div>${bar}`;
+  }
+
+  /** Breath bubbles (null hides them). */
+  setBreath(f: number | null) {
+    const n = f === null ? -1 : Math.ceil(f * 10);
+    if (n === this.breathShown) return;
+    this.breathShown = n;
+    this.breath.style.display = f === null ? 'none' : 'flex';
+    if (f !== null) this.breath.innerHTML = Array.from({ length: 10 }, (_, i) => `<span class="bubble${i < n ? '' : ' gone'}"></span>`).join('');
   }
 
   /** Wing flight meter under the crosshair (null hides it). */

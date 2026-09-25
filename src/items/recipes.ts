@@ -54,6 +54,7 @@ export const RECIPES: Recipe[] = [
   R('iron_chainmail', 1, 'anvil', ['iron_bar', 14]),
   R('iron_greaves', 1, 'anvil', ['iron_bar', 12]),
   R('bomb', 3, 'anvil', ['gel', 2], ['iron_bar', 1]),
+  R('bucket', 1, 'anvil', ['iron_bar', 3]),
   R('grappling_hook', 1, 'anvil', ['barbed_hook', 1], ['iron_bar', 4]),
   R('wyrm_bait', 1, 'anvil', ['lumite', 5], ['gel', 6], ['bat_wing', 2]),
   // Sky tier: aerite from the floating islands, feathers from their creatures.

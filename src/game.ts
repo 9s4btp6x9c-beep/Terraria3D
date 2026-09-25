@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import { Audio } from './audio/sfx';
+import { mulberry32 } from './core/noise';
 import { FurnitureSet, type Placed } from './building/furniture';
 import { Structures } from './building/structures';
 import { Combat } from './entities/combat';
@@ -46,7 +47,9 @@ import { SkyMap } from './world/skymap';
 import { TerrainField } from './world/terrain';
 import type { Tree } from './world/vegetation';
 import { Vegetation } from './world/vegetation';
-import { planStructures } from './world/worldStructures';
+import { caveFloor, planStructures } from './world/worldStructures';
+import { MIN_LEVEL, WaterSim } from './world/water';
+import { WaterRenderer, createWaterMaterial } from './render/waterRenderer';
 import { TerrainWorkerPool } from './world/workerPool';
 
 export interface LoadCallbacks { progress(fraction: number, label: string): void }
@@ -84,6 +87,16 @@ export class Game {
   /** World progression flags (bosses defeated, events). */
   progress = { bossDefeated: false, raidDefeated: false, rocDefeated: false };
   readonly events = new WorldEvents();
+  water!: WaterSim;
+  private waterRenderer!: WaterRenderer;
+  private waterAcc = 0;
+  private structVersion = -1;
+  private furnVersion = -1;
+  /** Seconds of breath left underwater. */
+  breath = 12;
+  readonly maxBreath = 12;
+  private drownTimer = 0;
+  private wasInWater = false;
   private rope!: RopeRenderer;
   private pool!: TerrainWorkerPool;
   private uniforms!: WorldUniforms;
@@ -196,10 +209,32 @@ export class Game {
     this.pool = new TerrainWorkerPool(cfg, this.gen);
     this.terrain = new TerrainSystem(this.field, this.log, this.pool, worldMat, this.quality.detail);
     this.terrain.onColumnResident = (x0, z0) => {
+      this.water?.invalidate();
       this.markSky(x0, z0, x0 + 31, z0 + 31);
       this.veg.invalidateTufts(x0 + 16, z0 + 16, 20);
     };
     this.scene.add(this.terrain.group);
+
+    // Liquid water (lakes, pools, floods). Distance to the coast (in columns)
+    // limits how far the sea's pressure floods tunnels instantly.
+    const coast = coastDistance(this.field.sx, this.field.sz, (x, z) => this.gen.oceanFloor(x + 0.5, z + 0.5) !== null);
+    this.water = new WaterSim({
+      sx: this.field.sx, sy: this.field.sy, sz: this.field.sz, seaLevel: cfg.seaLevel,
+      solid: (i, j, k) => {
+        const x = i + 0.5, y = j + 0.5, z = k + 0.5;
+        if (this.field.sample(x, y, z) > 0) return true;
+        const near = this.structures.near(x, y, z, 1.5);
+        if (near.length && Structures.distance(near, x, y, z) < 0.05) return true;
+        const furn = this.furniture.colliders(x, y, z, 1.5);
+        return furn.length > 0 && FurnitureSet.distance(furn, x, y, z) < 0;
+      },
+      oceanFloor: (i, k) => this.gen.oceanFloor(i + 0.5, k + 0.5),
+      nearCoast: (i, k) => coast[i + k * this.field.sx] <= 48,
+    });
+    if (save?.extra?.water) this.water.load(save.extra.water as never);
+    else this.fillInitialWater();
+    this.waterRenderer = new WaterRenderer(this.water, createWaterMaterial(u), (x, y, z) => this.sky.visibility(x, y, z) < 0.3);
+    this.scene.add(this.waterRenderer.group);
 
     this.vegRenderer = new VegetationRenderer(this.veg, worldMat, plantMat, this.quality.grass, this.quality.trees);
     this.scene.add(this.vegRenderer.group);
@@ -209,6 +244,7 @@ export class Game {
     const center = new THREE.Vector3(this.field.sx / 2, 0, this.field.sz / 2);
     this.atmosphere = new Atmosphere(this.scene, this.renderer, u, center, cfg.seed, cfg.seaLevel, this.quality.shadowSize);
     this.atmosphere.timeOfDay = (save?.extra?.timeOfDay as number | undefined) ?? 0.34;
+    this.atmosphere.setOceanMask(this.field.sx, this.field.sz, (x, z) => this.gen.height(x, z) < cfg.seaLevel + 3);
     this.furnitureRenderer = new FurnitureRenderer(this.furniture, furnMat, this.atmosphere.lights);
     this.scene.add(this.furnitureRenderer.group);
 
@@ -242,6 +278,7 @@ export class Game {
     });
     this.invUI.onClose = () => this.toggleInventory(false);
     this.minimap = new Minimap($<HTMLCanvasElement>('#minimap'), this.field, this.sky, cfg.seaLevel,
+      (x, z, h) => (this.gen.oceanFloor(x, z) !== null && h < cfg.seaLevel ? cfg.seaLevel : this.water.level(Math.floor(x), Math.floor(h), Math.floor(z)) >= MIN_LEVEL || this.water.level(Math.floor(x), Math.floor(h) + 1, Math.floor(z)) >= MIN_LEVEL ? h + 1 : null),
       (x, z, h) => {
         const dh = Math.hypot(this.gen.height(x + 1, z) - this.gen.height(x - 1, z), this.gen.height(x, z + 1) - this.gen.height(x, z - 1)) / 2;
         return this.gen.materialFor(x, h - 0.5, z, 0, 1 / Math.sqrt(1 + dh * dh));
@@ -318,6 +355,7 @@ export class Game {
       blast: (x, y, z, r) => this.blast(x, y, z, r),
       carve: (x, y, z, r, drops) => {
         const res = this.log.commit(this.field, 'sub', x, y, z, r, Mat.Air, drops ? 1 : 99);
+        this.water.wake(x, y, z, r + 1.5);
         const pad = r + 1;
         this.markSky(x - pad, z - pad, x + pad, z + pad);
         this.veg.invalidateTufts(x, z, r + 1);
@@ -357,6 +395,7 @@ export class Game {
       isLoaded: (x, z) => this.terrain.isLoaded(x, z),
       safeZone: (x, y, z) => this.furniture.near(x, y, z, 18).some(f => f.type === 'bed' || f.type === 'door'),
       mushroomAt: (x, y, z) => this.gen.mushroomAt(x, y, z),
+      inWater: (x, y, z) => this.waterLevelAt(x, y, z) !== null,
       activeEvent: () => (this.events.kind ? { kind: this.events.kind, target: this.events.target } : null),
       eventKill: () => this.onEventSignals(this.events.kill()),
     });
@@ -467,6 +506,10 @@ export class Game {
       this.startEvent('raid');
       return true;
     }
+    if (def.id === 'bucket' || def.id === 'water_bucket') {
+      this.useBucket(def.id === 'water_bucket');
+      return false;
+    }
     if (def.id === 'gale_idol') {
       const p = this.player;
       if (this.combat.boss) { this.hud.message(`${this.combat.boss.name} is already here!`, '#ffb070'); return false; }
@@ -533,6 +576,84 @@ export class Game {
     const anchor = occupied.reduce((a, h) => (Math.hypot(h.x - px, h.z - pz) < Math.hypot(a.x - px, a.z - pz) ? h : a));
     const cluster = occupied.filter(h => Math.hypot(h.x - anchor.x, h.z - anchor.z) < 60);
     return { x: cluster.reduce((a, h) => a + h.x, 0) / cluster.length, z: cluster.reduce((a, h) => a + h.z, 0) / cluster.length, npcs: cluster.length };
+  }
+
+  /**
+   * Surface height of the water the point is in (open sea or the liquid
+   * grid), or null when dry.
+   */
+  waterLevelAt(x: number, y: number, z: number): number | null {
+    const sea = this.field.cfg.seaLevel;
+    const floor = this.gen.oceanFloor(x, z);
+    if (floor !== null && y < sea && y > floor - 0.5) return sea;
+    const top = this.water.surfaceAt(x, y, z);
+    return top !== null && top > y ? top : null;
+  }
+
+  /** Scoop up a bucket of water, or pour one out where the player aims. */
+  useBucket(full: boolean) {
+    const eye = this.camera.position, d = this.dir;
+    if (!full) {
+      for (let t = 0.5; t < 5; t += 0.25) {
+        const x = eye.x + d.x * t, y = eye.y + d.y * t, z = eye.z + d.z * t;
+        if (this.field.sample(x, y, z) > 0) break;
+        if (this.waterLevelAt(x, y, z) === null) continue;
+        const got = this.water.take(Math.floor(x), Math.floor(y), Math.floor(z), 1);
+        if (got < 0.5) continue;
+        this.inventory.remove('bucket', 1);
+        this.inventory.add('water_bucket', 1);
+        this.audio.play('splash');
+        this.particles.burst(x, y, z, 0, 1, 0, 0xcfe8ff, 10, { speed: 2 });
+        return;
+      }
+      this.hud.message('There is no water there to scoop up', '#ffb070');
+      return;
+    }
+    const hit = this.field.raycast(eye.x, eye.y, eye.z, d.x, d.y, d.z, 5, 0.1);
+    const t = hit ? hit.distance - 0.4 : 3;
+    const x = eye.x + d.x * t, y = eye.y + d.y * t, z = eye.z + d.z * t;
+    const placed = this.water.add(Math.floor(x), Math.floor(y), Math.floor(z), 1);
+    if (placed < 0.5) { this.hud.message('No room to pour the water there', '#ffb070'); if (placed > 0) this.water.take(Math.floor(x), Math.floor(y), Math.floor(z), placed); return; }
+    this.inventory.remove('water_bucket', 1);
+    this.inventory.add('bucket', 1);
+    this.audio.play('splash');
+  }
+
+  /** Fill the lakes and seed cave pools (new worlds only). */
+  private fillInitialWater() {
+    const g = this.gen;
+    for (const l of g.lakes) {
+      const R = Math.ceil(l.r * 1.3);
+      for (let k = Math.floor(l.z - R); k <= Math.ceil(l.z + R); k++)
+        for (let i = Math.floor(l.x - R); i <= Math.ceil(l.x + R); i++) {
+          if (Math.hypot(i + 0.5 - l.x, k + 0.5 - l.z) > l.r * 1.25) continue;
+          // Bottom-up so the water rests on the lake bed.
+          let supported = false;
+          for (let j = Math.floor(l.level - l.depth - 2); j <= Math.floor(l.level); j++) {
+            const air = g.densityAt(i + 0.5, j + 0.5, k + 0.5) < 0;
+            if (!air) { supported = true; continue; }
+            if (!supported) break;
+            this.water.fill(i, j, k, Math.min(1, l.level - j));
+          }
+        }
+    }
+    const rand = mulberry32(g.cfg.seed ^ 0x7a7e);
+    const want = Math.round((g.size.x * g.size.z) / (512 * 512) * 26);
+    let pools = 0;
+    for (let tries = 0; pools < want && tries < 3000; tries++) {
+      const x = 24 + rand() * (g.size.x - 48), z = 24 + rand() * (g.size.z - 48);
+      const top = g.height(x, z) - 12;
+      const y0 = 26 + Math.floor(rand() * Math.max(1, top - 26));
+      const fy = caveFloor(g, x, y0, z, Math.min(top, y0 + 20));
+      if (fy === null || g.mushroomAt(x, fy + 1, z) && rand() < 0.5) continue;
+      const j = Math.floor(fy);
+      for (let dk = -1; dk <= 1; dk++) for (let di = -1; di <= 1; di++)
+        for (let dj = 0; dj < 2; dj++) {
+          const i = Math.floor(x) + di, k = Math.floor(z) + dk;
+          if (g.densityAt(i + 0.5, j + dj + 0.5, k + 0.5) < 0) this.water.fill(i, j + dj, k, 1, true);
+        }
+      pools++;
+    }
   }
 
   /** On clear nights stars streak down and land near the player as pickups. */
@@ -690,7 +811,8 @@ export class Game {
     }
   }
 
-  private onTerrainEdited(x: number, _y: number, z: number, r: number) {
+  private onTerrainEdited(x: number, y: number, z: number, r: number) {
+    this.water.wake(x, y, z, r + 1.5);
     const pad = r + 1;
     this.markSky(x - pad, z - pad, x + pad, z + pad);
     this.veg.invalidateTufts(x, z, r + 1);
@@ -770,6 +892,7 @@ export class Game {
         town: this.town.serialize(),
         progress: this.progress,
         events: this.events.serialize(),
+        water: this.water.serialize(),
       },
     };
   }
@@ -853,7 +976,7 @@ export class Game {
     // Move.
     const k = (c: string) => (active && inp.down(c) ? 1 : 0);
     const axisF = active ? inp.axisForward : 0, axisS = active ? inp.axisStrafe : 0;
-    const outdoorsHere = this.sky.visibility(this.player.x, this.player.y + 1, this.player.z) > 0.5;
+    const waterHere = this.waterLevelAt(this.player.x, this.player.y + 0.3, this.player.z);
     // Grappling hook (F): fire / release; jump releases; back key pays out rope.
     const hook = st.hook;
     if (!hook && this.grapple.state !== 'idle') this.grapple.release();
@@ -879,7 +1002,13 @@ export class Game {
         jump: !!k('Space'),
         sprint: !!(k('ShiftLeft') || k('ShiftRight')),
         crouch: !!k('KeyC'),
-      }, outdoorsHere ? this.field.cfg.seaLevel : null);
+      }, waterHere);
+      // Splash on entering water, and breath while the head is under.
+      if (this.player.inWater && !this.wasInWater && this.player.vy < -4) {
+        this.particles.burst(this.player.x, waterHere ?? this.player.y, this.player.z, 0, 1, 0, 0xcfe8ff, 18, { speed: 4 });
+        this.audio.play('splash');
+      }
+      this.wasInWater = this.player.inWater;
       if (this.player.flying || this.player.gliding) {
         // Feathers shed from the wings.
         this.flapTimer -= dt;
@@ -905,6 +1034,19 @@ export class Game {
     }
     if (this.player.y < -10) this.player.teleport(this.spawnPoint.x, this.spawnPoint.y + 2, this.spawnPoint.z);
 
+    // Breath: the head underwater drains it, then drowning hurts.
+    {
+      const head = this.player.y + this.player.eyeHeight;
+      const lvl = this.waterLevelAt(this.player.x, head, this.player.z);
+      const under = alive && lvl !== null && head < lvl;
+      if (under) {
+        this.breath = Math.max(0, this.breath - dt);
+        if (this.breath <= 0) {
+          this.drownTimer -= dt;
+          if (this.drownTimer <= 0) { this.drownTimer = 1; this.hurtPlayer(10, NaN, NaN, 0); }
+        }
+      } else { this.breath = Math.min(this.maxBreath, this.breath + dt * 4); this.drownTimer = 0; }
+    }
     // Death and respawn.
     this.vitals.update(dt);
     if (this.vitals.dead) {
@@ -959,6 +1101,15 @@ export class Game {
       }
     }
 
+    // Water: wake after building changes, then simulate at a fixed rate.
+    if (this.structures.version !== this.structVersion || this.furniture.version !== this.furnVersion) {
+      if (this.structVersion >= 0) this.water.wake(this.player.x, this.player.y, this.player.z, 10);
+      this.structVersion = this.structures.version; this.furnVersion = this.furniture.version;
+    }
+    this.waterAcc = Math.min(0.2, this.waterAcc + dt);
+    while (this.waterAcc >= 1 / 15) { this.waterAcc -= 1 / 15; this.water.step(2500, this.player.x, this.player.z, 90); }
+    this.waterRenderer.update(dt, this.camera.position);
+
     // World streaming + updates.
     this.terrain.update(this.camera.position, 3);
     this.vegRenderer.update(this.camera.position, dt);
@@ -993,6 +1144,8 @@ export class Game {
     const vis = this.sky.visibility(cam.x, cam.y, cam.z);
     const ember = THREE.MathUtils.smoothstep(EMBER_Y + 14 - cam.y, 0, 12);
     const shroom = this.gen.mushroomAt(cam.x, cam.y, cam.z) ? 1 : 0;
+    const camWater = this.waterLevelAt(cam.x, cam.y, cam.z);
+    this.atmosphere.underwater = camWater !== null && cam.y < camWater ? 1 : 0;
     this.atmosphere.update(dt, cam, vis, this.time, this.player.position, dir, st.lightBoost, ember, shroom);
     // Drifting embers in the depths.
     if (ember > 0.3 && Math.random() < ember * 0.6) {
@@ -1002,6 +1155,7 @@ export class Game {
     this.post.setUnderground(this.atmosphere.underground);
     this.post.setNight(1 - this.atmosphere.daylight);
     this.post.setBlood(this.atmosphere.bloodVisible);
+    this.post.setWater(this.atmosphere.underwater);
     const moving = Math.min(1, Math.hypot(this.player.vx, this.player.vz) / 5) * (this.player.grounded ? 1 : 0);
     const ambient = this.atmosphere.ambientAt(vis);
     this.viewmodel.update(dt, moving, Math.max(ambient, 0.25 + this.atmosphere.underground * 0.25));
@@ -1014,6 +1168,7 @@ export class Game {
     this.hud.setEvent(this.events.info, this.events.progress, this.events.goal);
     this.hud.setVitals(this.vitals.hp, this.vitals.maxHp, this.vitals.mana, this.vitals.maxMana, this.vitals.defense);
     const pl = this.player;
+    this.hud.setBreath(this.breath < this.maxBreath - 0.05 ? this.breath / this.maxBreath : null);
     this.hud.setFlight(pl.flightTime > 0 && !pl.grounded && !this.vitals.dead ? pl.flightLeft / pl.flightTime : null);
     this.labels.update(dt, this.camera, window.innerWidth, window.innerHeight);
     this.minimap.draw(this.player.x, this.player.z, this.player.yaw, this.combat.creatures.map(c => ({ x: c.x, z: c.z, color: '#ff5a4a' })));
@@ -1065,6 +1220,23 @@ export class Game {
 
 function tick() {
   return new Promise(r => setTimeout(r, 0));
+}
+
+/** Breadth-first distance (in columns) from every column to the nearest ocean column. */
+function coastDistance(w: number, d: number, ocean: (x: number, z: number) => boolean): Uint16Array {
+  const dist = new Uint16Array(w * d).fill(65535);
+  const queue = new Int32Array(w * d);
+  let head = 0, tail = 0;
+  for (let z = 0; z < d; z++) for (let x = 0; x < w; x++) if (ocean(x, z)) { dist[x + z * w] = 0; queue[tail++] = x + z * w; }
+  while (head < tail) {
+    const c = queue[head++], x = c % w, z = (c - x) / w, nd = dist[c] + 1;
+    for (const [nx, nz] of [[x + 1, z], [x - 1, z], [x, z + 1], [x, z - 1]]) {
+      if (nx < 0 || nz < 0 || nx >= w || nz >= d) continue;
+      const n = nx + nz * w;
+      if (dist[n] > nd) { dist[n] = nd; queue[tail++] = n; }
+    }
+  }
+  return dist;
 }
 
 export function savedGame() {

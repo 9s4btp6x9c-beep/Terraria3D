@@ -2,7 +2,7 @@
 // blips, thuds and noise bursts with a retro feel. Positional attenuation is
 // a simple distance falloff.
 
-type Sfx = 'swing' | 'hit' | 'mine' | 'stone' | 'pickup' | 'hurt' | 'jump' | 'explode' | 'bow' | 'magic' | 'door' | 'craft' | 'place' | 'die' | 'splat' | 'drink' | 'chop' | 'land' | 'horn' | 'omen' | 'flap' | 'screech' | 'gust';
+type Sfx = 'swing' | 'hit' | 'mine' | 'stone' | 'pickup' | 'hurt' | 'jump' | 'explode' | 'bow' | 'magic' | 'door' | 'craft' | 'place' | 'die' | 'splat' | 'drink' | 'chop' | 'land' | 'horn' | 'omen' | 'flap' | 'screech' | 'gust' | 'splash';
 
 export class Audio {
   private ctx: AudioContext | null = null;
@@ -87,6 +87,7 @@ export class Audio {
       case 'flap': this.burst(0.14, 0.18 * v, 'lowpass', 700 * r, 200); break;
       case 'screech': this.tone('sawtooth', 1400 * r, 700, 0.5, 0.14 * v); this.tone('square', 1900 * r, 900, 0.4, 0.06 * v, 0.05); this.burst(0.3, 0.12 * v, 'highpass', 3000, 1500); break;
       case 'gust': this.burst(0.45, 0.35 * v, 'bandpass', 500 * r, 1800); this.burst(0.3, 0.2 * v, 'highpass', 2500, 800, 0.1); break;
+      case 'splash': this.burst(0.35, 0.3 * v, 'lowpass', 2200 * r, 300); this.burst(0.2, 0.15 * v, 'highpass', 3000, 1200, 0.05); break;
       case 'drink': for (let i = 0; i < 3; i++) this.tone('sine', 300 + i * 80, 500 + i * 80, 0.06, 0.1, i * 0.08); break;
     }
   }

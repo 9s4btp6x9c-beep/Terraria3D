@@ -368,6 +368,18 @@ function glowcapItem() {
   ]);
 }
 
+/** An iron bucket, optionally full. */
+function bucket(full: boolean) {
+  const parts = [
+    cyl(0.13, 0.1, 0.24, 9, 'iron', { y: 0.12 }),
+    cyl(0.135, 0.135, 0.025, 9, 'metal', { y: 0.235 }),
+    cyl(0.105, 0.105, 0.02, 9, 'metal', { y: 0.06 }),
+    part(place(new THREE.TorusGeometry(0.13, 0.01, 4, 10, Math.PI), { y: 0.24 }), 'metal'),
+  ];
+  if (full) parts.push(cyl(0.12, 0.12, 0.02, 9, 'glass', { y: 0.22 }, 0x6aaaf0));
+  return merge(parts);
+}
+
 /** A five-pointed star with a glowing core. */
 function star() {
   const parts: THREE.BufferGeometry[] = [octa(0.07, 'flame', { y: 0.16, sz: 0.6 }, 0xfff4a0)];
@@ -638,6 +650,8 @@ export function modelFor(spec: ModelSpec): THREE.BufferGeometry {
     case 'mana_crystal': g = merge([octa(0.12, 'manaGem', { y: 0.16, sy: 1.6 }), octa(0.06, 'manaGem', { x: 0.1, y: 0.1, sy: 1.5, rz: -0.5 }), octa(0.05, 'manaGem', { x: -0.09, y: 0.09, sy: 1.5, rz: 0.5 }), octa(0.035, 'flame', { x: -0.04, y: 0.24, z: 0.05 }, 0xe0ecff)]); break;
     case 'mana_potion': g = bottle('manaGem'); break;
     case 'glowcap': g = glowcapItem(); break;
+    case 'bucket': g = bucket(false); break;
+    case 'water_bucket': g = bucket(true); break;
     case 'armor': g = armor(spec.slot, spec.layer); break;
     case 'boots': g = boots(spec.layer); break;
     case 'jar': g = jar(spec.layer); break;
