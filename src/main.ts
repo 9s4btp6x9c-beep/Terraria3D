@@ -9,6 +9,13 @@ const status = document.querySelector('#status') as HTMLElement;
 const buttons = document.querySelector('#buttons') as HTMLElement;
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed') ?? 1337);
+const isTouch = isTouchDevice() || params.has('touch');
+if (isTouch) {
+  (document.querySelector('#overlay .controls') as HTMLElement).innerHTML =
+    'Left stick move (push fully to sprint) · Drag to look<br/>' +
+    '⚒ use / attack / place · ⤒ jump · ⇩ crouch · ✋ interact<br/>' +
+    '⚓ grapple · ⟳ build shape · 🎒 inventory & crafting · ☰ pause / save';
+}
 
 const game = new Game(document.querySelector('#game') as HTMLCanvasElement);
 (window as unknown as { __game: Game }).__game = game;
@@ -33,7 +40,6 @@ async function begin(useSave: boolean) {
   });
   game.start();
   (window as unknown as { __ready: boolean }).__ready = true;
-  const isTouch = isTouchDevice() || params.has('touch');
   status.textContent = isTouch ? 'Tap to play' : 'Click to play';
   const touch = isTouch ? new TouchControls(game.input, {
     inventory: () => game.toggleInventory(),

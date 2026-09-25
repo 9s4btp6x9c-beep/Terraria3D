@@ -54,31 +54,36 @@ The prototype also includes: spaghetti tunnels and caverns, ore veins
 trees and grass, felling trees for wood, a hotbar and inventory, terrain fill,
 a minimap, particles, and a held-item viewmodel.
 
+## Milestones delivered
+
+| Milestone | Contents | Verified by |
+|---|---|---|
+| M1 Foundation | SDF terrain, Surface Nets, mining, building pieces, save/load | e2e checks 1–8 |
+| M2 Scale | Chunk streaming in workers, quadtree LOD for distant terrain (stride 2/4/8), 512 m world, day/night, fog | far-view LOD check |
+| M3 Core loop | Items, recipes, stations, furniture, pickups, creatures, melee/ranged combat, sound | crafting, furniture and combat checks |
+| M4 Progression | Desert/snow/Blight biomes, Ember Depths, cabins with loot, housing + NPCs with shop, grappling hook, the Deepwyrm boss | biome, housing, NPC, grapple and boss checks |
+| M5 Mobile | Touch controls, quality presets, free-look fallback without pointer lock, compact phone UI | `scripts/e2e-mobile.mjs` |
+
 ## Next phases
 
-1. **Crafting** (Phase 5): data-driven recipes; workbench, furnace and anvil
-   as placeable furniture; copper and iron tool tiers (iron pickaxe unlocks
-   iron, deepstone and lumite).
-2. **Placeables and housing** (Phase 4 completion): doors, torches (point
-   light pool, already supported by the shader), furniture, and room
-   validation by flood-fill inside pieces.
-3. **Combat** (Phase 6): health, damage, the first weapons (a melee swing and
-   a thrown or ranged weapon), 3–4 forest and cave enemies with simple
-   steering AI on the SDF, drops, death and respawn.
-4. **Progression** (Phase 7): accessories (double jump, dash, fall
-   protection), grappling hook (a ray against the SDF, then rope
-   constraint), and more biomes (desert, snow, jungle, corruption) driven by
-   biome noise in the generator.
-5. **First boss** (Phase 8), for example a burrowing boss that moves through
-   the SDF and carves real tunnels.
-6. **Scale and polish** (Phase 9): day/night cycle, distance LOD (coarser
-   Surface Nets for far chunks), meshing in workers, audio, more particles
-   and post effects.
+1. **More progression:** a second ore tier past iron, armor sets with set
+   bonuses, and accessories (double jump, dash, fall protection).
+2. **Events:** night invasions and a blood-moon style event that raises
+   spawn rates and brings special enemies.
+3. **Second boss** tied to the sky islands, and a flying mount or wings.
+4. **More NPCs** unlocked by progress (a smith who reforges, a guide).
+5. **Water and liquids** that flow into dug-out cavities.
 
 ## Performance notes
 
-- About 1M terrain triangles for the whole 256 m world. Frustum culling per
-  chunk; trees, grass and particles are instanced (a few draw calls each).
-- Meshing a dense chunk takes about 4 ms, and edits re-mesh only the
-  affected chunks.
-- Later: far-chunk LOD, worker meshing, streaming for larger worlds.
+- Terrain streams in 32³ chunks built in Web Workers (inline fallback when
+  workers are blocked). Distant areas use coarser quadtree regions (64/128/256 m
+  at stride 2/4/8) that overlap by one cell so no seams show. Buried caves
+  are culled from the far LOD.
+- A typical far view is about 800k terrain triangles in 160–260 draw calls.
+  Trees, grass, pickups and particles are instanced.
+- Quality presets (low/medium/high) scale pixel ratio, shadow map size,
+  MSAA, LOD detail, grass radius and tree distance. Touch devices default to
+  low.
+- Edits re-mesh only the affected chunks. The edit log is indexed per chunk
+  so streamed-in chunks replay exactly their own edits.

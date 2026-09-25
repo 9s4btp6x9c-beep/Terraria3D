@@ -1,4 +1,4 @@
-# Terraria 3D (working title)
+# Hollowdeep (working title)
 
 An original sandbox in the spirit of Terraria, built as a fully 3D game with
 organic, destructible, **non-voxel** terrain and a stylized low-poly /
@@ -13,10 +13,13 @@ npm install
 npm run dev          # http://localhost:5173
 npm test             # unit tests (world generation, meshing, editing)
 npm run build        # typecheck + production build
-npm run e2e          # headless-browser test of the core loop (needs a build)
+npm run e2e          # headless-browser test of the full game loop (needs a build)
+node scripts/e2e-mobile.mjs   # phone-sized touch smoke test (needs a build)
 ```
 
-URL options: `?seed=1234` (world seed), `?new` (ignore the save), `?continue=1` (load the save).
+URL options: `?seed=1234` (world seed), `?new` (ignore the save),
+`?continue=1` (load the save), `?quality=low|medium|high`, `?touch` (force
+the touch controls).
 
 ## Controls
 
@@ -24,12 +27,42 @@ URL options: `?seed=1234` (world seed), `?new` (ignore the save), `?continue=1` 
 |---|---|
 | WASD / Mouse | Move / look |
 | Shift · Space · C or Ctrl | Sprint · jump / swim up · crouch |
-| LMB | Use held item (mine, chop, place) |
+| LMB | Use held item (mine, chop, attack, place, drink) |
+| RMB | Interact: doors, chests, beds, talk to NPCs |
+| F | Grappling hook (equip a hook in an accessory slot) |
+| H | Check whether the room you stand in is valid housing |
 | 1–9, mouse wheel | Select hotbar slot |
 | Q | Cycle build shape for the held material (terrain fill, floor, wall, pillar, stairs, roof) |
-| Tab / E | Inventory (click two slots to swap) |
+| Tab / E | Inventory and crafting |
 | F5 / F9 | Save / reload the saved world |
-| F3 | Debug readout |
+| F3 | Debug readout (fps, triangles, draw calls, LOD) |
+
+**Touch (phones and tablets):** left stick to move (push fully to sprint),
+drag anywhere on the right to look, and on-screen buttons for use, jump,
+crouch, interact, grapple, build shape and inventory. ☰ pauses and saves.
+Touch devices start on the low quality preset.
+
+## What is in the game
+
+- **Mining and building:** every surface can be dug, filled and built on.
+  Modular pieces (floors, walls, pillars, stairs, roofs) sit on a 2 m grid.
+- **Crafting:** recipes by hand and at stations (workbench, furnace, anvil,
+  and more). Copper and iron tool tiers gate harder rock.
+- **Furniture and housing:** doors, torches, chairs, tables, beds and chests.
+  An enclosed room with a door, light, seat and table is valid housing, and
+  townsfolk move in: Aldo the Surveyor and Pell the Merchant (who runs a shop).
+- **Combat:** swords, bows, bombs and potions against globs, bats, wisps,
+  crawlers, shamblers and miners. Enemies vary by biome and depth. You have
+  hearts and mana stars, and you respawn at your bed.
+- **Biomes:** forest, desert, snow and the purple Blight on the surface.
+  Underground are caves, cabins with loot chests, glowing lumite crystals
+  and the molten Ember Depths.
+- **Boss:** craft Wyrm Bait at an anvil and use it at night or underground to
+  summon the Deepwyrm. It is a segmented worm that tunnels through the real
+  terrain and erupts out of the ground at you.
+- **World:** 512 m across with sky islands, a day/night cycle, and distant
+  terrain drawn at lower detail so the whole map is visible from a high
+  point.
 
 ## How the world works (and why it is not voxels)
 
@@ -57,18 +90,22 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the architecture and the developmen
 
 ```
 src/
+  audio/      procedural sound effects
   core/       seeded noise + PRNG
   world/      config, materials, TerrainField (density + CSG), generator,
-              Surface Nets mesher, worker loader, SkyMap, vegetation,
-              collision, persistence
-  building/   modular pieces (SDFs, snapping)
-  items/      item database, inventory
-  player/     controller, input, interaction (mine / chop / build)
-  render/     pixel-art texture array, world shader, terrain/vegetation/
-              structure renderers, sky, particles, post FX (outlines), viewmodel
-  ui/         HUD, minimap
+              Surface Nets mesher, worker pool, SkyMap, vegetation,
+              world structures (cabins, depths), collision, persistence
+  building/   modular pieces, furniture, housing check
+  entities/   creatures, combat, NPCs and town, the Deepwyrm
+  items/      item database, recipes, inventory, equipment
+  player/     controller, input, interaction, grappling hook, vitals
+  render/     pixel-art textures, world shader, terrain streaming + LOD,
+              vegetation, models (items, furniture, creatures, NPCs), icons,
+              atmosphere, particles, post FX (outlines), viewmodel
+  ui/         HUD, minimap, inventory/crafting, dialogue, quality presets,
+              touch controls
 tests/        vitest unit tests
-scripts/      e2e browser test
+scripts/      e2e browser tests (desktop and mobile)
 ```
 
 ## Screenshots (from the automated e2e run)
@@ -78,3 +115,11 @@ scripts/      e2e browser test
 | ![](docs/screenshots/landscape.png) | ![](docs/screenshots/overview.png) |
 | **Cave chamber (lantern + lumite crystal)** | **Tunnel dug with the pickaxe** |
 | ![](docs/screenshots/cave.png) | ![](docs/screenshots/mined-tunnel.png) |
+| **Far view (distant LOD)** | **An NPC moves into a valid house** |
+| ![](docs/screenshots/far-view.jpg) | ![](docs/screenshots/house-npc.jpg) |
+| **Desert** | **Ember Depths** |
+| ![](docs/screenshots/desert.jpg) | ![](docs/screenshots/ember-depths.jpg) |
+| **Crafting stations** | **The Deepwyrm** |
+| ![](docs/screenshots/crafting-stations.jpg) | ![](docs/screenshots/deepwyrm.jpg) |
+| **Touch controls on a phone** | |
+| ![](docs/screenshots/mobile-touch.jpg) | |
