@@ -17,9 +17,16 @@ npm run e2e          # headless-browser test of the full game loop (needs a buil
 node scripts/e2e-mobile.mjs   # phone-sized touch smoke test (needs a build)
 ```
 
-URL options: `?seed=1234` (world seed), `?new` (ignore the save),
-`?continue=1` (load the save), `?quality=low|medium|high`, `?touch` (force
-the touch controls).
+The game opens on a title screen over the live world. From there you can
+**Continue** or **Play**, create a **New World** from a seed, change
+**Settings** (graphics quality, field of view, look sensitivity, invert look,
+volume, frame-rate counter, fullscreen; saved per browser) and view the
+**Controls**. Press Esc in game to pause, save, or quit to the title.
+
+URL options: `?seed=1234` (world seed), `?new` (start a fresh world),
+`?play` (skip the title screen), `?quality=low|medium|high`, `?touch`
+(force the touch controls). `node scripts/ui-shots.mjs` captures every
+menu screen for review.
 
 ## Controls
 
@@ -35,6 +42,7 @@ the touch controls).
 | 1–9, mouse wheel | Select hotbar slot |
 | Q | Cycle build shape for the held material (terrain fill, floor, wall, pillar, stairs, roof) |
 | Tab / E | Inventory and crafting |
+| Esc | Pause menu (resume, settings, save, quit to title) |
 | F5 / F9 | Save / reload the saved world |
 | F3 | Debug readout (fps, triangles, draw calls, LOD) |
 

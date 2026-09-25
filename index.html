@@ -3,171 +3,17 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#101020" />
+<meta name="theme-color" content="#0a0a12" />
 <title>Hollowdeep</title>
-<style>
-  :root {
-    --gold: #d9a441;
-    --gold-dark: #7a5a1c;
-    --panel: rgba(22, 20, 40, 0.84);
-    --panel-2: rgba(40, 36, 70, 0.9);
-    --text: #f4ecd8;
-    --dim: #b8b0a0;
-  }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; color: var(--text); user-select: none; -webkit-user-select: none; touch-action: none; }
-  canvas#game { display: block; width: 100vw; height: 100vh; }
-  #hud { position: fixed; inset: 0; pointer-events: none; }
-  #hud .interactive { pointer-events: auto; }
-  #crosshair { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%); }
-  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #e8453c; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); }
-  #crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
-  #crosshair::after { left: 0; top: 6px; width: 14px; height: 2px; }
-  #minimap { position: absolute; right: 16px; top: 16px; width: 176px; height: 176px; border: 3px solid var(--gold); box-shadow: 0 0 0 2px var(--gold-dark), 0 4px 12px rgba(0,0,0,0.5); image-rendering: pixelated; background: #234; }
-  #clock { position: absolute; right: 16px; top: 202px; width: 182px; text-align: center; font-size: 13px; text-shadow: 1px 1px 0 #000; }
-
-  .slot { position: relative; width: 48px; height: 48px; box-sizing: border-box; background: var(--panel); border: 2px solid rgba(255,255,255,0.14); border-radius: 5px; }
-  .slot.sel { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-dark), inset 0 0 12px rgba(217,164,65,0.35); }
-  .slot img.icon { position: absolute; left: 2px; top: 2px; width: 40px; height: 40px; image-rendering: pixelated; pointer-events: none; }
-  .slot .count { position: absolute; right: 3px; bottom: 1px; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; pointer-events: none; }
-  .slot .key { position: absolute; left: 3px; top: 1px; font-size: 10px; opacity: 0.6; }
-  .slot .label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--dim); opacity: 0.7; }
-  img.mini { width: 22px; height: 22px; image-rendering: pixelated; vertical-align: middle; }
-
-  #hotbar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 4px; pointer-events: auto; }
-  #itemname { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 15px; text-shadow: 1px 1px 0 #000, 0 0 6px #000; text-align: center; white-space: nowrap; }
-  #itemname small { display: block; opacity: 0.8; font-size: 12px; }
-  #breath { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); display: none; gap: 3px; }
-  #breath .bubble { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffffff 0 18%, #9ad8ff 30%, #2a78c8 100%); box-shadow: 0 0 0 1px rgba(0,0,0,0.5); }
-  #breath .bubble.gone { opacity: 0.15; }
-  #flight { position: absolute; left: 50%; top: calc(50% + 16px); transform: translateX(-50%); width: 46px; height: 5px; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.35); display: none; }
-  #flight div { height: 100%; width: 100%; background: linear-gradient(#e8f4ff, #9ac8f0); }
-  #prompt { position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); font-size: 13px; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px; display: none; }
-  #messages { position: absolute; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; text-shadow: 1px 1px 0 #000; }
-  #messages div { transition: opacity 0.5s; }
-  #debug { position: absolute; left: 16px; top: 96px; font: 12px monospace; background: rgba(0,0,0,0.5); padding: 6px 8px; white-space: pre; display: none; }
-  #flash { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(255,0,0,0) 40%, rgba(200,10,10,0.9)); opacity: 0; }
-
-  #vitals { position: absolute; left: 16px; top: 14px; }
-  #vitals .hp-label { font-size: 13px; text-shadow: 1px 1px 0 #000; margin-bottom: 3px; }
-  #vitals .def { color: #cfe0ff; }
-  .hearts, .stars { display: flex; flex-wrap: wrap; width: 250px; gap: 2px; }
-  .heart, .star { width: 22px; height: 20px; display: inline-block; filter: drop-shadow(1px 1px 0 #000) drop-shadow(-1px -1px 0 rgba(0,0,0,0.6)); }
-  .heart { background: linear-gradient(to top, #e8323a 0, #ff6a5a calc(var(--f) * 100%), #3a1a24 calc(var(--f) * 100%)); clip-path: polygon(50% 100%, 8% 56%, 0 32%, 8% 10%, 28% 0, 50% 16%, 72% 0, 92% 10%, 100% 32%, 92% 56%); }
-  .star { background: linear-gradient(to top, #2a6aff 0, #7ab8ff calc(var(--f) * 100%), #1a2240 calc(var(--f) * 100%)); clip-path: polygon(50% 0, 62% 36%, 100% 38%, 70% 60%, 80% 100%, 50% 76%, 20% 100%, 30% 60%, 0 38%, 38% 36%); }
-
-  #inventory { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 3px solid var(--gold); box-shadow: 0 0 0 2px var(--gold-dark), 0 10px 40px rgba(0,0,0,0.6); padding: 14px; display: none; gap: 16px; pointer-events: auto; max-width: calc(100vw - 40px); max-height: calc(100vh - 40px); overflow: auto; }
-  #inventory h2 { margin: 0 0 8px; font-size: 15px; color: var(--gold); letter-spacing: 1px; }
-  #inventory .grid, #inventory .chest { display: grid; grid-template-columns: repeat(9, 48px); gap: 4px; }
-  #inventory .chest { grid-template-columns: repeat(10, 48px); margin-bottom: 12px; padding: 8px; background: var(--panel-2); border-radius: 6px; }
-  #inventory .grid .slot.hot { border-color: rgba(217,164,65,0.35); }
-  #inventory .equip { display: grid; grid-template-columns: 48px; gap: 4px; }
-  #inventory .slot { cursor: pointer; }
-  #inventory .slot:hover { border-color: #fff8; }
-  #inventory .hint { margin-top: 10px; font-size: 12px; color: var(--dim); }
-  #inventory .crafting { width: 290px; display: flex; flex-direction: column; }
-  #inventory .craft-list { flex: 1; max-height: 300px; overflow-y: auto; background: var(--panel-2); border-radius: 6px; padding: 4px; }
-  #inventory .craft-list .stations { font-size: 11px; color: var(--dim); padding: 2px 4px 6px; }
-  .recipe { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-  .recipe img.icon { width: 30px; height: 30px; image-rendering: pixelated; }
-  .recipe.no { opacity: 0.45; }
-  .recipe.sel { background: rgba(217,164,65,0.28); }
-  .recipe:hover { background: rgba(255,255,255,0.08); }
-  .craft-info { margin-top: 8px; font-size: 13px; line-height: 1.6; min-height: 120px; }
-  .craft-info .title { display: flex; align-items: center; gap: 6px; font-size: 15px; }
-  .craft-info .title img.icon { width: 36px; height: 36px; image-rendering: pixelated; }
-  .craft-info .have { color: #cfe8a0; } .craft-info .need { color: #ff8a7a; } .dim { color: var(--dim); }
-  .craft-info button { font: inherit; margin-top: 6px; padding: 4px 16px; background: #3f2a18; color: var(--text); border: 2px solid var(--gold); cursor: pointer; }
-  .craft-info button:disabled { opacity: 0.4; cursor: default; }
-  #tooltip { position: fixed; z-index: 30; pointer-events: none; background: rgba(12,10,24,0.92); border: 1px solid #fff3; padding: 6px 10px; font-size: 13px; line-height: 1.5; border-radius: 4px; max-width: 240px; display: none; }
-  #tooltip i { color: #d8d0ff; }
-  #cursor-stack { position: fixed; z-index: 31; pointer-events: none; width: 44px; height: 44px; display: none; }
-  #cursor-stack img.icon { width: 40px; height: 40px; image-rendering: pixelated; }
-  #cursor-stack .count { position: absolute; right: 0; bottom: 0; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; }
-
-  #topbars { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); width: min(460px, 60vw); display: flex; flex-direction: column; gap: 10px; }
-  #bossbar, #eventbar { display: none; text-align: center; }
-  #bossbar .name { font-size: 16px; color: #e8d0ff; text-shadow: 2px 2px 0 #000; margin-bottom: 4px; letter-spacing: 1px; }
-  #bossbar .bar { height: 14px; border: 2px solid #c89aff; background: #1a1024; box-shadow: 0 0 0 2px #3a2050; }
-  #bossbar .bar div { height: 100%; background: linear-gradient(#e05a8a, #8a1a4a); transition: width 0.15s; }
-  #eventbar .name { font-size: 15px; text-shadow: 2px 2px 0 #000; letter-spacing: 1px; }
-  #eventbar .sub { font-size: 12px; color: var(--dim); text-shadow: 1px 1px 0 #000; margin-top: 1px; }
-  #eventbar .bar { height: 10px; margin: 4px auto 0; width: 70%; border: 2px solid var(--gold); background: #1a1410; box-shadow: 0 0 0 2px var(--gold-dark); }
-  #eventbar .bar div { height: 100%; background: linear-gradient(#f0e0b0, #a08050); transition: width 0.2s; }
-  body.touch #topbars { top: 58px; width: min(360px, 46vw); }
-  #dialogue { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); width: min(520px, calc(100vw - 32px)); background: var(--panel); border: 3px solid var(--gold); box-shadow: 0 0 0 2px var(--gold-dark); padding: 12px 14px; pointer-events: auto; font-size: 14px; }
-  #dialogue .who { color: var(--gold); font-size: 16px; margin-bottom: 6px; } #dialogue .who span { color: var(--dim); font-size: 13px; }
-  #dialogue .say { line-height: 1.5; min-height: 40px; }
-  #dialogue .shop { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 10px; max-height: 220px; overflow-y: auto; }
-  #dialogue .ware { display: flex; align-items: center; gap: 6px; background: var(--panel-2); padding: 2px 6px; border-radius: 4px; cursor: pointer; }
-  #dialogue .ware:hover { background: rgba(217,164,65,0.25); } #dialogue .ware.poor { opacity: 0.45; }
-  #dialogue .ware img.icon { width: 30px; height: 30px; image-rendering: pixelated; } #dialogue .ware span { flex: 1; } #dialogue .ware b { white-space: nowrap; }
-  #dialogue .purse { margin-top: 6px; color: var(--dim); }
-  #dialogue .btns { margin-top: 10px; display: flex; gap: 8px; }
-  #dialogue button { font: inherit; padding: 4px 14px; background: #3f2a18; color: var(--text); border: 2px solid var(--gold); cursor: pointer; }
-  #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(40,60,110,0.85), rgba(10,10,20,0.95)); z-index: 10; text-align: center; padding: 16px; box-sizing: border-box; }
-  #overlay h1 { font-size: 46px; margin: 0 0 6px; letter-spacing: 2px; color: var(--gold); text-shadow: 3px 3px 0 #3a2410; }
-  #overlay p { margin: 4px 0; opacity: 0.85; }
-  #overlay .bar { width: min(320px, 80vw); height: 14px; border: 2px solid var(--gold); margin: 18px 0 6px; background: #111; }
-  #overlay .bar div { height: 100%; width: 0; background: linear-gradient(#7fd67a, #3f9a55); }
-  #overlay button { font: inherit; font-size: 18px; margin: 6px; padding: 8px 22px; background: #3f2a18; color: var(--text); border: 2px solid var(--gold); cursor: pointer; }
-  #overlay button:hover { background: #5a3c22; }
-  #overlay .controls { margin-top: 16px; font-size: 13px; line-height: 1.6; opacity: 0.8; }
-  @media (max-height: 460px) { #overlay h1 { font-size: 32px; } #overlay .bar { margin: 10px 0 4px; } #overlay .controls { margin-top: 8px; font-size: 12px; line-height: 1.5; } }
-  #touch { position: fixed; inset: 0; z-index: 5; display: none; pointer-events: none; }
-  #touch .look { position: absolute; inset: 0 0 0 38%; pointer-events: auto; touch-action: none; }
-  #touch .stick { position: absolute; left: 22px; bottom: 26px; width: 124px; height: 124px; border-radius: 50%; background: rgba(20,18,36,0.35); border: 2px solid rgba(255,255,255,0.25); pointer-events: auto; touch-action: none; }
-  #touch .knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; border-radius: 50%; transform: translate(-50%, -50%); background: rgba(217,164,65,0.55); border: 2px solid var(--gold); }
-  #touch .btns { position: absolute; right: 12px; bottom: 12px; display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); grid-template-areas: "mode inv hook" "crouch act jump" ". . use"; gap: 6px; pointer-events: auto; }
-  #touch button { width: 56px; height: 56px; border-radius: 50%; font-size: 23px; color: var(--text); background: rgba(20,18,36,0.5); border: 2px solid rgba(255,255,255,0.3); touch-action: none; padding: 0; user-select: none; -webkit-user-select: none; }
-  #touch button.big { width: 68px; height: 68px; margin: -6px 0 0 -12px; font-size: 28px; background: rgba(160,60,40,0.6); border-color: var(--gold); }
-  #touch button.on { background: rgba(217,164,65,0.6); }
-  #touch button.menu { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); width: 42px; height: 42px; font-size: 20px; pointer-events: auto; }
-  #touch.menu-open { display: none !important; }
-  body.touch #crosshair { transform: translate(-50%, -50%) scale(1.3); }
-  body.touch #hotbar { bottom: 8px; }
-  body.touch #messages { left: 16px; bottom: auto; top: 96px; }
-  body.touch #minimap { width: 104px; height: 104px; right: 10px; top: 10px; border-width: 2px; }
-  body.touch #clock { right: 10px; top: 118px; width: 110px; font-size: 12px; }
-  body.touch #inventory .hint { display: none; }
-  body.touch #dialogue { bottom: auto; top: 12px; }
-  #inventory .close { position: absolute; right: 8px; top: 6px; width: 30px; height: 30px; font: inherit; font-size: 16px; line-height: 1; color: var(--text); background: #3f2a18; border: 2px solid var(--gold); cursor: pointer; padding: 0; }
-  #inventory .close:hover { background: #5a3c22; }
-  #inventory .grid { align-content: start; }
-  @media (max-height: 520px) {
-    #inventory { padding: 8px 10px; gap: 10px; max-height: calc(100vh - 12px); max-width: calc(100vw - 12px); }
-    #inventory h2 { font-size: 13px; margin-bottom: 4px; }
-    #inventory .slot { width: 36px; height: 36px; }
-    #inventory .slot img.icon { width: 30px; height: 30px; left: 1px; top: 1px; }
-    #inventory .slot .count { font-size: 11px; }
-    #inventory .grid { grid-template-columns: repeat(9, 36px); gap: 3px; }
-    #inventory .chest { grid-template-columns: repeat(10, 36px); gap: 3px; padding: 4px; margin-bottom: 6px; }
-    #inventory .equip { grid-template-columns: repeat(2, 36px); gap: 3px; align-content: start; }
-    #inventory .crafting { width: 230px; font-size: 13px; }
-    #inventory .craft-list { max-height: 150px; }
-    #inventory .craft-info { min-height: 0; margin-top: 4px; line-height: 1.4; }
-    #inventory .craft-info .title img.icon { width: 28px; height: 28px; }
-    #inventory .hint { display: none; }
-  }
-  @media (max-width: 700px) {
-    #minimap { width: 110px; height: 110px; right: 10px; top: 10px; }
-    #clock { right: 10px; top: 124px; width: 116px; }
-    .slot { width: 40px; height: 40px; }
-    .slot img.icon { width: 34px; height: 34px; left: 1px; top: 1px; }
-    #inventory .grid { grid-template-columns: repeat(9, 40px); }
-    #inventory .chest { grid-template-columns: repeat(10, 40px); }
-    #inventory { flex-direction: column; }
-    .hearts, .stars { width: 170px; }
-    .heart, .star { width: 16px; height: 15px; }
-  }
-</style>
 </head>
-<body>
+<body class="in-menu">
 <canvas id="game"></canvas>
 <div id="hud">
   <div id="flash"></div>
   <div id="crosshair"></div>
   <div id="vitals"></div>
-  <canvas id="minimap" width="176" height="176"></canvas>
+  <div id="fps"></div>
+  <canvas id="minimap" width="172" height="172"></canvas>
   <div id="clock"></div>
   <div id="flight"><div></div></div>
   <div id="breath"></div>
@@ -177,8 +23,9 @@
   <div id="hotbar"></div>
   <div id="messages"></div>
   <div id="debug"></div>
+  <div id="death"><h2>You Were Slain</h2><p></p></div>
   <div id="inventory">
-    <button class="close" title="Close">✕</button>
+    <button class="close px-btn icon" title="Close"></button>
     <div>
       <div class="chest"></div>
       <h2>Inventory</h2>
@@ -186,7 +33,12 @@
         <div class="equip"></div>
         <div class="grid"></div>
       </div>
-      <div class="hint">Click to pick up / place · Right-click to split · Shift-click to quick-move · Tab/E to close</div>
+      <div class="hint">
+        <span><kbd>LMB</kbd> pick up / place</span>
+        <span><kbd>RMB</kbd> split</span>
+        <span><kbd>Shift</kbd> quick-move</span>
+        <span><kbd>Tab</kbd> close</span>
+      </div>
     </div>
     <div class="crafting">
       <h2>Crafting</h2>
@@ -197,17 +49,13 @@
 </div>
 <div id="tooltip"></div>
 <div id="cursor-stack"></div>
-<div id="overlay">
-  <h1>HOLLOWDEEP</h1>
-  <p>Dig, build and delve in a hand-shaped 3D world</p>
-  <div class="bar"><div></div></div>
-  <p id="status">Loading…</p>
-  <div id="buttons"></div>
-  <div class="controls">
-    WASD move · Shift sprint · Space jump · C crouch · Mouse look<br/>
-    LMB use / attack / place · RMB interact (doors, chests, beds, NPCs) · F grapple · H check housing<br/>
-    1–9 / wheel select · Q cycle build shape · Tab/E inventory & crafting<br/>
-    F5 save · F9 reload save · F3 debug · Esc pause
+<div id="menu" class="show">
+  <div class="shade"></div>
+  <div class="screen show" id="loading">
+    <div class="logo"><span class="word">Hollowdeep</span><span class="tag">Dig. Build. Delve.</span></div>
+    <div class="load-bar"><div></div></div>
+    <div class="status">Starting</div>
+    <div class="tip"></div>
   </div>
 </div>
 <script type="module" src="/src/main.ts"></script>

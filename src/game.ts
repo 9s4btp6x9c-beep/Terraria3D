@@ -115,6 +115,11 @@ export class Game {
   private lastFrame = 0;
   /** When true the rAF loop stops simulating; tests drive `simulate()` instead. */
   manual = false;
+  /** Paused (pause menu): the world is drawn but not simulated. */
+  paused = false;
+  /** Title screen: the camera drifts around spawn and the player is idle. */
+  menuMode = false;
+  private menuT = 0;
   private time = 0;
   private autosave = 0;
   private skyDirty: [number, number, number, number] | null = null;
@@ -124,6 +129,7 @@ export class Game {
   private shake = 0;
   private potionCooldown = 0;
   private flapTimer = 0;
+  private invertY = false;
   /** Stars currently falling (become pickups where they land). */
   private stars: { x: number; y: number; z: number; vx: number; vy: number; vz: number; t: number }[] = [];
   private starTimer = 30;
@@ -854,7 +860,7 @@ export class Game {
       this.lastFrame = now;
       if (this.manual) return;
       const t0 = performance.now();
-      this.update(dt);
+      if (!this.paused) this.update(dt);
       this.render();
       this.frameMs = this.frameMs * 0.9 + (performance.now() - t0) * 0.1;
     };
@@ -937,6 +943,66 @@ export class Game {
     this.refreshHeld();
   }
 
+  /** Enter or leave the title screen (the world keeps drawing behind it). */
+  setMenuMode(on: boolean) {
+    this.menuMode = on;
+    this.viewmodel.root.visible = !on;
+    if (on) {
+      this.combat.clear();
+      if (this.invUI.open) this.invUI.setOpen(false);
+      if (this.dialogue.open) this.dialogue.close();
+      this.menuT = Math.random() * 100;
+    } else {
+      this.camera.rotation.order = 'YXZ';
+    }
+  }
+
+  /** Apply player settings (quality applies on the next load). */
+  applySettings(s: { fov: number; sensitivity: number; invertY: boolean; volume: number; showFps: boolean }) {
+    this.camera.fov = s.fov;
+    this.camera.updateProjectionMatrix();
+    this.input.sensitivity = (this.input.touchMode ? 0.0042 : 0.0022) * s.sensitivity;
+    this.invertY = s.invertY;
+    this.audio.setVolume(s.volume);
+    this.hud.showFps = s.showFps;
+  }
+
+  /** Title screen: a slow cinematic orbit above spawn, looking out over the land. */
+  private updateMenu(dt: number) {
+    this.time += dt;
+    this.menuT += dt;
+    const s = this.gen.spawn, sea = this.field.cfg.seaLevel;
+    const a = this.menuT * 0.03;
+    const r = 52;
+    const cx = s.x + Math.cos(a) * r, cz = s.z + Math.sin(a) * r;
+    let ground = sea;
+    for (const [ox, oz] of [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6]]) ground = Math.max(ground, this.gen.height(cx + ox, cz + oz));
+    const cam = this.camera;
+    cam.position.set(cx, Math.min(this.field.sy - 8, ground + 34 + Math.sin(this.menuT * 0.2) * 2), cz);
+    const ta = a + 1.35;
+    const tx = s.x + Math.cos(ta) * 140, tz = s.z + Math.sin(ta) * 140;
+    cam.lookAt(tx, Math.max(sea, this.gen.height(tx, tz)) + 14, tz);
+    cam.updateMatrixWorld();
+    const dir = this.dir.set(0, 0, -1).applyQuaternion(cam.quaternion);
+
+    this.terrain.update(cam.position, 3);
+    this.vegRenderer.update(cam.position, dt);
+    this.structureRenderer.update();
+    this.furnitureRenderer.update(dt, cam.position);
+    this.waterRenderer.update(dt, cam.position);
+    this.town.update(dt, cam.position.x, cam.position.y, cam.position.z, this.atmosphere.daylight < 0.3, this.npcContext());
+    this.flushSky();
+    const vis = this.sky.visibility(cam.position.x, cam.position.y, cam.position.z);
+    this.atmosphere.underwater = 0;
+    this.atmosphere.update(dt, cam.position, vis, this.time, cam.position, dir, 0, 0, 0);
+    this.post.setUnderground(this.atmosphere.underground);
+    this.post.setNight(1 - this.atmosphere.daylight);
+    this.post.setBlood(this.atmosphere.bloodVisible);
+    this.post.setWater(0);
+    this.particles.update(dt, this.atmosphere.ambientAt(vis));
+    this.input.endFrame();
+  }
+
   private handleKeys() {
     const inp = this.input;
     for (let i = 0; i < HOTBAR; i++) if (inp.wasPressed(`Digit${i + 1}`)) this.inventory.select(i);
@@ -952,6 +1018,7 @@ export class Game {
   // ===================================================================== update
 
   update(dt: number) {
+    if (this.menuMode) { this.updateMenu(dt); return; }
     this.time += dt;
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-4)) * 0.05;
     const inp = this.input;
@@ -971,7 +1038,7 @@ export class Game {
     // Look.
     if (active) {
       this.player.yaw -= inp.mouseDX * inp.sensitivity;
-      this.player.pitch = Math.max(-1.55, Math.min(1.55, this.player.pitch - inp.mouseDY * inp.sensitivity));
+      this.player.pitch = Math.max(-1.55, Math.min(1.55, this.player.pitch - inp.mouseDY * inp.sensitivity * (this.invertY ? -1 : 1)));
     }
     // Move.
     const k = (c: string) => (active && inp.down(c) ? 1 : 0);
@@ -1052,7 +1119,7 @@ export class Game {
     if (this.vitals.dead) {
       if (!this.deathShown) {
         this.deathShown = true;
-        this.hud.message('You were slain...', '#ff5a4a');
+        this.hud.message('You were slain', '#ff5a4a');
         this.audio.play('die');
         this.particles.burst(this.player.x, this.player.y + 1, this.player.z, 0, 1, 0, 0xb02030, 30, { speed: 5 });
         // Drop half the coins where you fell.
@@ -1173,10 +1240,9 @@ export class Game {
     this.labels.update(dt, this.camera, window.innerWidth, window.innerHeight);
     this.minimap.draw(this.player.x, this.player.z, this.player.yaw, this.combat.creatures.map(c => ({ x: c.x, z: c.z, color: '#ff5a4a' })));
     const hours = this.atmosphere.timeOfDay * 24;
-    const clock = `${String(Math.floor(hours)).padStart(2, '0')}:${String(Math.floor((hours % 1) * 60)).padStart(2, '0')} ${this.atmosphere.daylight > 0.3 ? '☀' : '☾'}`;
-    const clockEl = $('#clock');
-    if (clockEl.textContent !== clock) clockEl.textContent = clock;
-    clockEl.style.color = ev === 'blood_moon' ? '#ff7a6a' : '';
+    this.hud.setClock(hours, this.atmosphere.daylight > 0.3, ev === 'blood_moon', this.events.nights + 1);
+    this.hud.setDeath(this.vitals.dead, this.vitals.respawnTimer);
+    this.hud.setFps(this.fps);
     if (this.hud.debugVisible) {
       const s2 = this.terrain.stats, vc = this.vegRenderer.counts;
       this.hud.setDebug(

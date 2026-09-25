@@ -28,10 +28,12 @@ try {
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
   const q = await page.evaluate(() => __game.quality.name);
   check('touch device gets the low quality preset', q === 'low', q);
-  await page.tap('#buttons button');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${OUT}/m0-title.png` });
+  await page.tap('#title [data-a="play"]');
   await page.evaluate(() => { __game.manual = true; });
-  const ui = await page.evaluate(() => ({ touch: getComputedStyle(document.querySelector('#touch')).display, locked: __game.input.locked, overlay: getComputedStyle(document.querySelector('#overlay')).display }));
-  check('touch controls shown after tapping Play', ui.touch === 'block' && ui.locked && ui.overlay === 'none', JSON.stringify(ui));
+  const ui = await page.evaluate(() => ({ touch: getComputedStyle(document.querySelector('#touch')).display, locked: __game.input.locked, menu: document.querySelector('#menu').classList.contains('show') }));
+  check('touch controls shown after tapping Play', ui.touch === 'block' && ui.locked && !ui.menu, JSON.stringify(ui));
 
   // Drag the joystick up (forward) and hold while the game simulates.
   const box = await page.locator('#touch .stick').boundingBox();

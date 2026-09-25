@@ -1,86 +1,100 @@
+import '@fontsource/jersey-10/latin-400.css';
+import '@fontsource/pixelify-sans/latin-400.css';
+import '@fontsource/pixelify-sans/latin-500.css';
+import '@fontsource/pixelify-sans/latin-600.css';
+import '@fontsource/pixelify-sans/latin-700.css';
+import './ui/styles.css';
 import { Game, savedGame } from './game';
-import { TouchControls } from './ui/touch';
+import { Menu } from './ui/menu';
 import { isTouchDevice } from './ui/quality';
+import { loadSettings } from './ui/settings';
+import { TouchControls } from './ui/touch';
 import { clearSave } from './world/persistence';
 
-const overlay = document.querySelector('#overlay') as HTMLElement;
-const bar = document.querySelector('#overlay .bar div') as HTMLElement;
-const status = document.querySelector('#status') as HTMLElement;
-const buttons = document.querySelector('#buttons') as HTMLElement;
 const params = new URLSearchParams(location.search);
-const seed = Number(params.get('seed') ?? 1337);
 const isTouch = isTouchDevice() || params.has('touch');
-if (isTouch) {
-  (document.querySelector('#overlay .controls') as HTMLElement).innerHTML =
-    'Left stick move (push fully to sprint) · Drag to look<br/>' +
-    '⚒ use / attack / place · ⤒ jump · ⇩ crouch · ✋ interact<br/>' +
-    '⚓ grapple · ⟳ build shape · 🎒 inventory & crafting · ☰ pause / save';
-}
-
+const settings = loadSettings();
 const game = new Game(document.querySelector('#game') as HTMLCanvasElement);
 (window as unknown as { __game: Game }).__game = game;
 
-function button(label: string, onClick: () => void) {
-  const b = document.createElement('button');
-  b.textContent = label;
-  b.onclick = onClick;
-  buttons.appendChild(b);
-  return b;
+let touch: TouchControls | null = null;
+let playing = false;
+
+const menu = new Menu({
+  isTouch,
+  settings,
+  saveInfo: () => {
+    const s = savedGame();
+    return s ? { seed: s.seed, savedAt: s.savedAt } : null;
+  },
+  seed: () => game.field?.cfg.seed ?? 0,
+  play,
+  newWorld: seed => {
+    clearSave();
+    location.href = `${location.pathname}?new&seed=${seed}&play`;
+  },
+  save: () => game.saveGame(),
+  quitToTitle: () => {
+    game.saveGame();
+    playing = false;
+    game.setMenuMode(true);
+    touch?.setVisible(false);
+    menu.open('title');
+  },
+  applySettings: s => game.applySettings(s),
+  sound: name => game.audio.play(name === 'hover' ? 'pickup' : 'craft'),
+});
+(window as unknown as { __menu: Menu }).__menu = menu;
+
+/** Leave the menus and hand control to the player. */
+function play() {
+  menu.hide();
+  game.paused = false;
+  game.setMenuMode(false);
+  playing = true;
+  touch?.setVisible(true);
+  game.input.lock();
 }
 
-async function begin(useSave: boolean) {
-  buttons.innerHTML = '';
-  const save = useSave ? savedGame() : null;
-  if (!useSave) clearSave();
-  await game.load(seed, save, {
-    progress(f, label) {
-      bar.style.width = `${(f * 100).toFixed(0)}%`;
-      status.textContent = `${label}…`;
-    },
+function pause() {
+  if (!playing || menu.visible) return;
+  game.paused = true;
+  game.input.locked = false;
+  touch?.setVisible(false);
+  menu.open('pause');
+}
+
+async function boot() {
+  const existing = savedGame();
+  const fresh = params.has('new') || !existing;
+  if (params.has('new')) clearSave();
+  const seed = Number(params.get('seed') ?? 1337);
+  await game.load(seed, fresh ? null : existing, {
+    progress(f, label) { menu.setProgress(f, label); },
   });
+  game.applySettings(settings);
   game.start();
+  game.setMenuMode(true);
   (window as unknown as { __ready: boolean }).__ready = true;
-  status.textContent = isTouch ? 'Tap to play' : 'Click to play';
-  const touch = isTouch ? new TouchControls(game.input, {
-    inventory: () => game.toggleInventory(),
-    cycleMode: () => game.cycleBuildMode(),
-    pause: () => {
-      game.input.locked = false;
-      touch?.setVisible(false);
-      overlay.style.display = 'flex';
-      status.textContent = 'Paused';
-    },
-    menuOpen: () => game.menuOpen,
-  }) : null;
-  if (touch) {
+
+  if (isTouch) {
+    touch = new TouchControls(game.input, {
+      inventory: () => game.toggleInventory(),
+      cycleMode: () => game.cycleBuildMode(),
+      pause,
+      menuOpen: () => game.menuOpen,
+    });
     document.body.classList.add('touch');
-    game.onFrame = () => touch.update();
+    touch.setVisible(false);
+    game.applySettings(settings);
+    game.onFrame = () => touch?.update();
   }
-  game.input.onFreeLook(active => {
-    overlay.style.display = active ? 'none' : 'flex';
-    if (!active) status.textContent = 'Paused';
-  });
-  const resume = () => {
-    overlay.style.display = 'none';
-    touch?.setVisible(true);
-    game.input.lock();
-  };
-  button('Play', resume);
-  button('Save', () => { game.saveGame(); status.textContent = 'World saved'; });
-  overlay.onclick = e => { if (e.target === overlay) resume(); };
+  game.input.onFreeLook(active => { if (!active) pause(); });
   document.addEventListener('pointerlockchange', () => {
-    if (!document.pointerLockElement && !game.menuOpen) {
-      overlay.style.display = 'flex';
-      status.textContent = 'Paused';
-    }
+    if (!document.pointerLockElement && !game.menuOpen && !isTouch && !game.input.freeLook) pause();
   });
+  if (params.has('play') || params.has('continue')) menu.open('ready');
+  else menu.open('title');
 }
 
-const existing = savedGame();
-if (params.has('continue') && existing) begin(true);
-else if (params.has('new') || !existing) begin(false);
-else {
-  status.textContent = 'A saved world was found.';
-  button('Continue', () => begin(true));
-  button('New World', () => begin(false));
-}
+void boot();

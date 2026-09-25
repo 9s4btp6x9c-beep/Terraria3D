@@ -20,8 +20,8 @@ export class WorldLabels {
   add(x: number, y: number, z: number, text: string, color: string, big = false) {
     const el = this.pool.pop() ?? document.createElement('div');
     el.textContent = text;
-    el.style.cssText = `position:absolute;left:0;top:0;font-weight:bold;font-size:${big ? 22 : 17}px;color:${color};` +
-      'text-shadow:2px 2px 0 #000,-1px -1px 0 #000;white-space:nowrap;will-change:transform';
+    el.style.cssText = `position:absolute;left:0;top:0;font:400 ${big ? 30 : 24}px 'Jersey 10','Pixelify Sans',monospace;color:${color};letter-spacing:1px;` +
+      'text-shadow:2px 2px 0 #07060c,-1px -1px 0 #07060c,1px -1px 0 #07060c,-1px 1px 0 #07060c;white-space:nowrap;will-change:transform';
     this.root.appendChild(el);
     this.live.push({ el, x: x + (Math.random() - 0.5) * 0.4, y, z: z + (Math.random() - 0.5) * 0.4, t: 0, life: 0.9, vy: 1.8 });
   }

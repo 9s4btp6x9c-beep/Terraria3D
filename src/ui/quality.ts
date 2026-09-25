@@ -1,3 +1,5 @@
+import { loadSettings } from './settings';
+
 // Graphics quality presets. Detected from the device (touch-first devices get
 // the light preset) and overridable with ?quality=low|medium|high.
 
@@ -35,6 +37,8 @@ export function isTouchDevice(): boolean {
 export function detectQuality(): Quality {
   const mobile = isTouchDevice();
   let name: Quality['name'] = mobile ? 'low' : 'high';
+  const chosen = loadSettings().quality;
+  if (chosen !== 'auto') name = chosen;
   try {
     const q = new URLSearchParams(location.search).get('quality');
     if (q === 'low' || q === 'medium' || q === 'high') name = q;

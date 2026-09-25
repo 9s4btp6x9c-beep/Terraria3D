@@ -3,6 +3,7 @@
 // object so the game logic is identical for touch and keyboard/mouse.
 
 import type { Input } from '../player/input';
+import { icon } from './icons';
 
 interface Actions {
   inventory(): void;
@@ -31,16 +32,16 @@ export class TouchControls {
     this.root.id = 'touch';
     this.root.innerHTML = `
       <div class="look"></div>
-      <button class="menu" data-b="menu">☰</button>
+      <button class="menu" data-b="menu" aria-label="Pause">${icon('menu')}</button>
       <div class="stick"><div class="knob"></div></div>
       <div class="btns">
-        <button data-b="use" class="big" style="grid-area:use">⚒</button>
-        <button data-b="jump" style="grid-area:jump">⤒</button>
-        <button data-b="act" style="grid-area:act">✋</button>
-        <button data-b="hook" style="grid-area:hook">⚓</button>
-        <button data-b="mode" style="grid-area:mode">⟳</button>
-        <button data-b="inv" style="grid-area:inv">🎒</button>
-        <button data-b="crouch" style="grid-area:crouch">⇩</button>
+        <button data-b="use" class="big" style="grid-area:use" aria-label="Use">${icon('pick')}</button>
+        <button data-b="jump" style="grid-area:jump" aria-label="Jump">${icon('jump')}</button>
+        <button data-b="act" style="grid-area:act" aria-label="Interact">${icon('hand')}</button>
+        <button data-b="hook" style="grid-area:hook" aria-label="Grappling hook">${icon('hook')}</button>
+        <button data-b="mode" style="grid-area:mode" aria-label="Build shape">${icon('cycle')}</button>
+        <button data-b="inv" style="grid-area:inv" aria-label="Inventory">${icon('bag')}</button>
+        <button data-b="crouch" style="grid-area:crouch" aria-label="Crouch">${icon('crouch')}</button>
       </div>`;
     document.body.appendChild(this.root);
     this.stick = this.root.querySelector('.stick')!;

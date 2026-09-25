@@ -43,8 +43,8 @@ export class Sky {
 
     // Faceted sun and moon, drawn just inside the dome.
     this.sunMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0, fog: false, depthWrite: false });
-    this.sun = new THREE.Mesh(new THREE.IcosahedronGeometry(68, 0), this.sunMat);
-    const halo = new THREE.Mesh(new THREE.IcosahedronGeometry(92, 0), new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.22, fog: false, depthWrite: false }));
+    this.sun = new THREE.Mesh(new THREE.IcosahedronGeometry(46, 1), this.sunMat);
+    const halo = new THREE.Mesh(new THREE.IcosahedronGeometry(64, 1), new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.18, fog: false, depthWrite: false }));
     this.sun.add(halo);
     this.moonMat = new THREE.MeshBasicMaterial({ color: this.moonBase, fog: false, depthWrite: false });
     const craterMat = new THREE.MeshBasicMaterial({ color: 0xb8bccc, fog: false, depthWrite: false });

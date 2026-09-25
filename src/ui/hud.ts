@@ -4,6 +4,7 @@
 import { HOTBAR, type Inventory } from '../items/inventory';
 import { RARITY_COLORS, item } from '../items/items';
 import type { IconAtlas } from '../render/icons';
+import { icon } from './icons';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -24,6 +25,13 @@ export class Hud {
   private flightShown = -1;
   private eventKey = '';
   debugVisible = false;
+  showFps = false;
+  private clockEl = $('#clock');
+  private clockKey = '';
+  private death = $('#death');
+  private deathKey = '';
+  private fpsEl = $('#fps');
+  private fpsT = 0;
   modeLabel = '';
   private lastVitals = '';
   private flashT = 0;
@@ -72,7 +80,7 @@ export class Hud {
       const f = Math.max(0, Math.min(1, (mana - i * 20) / 20));
       stars.push(`<span class="star" style="--f:${f}"></span>`);
     }
-    this.vitals.innerHTML = `<div class="hp-label">Life ${Math.ceil(hp)}/${maxHp}${defense ? ` · <span class="def">🛡 ${defense}</span>` : ''}</div>` +
+    this.vitals.innerHTML = `<div class="label"><span>Life <span class="num">${Math.ceil(hp)}/${maxHp}</span></span>${defense ? `<span class="def">${icon('shield')}${defense}</span>` : ''}</div>` +
       `<div class="hearts">${hearts.join('')}</div>` + (maxMana > 0 ? `<div class="stars">${stars.join('')}</div>` : '');
   }
 
@@ -118,9 +126,39 @@ export class Hud {
     this.flashT = Math.min(1, this.flashT + 0.5 * strength);
   }
 
+  /** Interaction hint; "[RMB] Talk" shows the key as a keycap. */
   setPrompt(text: string) {
-    if (this.prompt.textContent !== text) this.prompt.textContent = text;
+    if (this.prompt.dataset.text !== text) {
+      this.prompt.dataset.text = text;
+      const m = /^\[([^\]]+)\]\s*(.*)$/.exec(text);
+      this.prompt.innerHTML = m ? `<span class="key">${m[1]}</span>${m[2]}` : text;
+    }
     this.prompt.style.display = text ? 'block' : 'none';
+  }
+
+  /** Time of day under the minimap with a pixel sun or moon. */
+  setClock(hours: number, day: boolean, blood: boolean, dayCount: number) {
+    const hh = String(Math.floor(hours)).padStart(2, '0'), mm = String(Math.floor((hours % 1) * 60)).padStart(2, '0');
+    const key = `${hh}${mm}${day}${blood}${dayCount}`;
+    if (key === this.clockKey) return;
+    this.clockKey = key;
+    const ic = day ? `<span class="sun">${icon('sun')}</span>` : `<span class="${blood ? 'blood' : 'moon'}">${icon('moon')}</span>`;
+    this.clockEl.innerHTML = `${ic}<span>${hh}:${mm}</span><span class="day">Day ${dayCount}</span>`;
+  }
+
+  /** Death screen with the respawn countdown. */
+  setDeath(dead: boolean, respawnIn: number) {
+    const key = dead ? String(Math.ceil(respawnIn)) : '';
+    if (key === this.deathKey) return;
+    this.deathKey = key;
+    this.death.style.display = dead ? 'flex' : 'none';
+    if (dead) (this.death.querySelector('p') as HTMLElement).textContent = `Respawning in ${Math.max(1, Math.ceil(respawnIn))}`;
+  }
+
+  setFps(fps: number) {
+    this.fpsEl.style.display = this.showFps ? 'block' : 'none';
+    if (!this.showFps) return;
+    if ((this.fpsT = (this.fpsT + 1) % 15) === 0) this.fpsEl.textContent = `${Math.round(fps)} FPS`;
   }
 
   update(dt: number) {

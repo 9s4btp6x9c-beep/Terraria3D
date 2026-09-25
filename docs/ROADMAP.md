@@ -68,6 +68,7 @@ a minimap, particles, and a held-item viewmodel.
 | M8 Growth | Life Crystals in caves (+max life), fallen stars at night, Mana Crystals and mana potions, max stats saved | growth e2e checks |
 | M9 Mushroom caverns | Underground zone with wide halls, luminous mushroom grass over mud, giant glowing mushrooms with real point lights, teal cave tint, Sporelings and Glowmoths, glowcaps, Glowcap Lamp, glowcap mana potions; far-away furniture and buried mushrooms culled | cavern e2e checks |
 | M10 Water | Liquid grid (fall, spread, level out, flood from the sea below sea level), lakes and cave pools, swimming, breath and drowning, underwater view, buckets, creatures float; the sea plane is limited to the real ocean | `tests/water.test.ts`, water e2e checks |
+| M11 Interface | Title screen over the live world (orbiting camera), loading screen with tips, new world, settings, controls, pause and death screens; bundled pixel fonts, a pixel icon set replacing all emoji, one panel style across HUD, inventory and dialogue | `scripts/ui-shots.mjs`, e2e suites |
 
 ## Next phases
 

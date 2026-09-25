@@ -49,7 +49,7 @@ export class DialogueUI {
         `<div class="ware ${coins >= e.price ? '' : 'poor'}" data-i="${i}">${this.icons.img(item(e.item))}<span>${item(e.item).name}${e.count > 1 ? ` ×${e.count}` : ''}</span><b>${e.price} ${this.icons.img(item('coin'), 'mini')}</b></div>`).join('')}</div>` +
         `<div class="purse">You have ${coins} ${this.icons.img(item('coin'), 'mini')}</div>`;
     }
-    html += `<div class="btns"><button data-a="chat">Chat</button>${n.def.shop ? `<button data-a="shop">${this.showShop ? 'Hide shop' : 'Shop'}</button>` : ''}<button data-a="close">Close</button></div>`;
+    html += `<div class="btns"><button class="px-btn" data-a="chat">Chat</button>${n.def.shop ? `<button class="px-btn gold" data-a="shop">${this.showShop ? 'Hide Shop' : 'Shop'}</button>` : ''}<button class="px-btn" data-a="close">Goodbye</button></div>`;
     this.el.innerHTML = html;
     this.el.querySelectorAll<HTMLButtonElement>('button').forEach(b => {
       b.onclick = () => {

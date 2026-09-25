@@ -7,6 +7,7 @@ import { HOTBAR, type Inventory } from '../items/inventory';
 import { type ItemDef, RARITY_COLORS, type StationId, item } from '../items/items';
 import { STATION_NAMES, craft, visibleRecipes } from '../items/recipes';
 import type { IconAtlas } from '../render/icons';
+import { icon } from './icons';
 
 export interface SlotContainer {
   slots: (Stack | null)[];
@@ -65,7 +66,9 @@ export class InventoryUI {
       this.tip.style.top = `${Math.min(window.innerHeight - 120, e.clientY + 18)}px`;
     });
     this.panel.addEventListener('contextmenu', e => e.preventDefault());
-    this.panel.querySelector<HTMLButtonElement>('.close')!.onclick = () => this.onClose?.();
+    const close = this.panel.querySelector<HTMLButtonElement>('.close')!;
+    close.innerHTML = icon('close');
+    close.onclick = () => this.onClose?.();
   }
 
   /** Close button pressed. */
@@ -123,17 +126,17 @@ export class InventoryUI {
   private renderCrafting() {
     const list = visibleRecipes(this.inv, this.stations);
     this.recipeIndex = Math.min(this.recipeIndex, Math.max(0, list.length - 1));
-    const st = [...this.stations].map(s => STATION_NAMES[s]).join(', ') || 'none (by hand)';
-    this.craftList.innerHTML = `<div class="stations">Nearby: ${st}</div>` + list.map(({ r, ok }, i) =>
+    const st = [...this.stations].map(s => STATION_NAMES[s]).join(', ') || 'Crafting by hand';
+    this.craftList.innerHTML = `<div class="stations">${this.stations.size ? `Near: ${st}` : st}</div>` + list.map(({ r, ok }, i) =>
       `<div class="recipe ${ok ? 'ok' : 'no'} ${i === this.recipeIndex ? 'sel' : ''}" data-rc="${i}">${this.icons.img(item(r.out))}<span>${item(r.out).name}${r.count > 1 ? ` ×${r.count}` : ''}</span></div>`).join('');
     const cur = list[this.recipeIndex];
-    if (!cur) { this.craftInfo.innerHTML = '<i>Gather materials to discover recipes.</i>'; return; }
+    if (!cur) { this.craftInfo.innerHTML = '<span class="dim">Gather materials to discover recipes.</span>'; return; }
     const { r, ok } = cur;
     this.craftInfo.innerHTML =
       `<div class="title">${this.icons.img(item(r.out))}<b style="color:${RARITY_COLORS[item(r.out).rarity ?? 0]}">${item(r.out).name}</b></div>` +
       r.in.map(([id, n]) => `<div class="${this.inv.count(id) >= n ? 'have' : 'need'}">${this.icons.img(item(id), 'mini')} ${n} ${item(id).name} <span class="dim">(${this.inv.count(id)})</span></div>`).join('') +
       `<div class="dim">Station: ${r.station ? STATION_NAMES[r.station] : 'none'}${r.station && !this.stations.has(r.station) ? ' <span class="need">(not nearby)</span>' : ''}</div>` +
-      `<button class="craft-btn" ${ok ? '' : 'disabled'}>Craft</button> <button class="craft-btn5" ${ok ? '' : 'disabled'}>×5</button>`;
+      `<div class="actions"><button class="craft-btn px-btn gold" ${ok ? '' : 'disabled'}>Craft</button><button class="craft-btn5 px-btn" ${ok ? '' : 'disabled'}>Craft 5</button></div>`;
     const doCraft = (times: number) => {
       let n = 0;
       for (let k = 0; k < times; k++) if (craft(r, this.inv, this.stations)) n++; else break;

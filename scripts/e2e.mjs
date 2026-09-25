@@ -39,7 +39,10 @@ async function boot(query) {
   await page.goto(`http://localhost:${PORT}/${query}`);
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
   await page.evaluate(() => {
-    document.querySelector('#overlay').style.display = 'none';
+    // Leave the title screen straight into the game.
+    window.__menu.hide();
+    window.__game.setMenuMode(false);
+    window.__game.paused = false;
     // Software WebGL is slow; drive the simulation with fixed steps instead of real time.
     window.__game.manual = true;
     window.__game.input.locked = true;
