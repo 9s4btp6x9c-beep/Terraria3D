@@ -92,7 +92,7 @@ try {
       const hs = [[0, 0], [4, 0], [0, 4], [4, 4]].map(([a, b]) => g.gen.height(x + a, z + b));
       const slope = Math.max(...hs) - Math.min(...hs);
       if (g.veg.treesNear(x + 2, z + 2, 7).length || g.gen.lakeAt(x + 2, z + 2) || Math.min(...hs) < g.field.cfg.seaLevel + 2) continue;
-      (window.__sites ??= []).push({ x, z, slope, score: Math.abs(slope - 0.9) });
+      (window.__sites ??= []).push({ x, z, slope, score: Math.abs(slope - 1.4) });
     }
     window.__sites.sort((a, b) => a.score - b.score);
     // SITE picks another plot (to try the build on different ground).

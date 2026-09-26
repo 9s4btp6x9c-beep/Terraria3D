@@ -433,9 +433,22 @@ try {
     g.equipment.set(3, { id: 'grappling_hook', count: 1 });
     g.stats = g.equipment.stats();
     const s = g.gen.spawn;
-    g.player.teleport(s.x, s.y + 0.5, s.z);
-    g.player.yaw = -1.72; g.player.pitch = -0.6;
-    g.simulate(0.3);
+    // Open land away from everything the earlier checks built around spawn.
+    let spot = [s.x, s.z];
+    for (let r = 40; r < 120; r += 6) {
+      const x = s.x + r, z = s.z;
+      if (g.gen.height(x, z) > g.gen.cfg.seaLevel + 2 && !g.structures.near(x, g.gen.height(x, z), z, 25).length && !g.gen.lakeAt(x, z)) { spot = [x, z]; break; }
+    }
+    g.player.teleport(spot[0], g.gen.height(spot[0], spot[1]) + 1, spot[1]);
+    g.simulate(1);
+    // Aim at open ground 8-20 m away (nothing closer in the way).
+    g.player.pitch = -0.3; g.player.yaw = -1.72;
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 16) {
+      g.player.yaw = -1.72 + a; g.simulate(1 / 60);
+      const c = g.camera.position, d = new c.constructor(0, 0, -1).applyQuaternion(g.camera.quaternion);
+      const hit = g.field.raycast(c.x, c.y, c.z, d.x, d.y, d.z, 26, 0.25);
+      if (hit && hit.distance > 8 && hit.distance < 20 && !g.structures.raycast(c.x, c.y, c.z, d.x, d.y, d.z, hit.distance)) break;
+    }
     const before = { x: g.player.x, y: g.player.y, z: g.player.z };
     const c = g.camera.position, d = new c.constructor(0, 0, -1).applyQuaternion(g.camera.quaternion);
     const probe = {
@@ -1022,10 +1035,12 @@ try {
     g.player.teleport(s.x, s.y + 0.5, s.z);
     g.player.pitch = -0.8;
     g.simulate(0.5);
-    const before = g.water.cells.size;
+    // (Counted near the pour: water elsewhere in the world is still settling.)
+    const near = () => { let n = 0; for (const k of g.water.cells.keys()) { const [i, j, kk] = g.water.unkey(k); if (Math.abs(i - s.x) < 10 && Math.abs(kk - s.z) < 10 && Math.abs(j - s.y) < 10) n++; } return n; };
+    const before = near();
     g.useBucket(true);
     g.simulate(2);
-    return { scooped, poured: g.inventory.count('bucket') === 1, spread: g.water.cells.size - before };
+    return { scooped, poured: g.inventory.count('bucket') === 1, spread: near() - before };
   }, lake);
   check('buckets scoop water up and pour it out', bucket.scooped && bucket.poured && bucket.spread > 0, JSON.stringify(bucket));
 
@@ -1106,7 +1121,8 @@ try {
     let at = null;
     for (const key of g.lava.cells.keys()) {
       const [i, j, k] = g.lava.unkey(key);
-      if (Math.hypot(i - v.x, k - v.z) < v.rc && g.lava.level(i, j, k) > 0.9 && g.lava.level(i, j + 1, k) < 0.5) { at = [i + 0.5, j + 0.1, k + 0.5]; break; }
+      // (Deep lava, not a thin edge that is still flowing away.)
+      if (Math.hypot(i - v.x, k - v.z) < v.rc && g.lava.level(i, j, k) > 0.9 && g.lava.level(i, j - 1, k) > 0.9 && g.lava.level(i, j + 1, k) < 0.5) { at = [i + 0.5, j - 0.9, k + 0.5]; break; }
     }
     if (!at) return null;
     g.player.teleport(at[0], at[1], at[2]);
