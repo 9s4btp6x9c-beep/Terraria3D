@@ -220,6 +220,9 @@ try {
   // ---------------------------------------------------------------- gameplay
   await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;
+    // The overview shot drops the player from 30m up; bring them back if the fall killed them.
+    if (g.vitals.dead) { g.vitals.respawn(); g.deathShown = false; }
+    g.vitals.hp = g.vitals.maxHp;
     g.player.teleport(s.x, s.y, s.z); g.player.pitch = -0.95;
     for (const [id, n] of [['wood', 80], ['stone', 60], ['gel', 20], ['iron_bar', 12], ['copper_bar', 6], ['sand', 6]]) g.inventory.add(id, n);
   });
@@ -1032,7 +1035,7 @@ try {
   const volcano = await page.evaluate(() => {
     const g = __game, v = g.gen.volcanoes[0];
     if (!v) return null;
-    if (g.vitals.dead) g.vitals.respawn();
+    if (g.vitals.dead) { g.vitals.respawn(); g.deathShown = false; }
     g.vitals.hp = g.vitals.maxHp;
     g.atmosphere.timeOfDay = 0.42;
     // Stand on the highest point of the rim, looking down into the crater.
