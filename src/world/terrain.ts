@@ -147,8 +147,7 @@ export class TerrainField {
   }
 
   /** Gradient of the density (points into solid). */
-  gradient(x: number, y: number, z: number, out: [number, number, number]) {
-    const h = 0.25;
+  gradient(x: number, y: number, z: number, out: [number, number, number], h = 0.25) {
     out[0] = (this.sample(x + h, y, z) - this.sample(x - h, y, z)) / (2 * h);
     out[1] = (this.sample(x, y + h, z) - this.sample(x, y - h, z)) / (2 * h);
     out[2] = (this.sample(x, y, z + h) - this.sample(x, y, z - h)) / (2 * h);
@@ -200,8 +199,21 @@ export class TerrainField {
   distance(x: number, y: number, z: number, gradOut: [number, number, number]): number {
     const v = this.sample(x, y, z);
     this.gradient(x, y, z, gradOut);
-    const len = Math.sqrt(gradOut[0] * gradOut[0] + gradOut[1] * gradOut[1] + gradOut[2] * gradOut[2]);
-    if (len < 1e-4) return v > 0 ? -DENSITY_CLAMP : DENSITY_CLAMP;
+    let len = Math.sqrt(gradOut[0] * gradOut[0] + gradOut[1] * gradOut[1] + gradOut[2] * gradOut[2]);
+    if (len < 1e-4) {
+      if (v <= 0) return DENSITY_CLAMP;
+      // Deep in solid the density is clamped flat: look further out for the
+      // nearest way out (otherwise a body stuck in rock has no normal and
+      // sinks straight through it), falling back to straight up.
+      for (const h of [1, 2.5, 6]) {
+        this.gradient(x, y, z, gradOut, h);
+        len = Math.sqrt(gradOut[0] * gradOut[0] + gradOut[1] * gradOut[1] + gradOut[2] * gradOut[2]);
+        if (len > 1e-3) break;
+      }
+      if (len > 1e-3) { gradOut[0] /= len; gradOut[1] /= len; gradOut[2] /= len; }
+      else { gradOut[0] = 0; gradOut[1] = -1; gradOut[2] = 0; }
+      return -DENSITY_CLAMP;
+    }
     gradOut[0] /= len; gradOut[1] /= len; gradOut[2] /= len;
     return -v / Math.max(len, 0.5);
   }

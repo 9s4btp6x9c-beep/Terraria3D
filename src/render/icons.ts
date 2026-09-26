@@ -41,7 +41,7 @@ export class IconAtlas {
     }
     // Building pieces for the build menu, turned to show their shape.
     for (const shape of SHAPES) {
-      const geo = pieceGeometry({ shape, texture: 'planks', x: 0, y: 0, z: 0, rot: 0, ext: shape === 'foundation' ? 0.75 : 0 });
+      const geo = pieceGeometry({ shape, texture: 'planks', x: 0, y: 0, z: 0, rot: 0, ext: shape === 'foundation' ? 0.75 : 0 })!;
       // The icon material tints by vertex colour; pieces are untinted.
       geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3).fill(1), 3));
       const mesh = new THREE.Mesh(geo, material);

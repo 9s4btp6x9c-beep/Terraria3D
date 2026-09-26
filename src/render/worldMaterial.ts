@@ -26,6 +26,20 @@ export interface WorldUniforms {
   uLightPos: { value: THREE.Vector4[] };
   uLightColor: { value: THREE.Color[] };
   uTime: { value: number };
+  /** Per layer: how far its texture is calmed toward its own average colour. */
+  uFlat: { value: number[] };
+}
+
+/**
+ * How much each texture layer is calmed toward its mean colour. The painted
+ * textures are busy four-colour patterns; up close that detail reads well,
+ * but side by side across a cave wall or a hillside it turns to mush. Ores
+ * and crystals keep their contrast (their flecks are how you spot them).
+ */
+function flatness(style: string): number {
+  if (style === 'ore' || style === 'crystal' || style === 'plain' || style === 'flame') return 0;
+  if (style === 'planks' || style === 'bricks' || style === 'metal') return 0.2;
+  return 0.42;
 }
 
 export function createWorldUniforms(tex: THREE.DataArrayTexture, sky: THREE.DataTexture, skyW: number, skyD: number): WorldUniforms {
@@ -41,6 +55,7 @@ export function createWorldUniforms(tex: THREE.DataArrayTexture, sky: THREE.Data
     uLightPos: { value: Array.from({ length: MAX_POINT_LIGHTS }, () => new THREE.Vector4(0, -1000, 0, 1)) },
     uLightColor: { value: Array.from({ length: MAX_POINT_LIGHTS }, () => new THREE.Color(0, 0, 0)) },
     uTime: { value: 0 },
+    uFlat: { value: [...MATERIALS.map(m => flatness(m.texture)), ...Object.values(EXTRA_LAYERS).map(l => flatness(l.style))] },
   };
 }
 
@@ -71,6 +86,8 @@ export interface WorldMaterialOptions {
    * multiplier; `visibility` overrides the sky map (null = use it).
    */
   objectSpace?: { scale: number; visibility: { value: number } | null };
+  /** Multiplier on the per-layer texture calming (creatures are calmed further). */
+  flatten?: number;
 }
 
 export function createWorldMaterial(u: WorldUniforms, opts: WorldMaterialOptions = {}) {
@@ -83,6 +100,7 @@ export function createWorldMaterial(u: WorldUniforms, opts: WorldMaterialOptions
     shader.uniforms.uObjScale = { value: obj?.scale ?? 1 };
     shader.uniforms.uVisOverride = obj?.visibility ?? { value: -1 };
     shader.uniforms.uFlash = flash;
+    shader.uniforms.uFlatMul = { value: opts.flatten ?? 1 };
     if (obj) shader.defines = { ...(shader.defines ?? {}), OBJECT_SPACE: '' };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
@@ -108,6 +126,11 @@ varying vec3 vTexNormal;`)
   #ifdef OBJECT_SPACE
     vTexPos = transformed * uObjScale;
     vTexNormal = objectNormal;
+  #elif defined(USE_INSTANCING)
+    // Instances (trees) carry their texture with them, so a tree that sways
+    // when struck moves as one piece instead of sliding under its bark.
+    vTexPos = instanceMatrix[3].xyz + transformed * length(instanceMatrix[0].xyz);
+    vTexNormal = objectNormal;
   #else
     vTexPos = vWorld;
     vTexNormal = vWorldNormal;
@@ -132,6 +155,8 @@ uniform vec3 uLightColor[${MAX_POINT_LIGHTS}];
 uniform float uTime;
 uniform float uVisOverride;
 uniform float uFlash;
+uniform float uFlat[${LAYER_COUNT}];
+uniform float uFlatMul;
 flat varying vec3 vMats;
 varying vec3 vBary;
 varying vec3 vWorld;
@@ -152,11 +177,6 @@ float skyVisibility(vec3 p) {
       .replace('#include <map_fragment>', `
   // Pixel-snapped dither value, stable in world space.
   float dith = whash(floor(vTexPos * ${(64 / TILE_METRES).toFixed(1)}) + 0.5);
-  vec3 bw = vBary * vBary * vBary;
-  bw /= (bw.x + bw.y + bw.z);
-  float layer = dith < bw.x ? vMats.x : (dith < bw.x + bw.y ? vMats.y : vMats.z);
-  layer = floor(layer + 0.5);
-
   vec3 an = abs(normalize(vTexNormal)) + (dith - 0.5) * 0.12;
   vec3 dpx = dFdx(vTexPos), dpy = dFdy(vTexPos);
   vec2 uv, gx, gy;
@@ -164,17 +184,38 @@ float skyVisibility(vec3 p) {
   else if (an.y > an.z) { uv = vTexPos.xz; gx = dpx.xz; gy = dpy.xz; }
   else { uv = vTexPos.xy; gx = dpx.xy; gy = dpy.xy; }
   const float TS = 1.0 / ${TILE_METRES.toFixed(1)};
-  vec4 texel = textureGrad(uTex, vec3(uv * TS, layer), gx * TS, gy * TS);
-  diffuseColor.rgb *= texel.rgb;
-  float emissiveAmt = uEmissive[int(layer)];
+  // Up to three materials per triangle, blended smoothly over a narrow band
+  // near the middle (a speckled dither between them read as noise).
+  vec3 lm = floor(vMats + 0.5);
+  vec3 bw = vBary * vBary * vBary * vBary;
+  bw /= (bw.x + bw.y + bw.z);
+  if (lm.y == lm.x) { bw.x += bw.y; bw.y = 0.0; }
+  if (lm.z == lm.x) { bw.x += bw.z; bw.z = 0.0; }
+  else if (lm.z == lm.y) { bw.y += bw.z; bw.z = 0.0; }
+  vec3 texCol = vec3(0.0);
+  float emissiveAmt = 0.0;
+  for (int li = 0; li < 3; li++) {
+    float w = li == 0 ? bw.x : li == 1 ? bw.y : bw.z;
+    if (w < 0.004) continue;
+    float layer = li == 0 ? lm.x : li == 1 ? lm.y : lm.z;
+    vec3 t = textureGrad(uTex, vec3(uv * TS, layer), gx * TS, gy * TS).rgb;
+    // Calm the texture toward its own average (its smallest mip).
+    vec3 mean = textureLod(uTex, vec3(0.5, 0.5, layer), 8.0).rgb;
+    t = mix(t, mean, clamp(uFlat[int(layer)] * uFlatMul, 0.0, 0.8));
+    texCol += t * w;
+    emissiveAmt += uEmissive[int(layer)] * w;
+  }
+  diffuseColor.rgb *= texCol;
 `)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
   totalEmissiveRadiance += diffuseColor.rgb * emissiveAmt * 1.6 + vec3(uFlash);
 `)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
   {
-    float vis = skyVisibility(vWorld);
     vec3 wn = normalize(vWorldNormal);
+    // Sample the sky map a little way out along the surface: a cliff face or
+    // a pit wall takes its light from the open column it faces.
+    float vis = skyVisibility(vWorld + vec3(wn.x, 0.0, wn.z) * 1.2);
     reflectedLight.directDiffuse *= vis;
     vec3 hemi = mix(uHemiGround, uHemiSky, wn.y * 0.5 + 0.5);
     reflectedLight.indirectDiffuse += diffuseColor.rgb * (hemi * vis + uCaveAmbient);

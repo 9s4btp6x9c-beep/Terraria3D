@@ -215,7 +215,7 @@ const list: ItemDef[] = [
   { id: 'forge', name: 'Lumite Forge', kind: 'placeable', maxStack: 99, color: '#6ae6ff', rarity: 2, model: { type: 'furniture', id: 'forge' }, furniture: 'forge', description: 'Advanced station for lumite gear.' },
   { id: 'chair', name: 'Wooden Chair', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'chair' }, furniture: 'chair' },
   { id: 'table', name: 'Wooden Table', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'table' }, furniture: 'table' },
-  { id: 'door', name: 'Wooden Door', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'door' }, furniture: 'door', description: 'Snaps into wall slots. [RMB] to open.' },
+  { id: 'door', name: 'Wooden Door', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'door' }, furniture: 'door', description: 'Snaps into doorways and wall slots. [RMB] to open; it swings away from you.' },
   { id: 'torch', name: 'Torch', kind: 'placeable', maxStack: 99, color: '#ffb030', model: { type: 'furniture', id: 'torch' }, furniture: 'torch', description: 'Place on floors or walls.' },
   { id: 'chest', name: 'Chest', kind: 'placeable', maxStack: 99, color: '#a8744a', model: { type: 'furniture', id: 'chest' }, furniture: 'chest', description: 'Stores 20 stacks. [RMB] to open.' },
   { id: 'glowcap_lamp', name: 'Glowcap Lamp', kind: 'placeable', maxStack: 99, color: '#3aa0d0', model: { type: 'furniture', id: 'glowcap_lamp' }, furniture: 'glowcap_lamp', description: 'A cool, steady light.' },

@@ -1,32 +1,48 @@
-// First-person held item: the item's own 3D model in a low-poly hand, with
-// snappy per-type animations (tool/sword swing, bow draw, place bob, drink).
+// First-person held item: the item's own 3D model gripped in a blocky arm
+// that hangs from a shoulder just off the bottom-right of the screen. Swings
+// turn the whole arm at the shoulder (not just the wrist), so a pick or sword
+// is driven away from the player the way a real swing would be.
+//
+// The arm and item live on their own render layer: the world is drawn first,
+// then the depth buffer is cleared and the held item is drawn over it with
+// normal depth testing (see PostFX), so it never clips into walls, is never
+// crossed by world outlines, and its own faces sort correctly.
 
 import * as THREE from 'three';
 import { type ItemDef, item } from '../items/items';
 import { itemModel, part } from './models';
 import { mergeNonIndexed } from './sky';
 
-type Pose = 'swing' | 'bow' | 'hold' | 'staff';
+/** Render layer for the first-person overlay. */
+export const VIEWMODEL_LAYER = 1;
+
+type Pose = 'swing' | 'slash' | 'bow' | 'hold' | 'staff';
 
 function poseFor(def: ItemDef): Pose {
   if (def.kind === 'tool') return 'swing';
-  if (def.weapon?.type === 'melee') return 'swing';
+  if (def.weapon?.type === 'melee') return 'slash';
   if (def.weapon?.type === 'bow') return 'bow';
   if (def.weapon?.type === 'magic') return 'staff';
   return 'hold';
 }
 
+/** Sleeve from the shoulder (origin) forward along -z to the hand. */
+const ARM_LEN = 0.5;
 function armGeometry() {
-  const sleeve = part(new THREE.BoxGeometry(0.085, 0.085, 0.42).translate(0, 0, 0.23), 'fabric', 0x46548a);
-  const cuff = part(new THREE.BoxGeometry(0.095, 0.095, 0.04).translate(0, 0, 0.03), 'fabric', 0xb89a5a);
-  const hand = part(new THREE.BoxGeometry(0.075, 0.07, 0.085).translate(0, 0, -0.035), 'plain', 0xd8a07a);
-  const thumb = part(new THREE.BoxGeometry(0.028, 0.03, 0.05).translate(-0.042, 0.022, -0.04), 'plain', 0xc88c6a);
-  return mergeNonIndexed([sleeve, cuff, hand, thumb]);
+  const sleeve = part(new THREE.BoxGeometry(0.12, 0.12, 0.42).translate(0, 0, -0.21), 'fabric', 0x46548a);
+  const cuff = part(new THREE.BoxGeometry(0.13, 0.13, 0.05).translate(0, 0, -0.43), 'fabric', 0xb89a5a);
+  const hand = part(new THREE.BoxGeometry(0.1, 0.1, 0.1).translate(0, 0, -ARM_LEN), 'plain', 0xd8a07a);
+  return mergeNonIndexed([sleeve, cuff, hand]);
 }
+
+const ease = (t: number) => t * t * (3 - 2 * t);
 
 export class Viewmodel {
   readonly root = new THREE.Group();
-  private pivot = new THREE.Group();
+  /** Rotates the whole arm (and what it holds) about the shoulder. */
+  private shoulder = new THREE.Group();
+  /** The item's grip, at the hand. */
+  private grip = new THREE.Group();
   private itemMesh: THREE.Mesh;
   private arm: THREE.Mesh;
   private currentId: string | null = null;
@@ -36,28 +52,27 @@ export class Viewmodel {
   private draw = 0;
   private bob = 0;
   private equipT = 1;
-  private tool = false;
 
   /**
-   * @param material   dedicated object-space world material (depth test is disabled
-   *                   so the held item never clips into walls)
+   * @param material   dedicated object-space world material
    * @param visibility the material's sky-visibility override, driven per frame
    */
   constructor(camera: THREE.Camera, material: THREE.Material, private visibility: { value: number }) {
-    material.depthTest = false;
-    // Drawn in the transparent pass (after water) so nothing washes over it.
-    material.transparent = true;
-    material.depthWrite = true; // still write depth so the outline pass sees it
+    material.depthTest = true;
+    material.depthWrite = true;
+    material.transparent = false;
     this.itemMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
     this.arm = new THREE.Mesh(armGeometry(), material);
     for (const m of [this.itemMesh, this.arm]) {
-      m.renderOrder = 1000;
       m.frustumCulled = false;
+      m.layers.set(VIEWMODEL_LAYER);
     }
-    this.root.add(this.pivot);
-    this.pivot.add(this.itemMesh);
-    this.root.add(this.arm);
-    this.root.position.set(0.34, -0.3, -0.52);
+    this.root.add(this.shoulder);
+    this.shoulder.add(this.arm);
+    this.shoulder.add(this.grip);
+    this.grip.add(this.itemMesh);
+    this.grip.position.set(0, 0.01, -ARM_LEN);
+    this.shoulder.position.set(0.46, -0.52, -0.12);
     camera.add(this.root);
   }
 
@@ -74,20 +89,23 @@ export class Viewmodel {
     this.pose = poseFor(def);
     this.itemMesh.geometry = itemModel(def);
     this.itemMesh.visible = true;
-    // Normalise the size of held blocks/furniture.
     const bs = this.itemMesh.geometry.boundingSphere!;
-    // Held blocks/furniture are normalised; long tools/weapons are shrunk so
-    // they read like a hand-held item rather than filling the screen.
-    const scale = this.pose === 'hold' ? Math.min(1.1, 0.16 / bs.radius) : Math.min(0.5, 0.25 / bs.radius);
+    // Held blocks and small items are normalised to fit the hand; tools and
+    // weapons keep their proportions at a hand-held size.
+    const scale = this.pose === 'hold' ? Math.min(1.1, 0.13 / bs.radius) : Math.min(0.54, 0.26 / bs.radius);
     this.itemMesh.scale.setScalar(scale);
     this.itemMesh.position.set(0, 0, 0);
     this.itemMesh.rotation.set(0, 0, 0);
-    // Picks and axes are modelled with the head across x; turn them so the
-    // head points away from the player and the swing strikes forward.
-    this.tool = def.kind === 'tool';
-    if (this.tool) this.itemMesh.rotation.set(0, Math.PI / 2, 0);
-    if (this.pose === 'hold') this.itemMesh.position.set(-bs.center.x * scale, -bs.center.y * scale + 0.02, -bs.center.z * scale);
-    if (this.pose === 'bow') this.itemMesh.rotation.set(0, Math.PI / 2, 0);
+    switch (this.pose) {
+      // Picks, axes and hammers are modelled with the head across x: turn them
+      // so the working edge points away from the player, seen half in profile.
+      case 'swing': this.itemMesh.rotation.set(0, 0.45, 0); this.itemMesh.position.set(0, -0.04, 0); break;
+      // Blades show a little of their flat, edge leading.
+      case 'slash': this.itemMesh.rotation.set(0, 0.35, 0); this.itemMesh.position.set(0, -0.04, 0); break;
+      case 'bow': this.itemMesh.rotation.set(0, Math.PI / 2, 0); this.itemMesh.position.set(0, -0.3 * scale, 0); break;
+      case 'staff': this.itemMesh.position.set(0, -0.12, 0); break;
+      default: this.itemMesh.position.set(-bs.center.x * scale, -bs.center.y * scale + 0.06, -bs.center.z * scale - 0.02);
+    }
   }
 
   /** Trigger a use animation lasting `duration` seconds. */
@@ -104,41 +122,42 @@ export class Viewmodel {
     this.swing = Math.max(0, this.swing - dt / this.swingDur);
     this.equipT = Math.min(1, this.equipT + dt * 5);
     this.bob += dt * moving * 9;
-    const s = this.swing > 0 ? Math.sin((1 - this.swing) * Math.PI) : 0;
-    const k = 1 - this.swing; // 0 -> 1 through the swing
-    const bobX = Math.sin(this.bob) * 0.012 * moving, bobY = Math.abs(Math.cos(this.bob)) * 0.016 * moving;
-    const drop = (1 - this.equipT) * 0.35;
+    const k = this.swing > 0 ? 1 - this.swing : 0; // 0 -> 1 through the swing
+    // A quick wind-up (first fifth), a hard strike, then an eased recovery.
+    const strike = this.swing > 0 ? (k < 0.2 ? -ease(k / 0.2) * 0.25 : k < 0.5 ? -0.25 + ease((k - 0.2) / 0.3) * 1.25 : 1 - ease((k - 0.5) / 0.5)) : 0;
+    const bobX = Math.sin(this.bob) * 0.014 * moving, bobY = Math.abs(Math.cos(this.bob)) * 0.02 * moving;
+    const drop = (1 - ease(this.equipT)) * 0.4;
 
-    const p = this.pivot;
+    const sh = this.shoulder, g = this.grip;
+    sh.position.set(0.46 + bobX, -0.52 + bobY - drop, -0.12);
     switch (this.pose) {
-      case 'swing': {
-        // Wind up (raise and pull back), then strike down and forward.
-        const a = this.swing > 0 ? (k < 0.3 ? -k * 1.6 : -0.48 + (k - 0.3) * 2.2) : 0;
-        if (this.tool) {
-          // Picks and axes: held upright in profile, head forward.
-          p.position.set(bobX + 0.03, bobY - drop - 0.04 - s * 0.05, -s * 0.06);
-          p.rotation.set(-0.12 - a * 1.5, 1.0, 0.18);
-        } else {
-          // Blades: flat of the blade toward the player, a diagonal slash.
-          p.position.set(bobX + 0.02, bobY - drop - 0.04 - s * 0.04, -s * 0.05);
-          p.rotation.set(-0.05 - a * 1.1, 0.3 - s * 0.3, 0.2 + s * 0.7);
-        }
+      case 'swing':
+        // Arm raised forward, tool leaning away; the strike drops the whole
+        // arm forward and down across the body.
+        sh.rotation.set(0.36 - strike * 0.55, 0.2 + strike * 0.3, strike * 0.2);
+        g.rotation.set(-0.3 - strike * 0.85, 0, 0.5);
         break;
-      }
+      case 'slash':
+        // A diagonal cut from upper right to lower left.
+        sh.rotation.set(0.38 - strike * 0.5, 0.18 + strike * 0.6, -strike * 0.3);
+        g.rotation.set(-0.3 - strike * 0.6, 0, 0.5 + strike * 0.5);
+        break;
       case 'bow':
-        p.position.set(-0.12 + bobX, 0.02 + bobY - drop, -0.05 + this.draw * 0.06);
-        p.rotation.set(0, 0.1, -0.15);
+        // Held up in front, pulled toward the eye as it draws.
+        sh.rotation.set(0.5, 0.42, 0);
+        sh.position.z = -0.12 + this.draw * 0.1;
+        g.rotation.set(0, 0, -0.12);
         break;
       case 'staff':
-        p.position.set(bobX, bobY - drop - 0.05 + s * 0.04, -s * 0.12);
-        p.rotation.set(-0.35 - s * 0.5, 0.2, 0.25);
+        // Pointed forward; casting thrusts it out.
+        sh.rotation.set(0.38 + strike * 0.2, 0.22, 0);
+        sh.position.z = -0.12 - Math.max(0, strike) * 0.12;
+        g.rotation.set(-0.35, 0, 0.2);
         break;
       default:
-        p.position.set(bobX, bobY - drop - s * 0.1, -s * 0.15);
-        p.rotation.set(-0.3 + s * 0.5, 0.5 + Math.sin(this.bob * 0.5) * 0.05, 0.1);
+        // Held out in the palm; using it dips the arm forward.
+        sh.rotation.set(0.38 - Math.max(0, strike) * 0.4, 0.25, 0);
+        g.rotation.set(-0.2, 0.4 + Math.sin(this.bob * 0.5) * 0.04, 0);
     }
-    // The arm follows the grip.
-    this.arm.position.set(p.position.x + 0.02, p.position.y - 0.02, p.position.z + 0.02);
-    this.arm.rotation.set(0.25 + p.rotation.x * 0.3, 0.35, 0);
   }
 }

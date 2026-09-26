@@ -78,7 +78,9 @@ interface Projectile {
   bossCd: number;
 }
 
-const CAPS = { day: 4, night: 9, cave: 8, sky: 3 };
+// Nights are dangerous but not relentless: a few more hunters than by day,
+// arriving at a steady trickle rather than all at once.
+const CAPS = { day: 4, night: 6, cave: 7, sky: 3 };
 /** Above this height the player is in the high sky (floating islands). */
 export const SKY_Y = 112;
 /** Cinderbound alive at once during the Cinder Siege. */
@@ -396,7 +398,7 @@ export class Combat {
     // Spawning.
     this.spawnTimer -= dt * this.spawnBoost;
     if (this.spawnTimer <= 0 && this.spawning) {
-      this.spawnTimer = 0.9 + Math.random() * 0.8;
+      this.spawnTimer = (this.hooks.isNight() && !this.hooks.activeEvent() ? 2.2 : 0.9) + Math.random() * 0.8;
       this.trySpawn(px, py, pz);
     }
 
@@ -420,12 +422,13 @@ export class Combat {
     for (const c of [...this.creatures]) {
       // Keep creatures inside loaded terrain; freeze them otherwise.
       if (!this.hooks.isLoaded(c.x, c.z)) { c.idle += dt; if (c.idle > 5) this.remove(c); continue; }
+      c.swimming = c.def.ai !== 'flyer' && this.hooks.inWater(c.x, c.y + c.def.height * 0.5, c.z);
       think(c, ctx);
-      // Walkers and hoppers float up and are slowed in water.
-      if (c.def.ai !== 'flyer' && this.hooks.inWater(c.x, c.y + c.def.height * 0.5, c.z)) {
+      // Walkers and hoppers float up and swim (steering in think) through water.
+      if (c.swimming) {
         c.vy += 30 * dt;
         c.vy *= Math.pow(0.15, dt);
-        c.vx *= Math.pow(0.35, dt); c.vz *= Math.pow(0.35, dt);
+        c.vx *= Math.pow(0.6, dt); c.vz *= Math.pow(0.6, dt);
       }
       // Lava burns everything but the creatures born to it.
       if (!c.def.fireproof && this.hooks.inLava?.(c.x, c.y + 0.3, c.z)) {

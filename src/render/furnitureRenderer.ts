@@ -3,7 +3,7 @@
 // pool and shows the placement ghost.
 
 import * as THREE from 'three';
-import { FURNITURE, type FurnitureSet, type Placed } from '../building/furniture';
+import { FURNITURE, type FurnitureSet, type Placed, lightPoint } from '../building/furniture';
 import type { FurnitureId } from '../items/items';
 import type { LightPool } from './atmosphere';
 import { doorFrame, furnitureModel, lifeCrystalBase, lifeCrystalHeart } from './models';
@@ -66,15 +66,9 @@ export class FurnitureRenderer {
       this.group.add(group);
       const def = FURNITURE[f.type];
       let light: number | undefined;
-      if (def.light) {
-        const [ox, oy, oz] = def.light.offset;
-        const a = f.rot * Math.PI / 2;
-        light = this.lights.add({
-          x: f.x + ox * Math.cos(a) + oz * Math.sin(a) + (f.wall ? f.wall[0] * 0.25 : 0),
-          y: f.y + oy,
-          z: f.z - ox * Math.sin(a) + oz * Math.cos(a) + (f.wall ? f.wall[2] * 0.25 : 0),
-          color: new THREE.Color(def.light.color), range: def.light.range, flicker: def.light.flicker,
-        });
+      const lp = lightPoint(f);
+      if (def.light && lp) {
+        light = this.lights.add({ x: lp[0], y: lp[1], z: lp[2], color: new THREE.Color(def.light.color), range: def.light.range, flicker: def.light.flicker });
       }
       this.entries.set(f.uid, { f, group, leaf, light, angle: f.open ? 1 : 0, spin });
     }
@@ -105,7 +99,7 @@ export class FurnitureRenderer {
       if (e.angle === target) continue;
       e.angle += Math.sign(target - e.angle) * Math.min(Math.abs(target - e.angle), dt * 5);
       const t = e.angle * e.angle * (3 - 2 * e.angle);
-      e.leaf.rotation.y = -t * Math.PI / 2;
+      e.leaf.rotation.y = -t * (e.f.swing ?? 1) * Math.PI / 2;
     }
   }
 

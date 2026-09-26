@@ -34,10 +34,18 @@ function sampleKeys(keys: readonly (readonly [number, THREE.Color])[], t: number
 
 interface LightSource { x: number; y: number; z: number; color: THREE.Color; range: number; flicker?: number }
 
-/** Chooses which point lights feed the shader each frame (nearest first). */
+/**
+ * Chooses which point lights feed the shader each frame (nearest first).
+ * There are only a few slots, so lights that lose theirs fade out and new
+ * ones fade in, and a light already shining is favoured to keep its slot:
+ * torches never snap off and on (strobe) as the camera moves or a spark
+ * flashes nearby.
+ */
 export class LightPool {
   private statics = new Map<number, LightSource>();
   private transient: (LightSource & { life: number; max: number })[] = [];
+  /** Current brightness (0..1) of each static light that holds or is leaving a slot. */
+  private weight = new Map<number, number>();
   private nextId = 1;
 
   add(src: LightSource): number {
@@ -46,22 +54,48 @@ export class LightPool {
     return id;
   }
 
-  remove(id: number) { this.statics.delete(id); }
+  remove(id: number) { this.statics.delete(id); this.weight.delete(id); }
 
   flash(x: number, y: number, z: number, color: number, range: number, life: number) {
     this.transient.push({ x, y, z, color: new THREE.Color(color), range, life, max: life });
   }
 
   update(dt: number, cam: THREE.Vector3, u: WorldUniforms, time: number) {
+    const slots = MAX_POINT_LIGHTS - 1;
     this.transient = this.transient.filter(l => (l.life -= dt) > 0);
-    const all: { l: LightSource; k: number; d: number }[] = [];
-    for (const l of this.statics.values()) all.push({ l, k: 1, d: (l.x - cam.x) ** 2 + (l.y - cam.y) ** 2 + (l.z - cam.z) ** 2 });
-    for (const l of this.transient) all.push({ l, k: l.life / l.max, d: (l.x - cam.x) ** 2 + (l.y - cam.y) ** 2 + (l.z - cam.z) ** 2 - 400 });
-    all.sort((a, b) => a.d - b.d);
+    const dist = (l: LightSource) => (l.x - cam.x) ** 2 + (l.y - cam.y) ** 2 + (l.z - cam.z) ** 2;
+    // Flashes are brief: they take at most two slots, and only spare ones.
+    const flashes = this.transient.map(l => ({ l, k: l.life / l.max, d: dist(l) })).filter(e => e.d < 60 * 60).sort((a, b) => a.d - b.d).slice(0, 2);
+    const statics: { id: number; l: LightSource; d: number }[] = [];
+    for (const [id, l] of this.statics) {
+      const d = dist(l);
+      if (d > 90 * 90) continue;
+      // Hysteresis: a lit light ranks as if a little closer than it is.
+      statics.push({ id, l, d: (this.weight.get(id) ?? 0) > 0 ? d * 0.7 : d });
+    }
+    statics.sort((a, b) => a.d - b.d);
+    const want = new Set(statics.slice(0, slots).map(e => e.id));
+    // Lights keep their slot while fading out; a newcomer starts fading in
+    // only once a slot is free, so no light is ever cut off mid-fade.
+    let held = statics.filter(e => this.weight.has(e.id)).length;
+    const rate = dt * 4;
+    for (const e of statics) {
+      const w = this.weight.get(e.id) ?? 0;
+      if (w === 0 && (!want.has(e.id) || held >= slots)) continue;
+      if (w === 0) held++;
+      const nw = want.has(e.id) ? Math.min(1, w + rate) : Math.max(0, w - rate);
+      if (nw > 0) this.weight.set(e.id, nw); else this.weight.delete(e.id);
+    }
+    for (const id of this.weight.keys()) if (!statics.some(e => e.id === id)) this.weight.delete(id);
+    // Fill the slots with the lit statics, and flashes in any left over.
+    const out: { l: LightSource; k: number }[] = statics.filter(e => this.weight.has(e.id)).map(e => ({ l: e.l, k: this.weight.get(e.id)! }));
+    for (const e of flashes) if (out.length < slots) out.push(e);
     for (let i = 1; i < MAX_POINT_LIGHTS; i++) {
-      const e = all[i - 1];
-      if (!e || e.d > 90 * 90) { u.uLightPos.value[i].set(0, -1000, 0, 1); u.uLightColor.value[i].setRGB(0, 0, 0); continue; }
-      const f = e.l.flicker ? 1 + Math.sin(time * 13 + e.l.x) * 0.06 * e.l.flicker + Math.sin(time * 29 + e.l.z) * 0.04 * e.l.flicker : 1;
+      const e = out[i - 1];
+      if (!e) { u.uLightPos.value[i].set(0, -1000, 0, 1); u.uLightColor.value[i].setRGB(0, 0, 0); continue; }
+      // Flicker: a few slow, incommensurate waves (smooth at any frame rate).
+      const fl = e.l.flicker ?? 0;
+      const f = fl ? 1 + (Math.sin(time * 7.3 + e.l.x) * 0.05 + Math.sin(time * 11.1 + e.l.z * 1.7) * 0.035 + Math.sin(time * 17.9 + e.l.x + e.l.z) * 0.02) * fl : 1;
       u.uLightPos.value[i].set(e.l.x, e.l.y, e.l.z, e.l.range);
       u.uLightColor.value[i].copy(e.l.color).multiplyScalar(e.k * f);
     }
@@ -101,6 +135,7 @@ export class Atmosphere {
   constructor(scene: THREE.Scene, private renderer: THREE.WebGLRenderer, private u: WorldUniforms,
     center: THREE.Vector3, seed: number, seaLevel: number, shadowSize: number) {
     this.sun = new THREE.DirectionalLight(0xfff2dc, 2.8);
+    this.sun.layers.enable(1); // also lights the first-person held item (render/viewmodel.ts)
     this.sun.castShadow = shadowSize > 0;
     this.sun.shadow.mapSize.set(Math.max(512, shadowSize), Math.max(512, shadowSize));
     const s = this.sun.shadow.camera;

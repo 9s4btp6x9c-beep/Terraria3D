@@ -115,8 +115,14 @@ export class WaterRenderer {
   private meshes = new Map<number, THREE.Mesh>();
   private timer = 0;
 
-  /** `buried(x, y, z)`: is this point under the terrain surface (cave water)? */
-  constructor(private sim: WaterSim, private material: THREE.Material, private buried: (x: number, y: number, z: number) => boolean) {
+  /**
+   * `buried(x, y, z)`: is this point under the terrain surface (cave water)?
+   * `shore(i, j, k)`: is this cell filled by terrain (not a building)? The
+   * surface is carried one cell into such shore cells so the ground, not the
+   * 1 m liquid grid, draws the waterline.
+   */
+  constructor(private sim: WaterSim, private material: THREE.Material, private buried: (x: number, y: number, z: number) => boolean,
+    private shore: ((i: number, j: number, k: number) => boolean) | null = null) {
     this.group.renderOrder = 6;
   }
 
@@ -206,6 +212,35 @@ export class WaterRenderer {
       side(i, k + 1, [i + 1, k + 1], [i, k + 1], h11, h01, [0, 0, 1]);
       // Underside of hanging / falling water.
       if (!sim.solid(i, j - 1, k) && !wet(i, j - 1, k)) quad([i, j, k], [i + 1, j, k], [i + 1, j, k + 1], [i, j, k + 1], [0, -1, 0], f);
+    }
+    // Shoreline: carry the top surface one cell into the surrounding ground
+    // (each shore cell once: drawn by the region holding its first resting
+    // water neighbour, so it is never doubled or dropped at region borders). Where the ground
+    // rises above the water it hides the extra surface; where it dips below
+    // the waterline inside a "solid" cell, the water now covers it instead
+    // of stopping in a square step.
+    if (this.shore) {
+      const seen = new Set<number>();
+      for (const key of keys) {
+        const [i, j, k] = sim.unkey(key);
+        if (sim.level(i, j, k) < MIN_LEVEL || wet(i, j + 1, k) || (!sim.solid(i, j - 1, k) && sim.level(i, j - 1, k) < 0.99)) continue;
+        for (let dc = -1; dc <= 1; dc++) for (let da = -1; da <= 1; da++) {
+          const a = i + da, c = k + dc;
+          if ((!da && !dc) || wet(a, j, c)) continue;
+          const sk = sim.key(a, j, c);
+          if (seen.has(sk)) continue;
+          seen.add(sk);
+          if (!this.shore(a, j, c)) continue;
+          // Height: the mean of the resting water around it.
+          let s = 0, n = 0, owner = -1;
+          for (let z = c - 1; z <= c + 1; z++) for (let x = a - 1; x <= a + 1; x++)
+            if (wet(x, j, z) && !wet(x, j + 1, z)) { s += sim.level(x, j, z); n++; if (owner < 0) owner = sim.regionKey(x, j, z); }
+          if (!n || owner !== rk) continue;
+          const h = s / n;
+          const at = (x: number, z: number) => { const v = corner(x, j, z); return j + Math.max(0.02, v > 0 ? v : h); };
+          quad([a, at(a, c), c], [a, at(a, c + 1), c + 1], [a + 1, at(a + 1, c + 1), c + 1], [a + 1, at(a + 1, c), c], [0, 1, 0], 0);
+        }
+      }
     }
     if (!pos.length) return;
     const g = new THREE.BufferGeometry();

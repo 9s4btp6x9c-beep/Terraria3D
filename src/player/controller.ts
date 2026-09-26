@@ -49,7 +49,10 @@ export class PlayerController {
   /** Seconds since last grounded (coyote time). */
   private airTime = 0;
   private jumpHeld = false;
+  /** The head pressed into a low ceiling while standing (crouch next frame). */
+  private headBumped = false;
   private n: [number, number, number] = [0, 0, 0];
+  private n2: [number, number, number] = [0, 0, 0];
 
   walkSpeed = 5.2;
   sprintSpeed = 8.2;
@@ -59,7 +62,9 @@ export class PlayerController {
 
   constructor(private world: WorldCollision) {}
 
-  get eyeHeight() { return this.crouching ? 1.1 : 1.62; }
+  /** Eye height above the feet, eased so crouching and standing never pop the view. */
+  private eye = 1.62;
+  get eyeHeight() { return this.eye; }
 
   get position() { return { x: this.x, y: this.y, z: this.z }; }
 
@@ -71,13 +76,20 @@ export class PlayerController {
 
   teleport(x: number, y: number, z: number) {
     this.x = x; this.y = y; this.z = z;
+    this.eye = this.crouching ? 1.1 : 1.62;
     this.vx = this.vy = this.vz = 0;
   }
 
   update(dt: number, input: MoveInput, waterLevel: number | null) {
     dt = Math.min(dt, 0.05);
     this.world.prepare(this.x, this.y + 1, this.z);
-    this.crouching = input.crouch || (this.crouching && !this.canStand());
+    // Duck under low ceilings instead of fighting them (the feet push up, the
+    // head pushes down, and the view would shudder between the two).
+    this.crouching = input.crouch || this.headBumped || (this.crouching && !this.canStand());
+    this.headBumped = false;
+    const eyeTarget = this.crouching ? 1.1 : 1.62;
+    this.eye += (eyeTarget - this.eye) * Math.min(1, dt * 14);
+    if (Math.abs(eyeTarget - this.eye) < 0.002) this.eye = eyeTarget;
     this.inWater = waterLevel !== null && this.y + 0.9 < waterLevel;
 
     // Desired horizontal velocity from input, relative to view yaw.
@@ -176,11 +188,26 @@ export class PlayerController {
         const cy = this.y + sph[i];
         const d = this.world.distance(this.x, cy, this.z, n);
         if (d >= PLAYER_RADIUS) continue;
-        const push = PLAYER_RADIUS - d;
+        // (Capped: deep inside rock the distance is only a bound.)
+        const push = Math.min(PLAYER_RADIUS - d, 1);
+        if (i > 0 && this.grounded && n[1] < 0) {
+          // Overhead contact on a grounded body: slide sideways off it, never
+          // down into the floor (the feet would push back up and the view
+          // would shudder); if it presses in from above, duck under it.
+          if (n[1] < -0.5 && push > 0.06) this.headBumped = true;
+          const hl = Math.hypot(n[0], n[2]);
+          if (hl < 0.2) continue;
+          const side = Math.min(push / hl, 0.3);
+          this.x += n[0] / hl * side; this.z += n[2] / hl * side;
+          moved = true;
+          continue;
+        }
         moved = true;
         if (i === 0 && n[1] > WALKABLE) {
-          // Standing on walkable ground: lift straight up, no sideways slide.
-          this.y += Math.min(push / n[1], 0.6);
+          // Standing on walkable ground: lift straight up, no sideways slide,
+          // by exactly as much as clears the ground (an estimate overshoots
+          // in creases and the body bobs).
+          this.y += this.clearLift(cy, Math.min(push / n[1] * 1.5 + 0.02, 0.6));
           if (this.vy < 0) this.vy = 0;
           this.grounded = true;
         } else {
@@ -194,8 +221,21 @@ export class PlayerController {
     }
   }
 
+  /** Smallest upward shift (up to `max`) that lifts the foot sphere at height `cy` clear of the ground. */
+  private clearLift(cy: number, max: number): number {
+    const n = this.n2;
+    if (this.world.distance(this.x, cy + max, this.z, n) < PLAYER_RADIUS - 1e-3) return max;
+    let lo = 0, hi = max;
+    for (let k = 0; k < 7; k++) {
+      const mid = (lo + hi) * 0.5;
+      if (this.world.distance(this.x, cy + mid, this.z, n) >= PLAYER_RADIUS - 1e-3) hi = mid; else lo = mid;
+    }
+    return hi;
+  }
+
+  /** Room to stand up (with a little clearance, so ducking under a ceiling never flickers). */
   private canStand(): boolean {
-    for (const off of STAND_SPHERES) if (this.world.distance(this.x, this.y + off, this.z, this.n) < PLAYER_RADIUS - 0.05) return false;
+    for (const off of STAND_SPHERES) if (this.world.distance(this.x, this.y + off, this.z, this.n) < PLAYER_RADIUS - 0.05 + (off > 1.2 ? 0.1 : 0)) return false;
     return true;
   }
 

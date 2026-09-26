@@ -145,12 +145,33 @@ export class PostFX {
     this.mat.uniforms.uTexel.value.set(1 / size.x, 1 / size.y);
   }
 
-  render(scene: THREE.Scene) {
+  render(scene: THREE.Scene, overlayLayer?: number) {
     this.mat.uniforms.uNear.value = this.camera.near;
     this.mat.uniforms.uFar.value = this.camera.far;
     this.renderer.setRenderTarget(this.target);
     this.renderer.render(scene, this.camera);
     this.renderer.setRenderTarget(null);
     this.renderer.render(this.scene, this.cam);
+    if (overlayLayer !== undefined) this.renderOverlay(scene, overlayLayer);
+  }
+
+  /**
+   * Draw one layer of the scene (the first-person held item) over the
+   * finished frame with a fresh depth buffer, so it can never sink into the
+   * world and sorts its own faces properly. Shadow maps are reused as is.
+   */
+  private renderOverlay(scene: THREE.Scene, layer: number) {
+    const r = this.renderer, cam = this.camera;
+    const autoClear = r.autoClear, shadows = r.shadowMap.autoUpdate, bg = scene.background;
+    r.autoClear = false;
+    r.shadowMap.autoUpdate = false;
+    scene.background = null;
+    r.clearDepth();
+    cam.layers.set(layer);
+    r.render(scene, cam);
+    cam.layers.set(0);
+    r.autoClear = autoClear;
+    r.shadowMap.autoUpdate = shadows;
+    scene.background = bg;
   }
 }

@@ -499,7 +499,8 @@ export class WorldGenerator {
             const out = Math.sin(phi) * R, up = (1 - Math.cos(phi)) * R * 0.95;
             pts.push([bx + sx * side * out, by + up, bz + sz * side * out]);
           }
-          this.chain(pts, q => 0.85 - q * 0.45, Mat.Fossil);
+          // (Never thinner than the 1 m sampling can resolve, or the rib breaks into floating pieces.)
+          this.chain(pts, q => 1.05 - q * 0.15, Mat.Fossil);
         }
       }
       // Skull and a pair of sweeping tusks at the head end.
@@ -511,7 +512,7 @@ export class WorldGenerator {
           const q = k / 5;
           pts.push([hx + fx * (2 + q * 11) + sx * side * (2.2 + Math.sin(q * 2.2) * 4), hy - 1 + Math.sin(q * 2.6) * 6, hz + fz * (2 + q * 11) + sz * side * (2.2 + Math.sin(q * 2.2) * 4)]);
         }
-        this.chain(pts, q => 1.1 - q * 0.8, Mat.Fossil);
+        this.chain(pts, q => 1.25 - q * 0.35, Mat.Fossil);
       }
       bones++;
     }
@@ -573,7 +574,7 @@ export class WorldGenerator {
     }
     if (best === -Infinity) return null;
     // Gnarled, weathered surfaces.
-    if (best > -2) best += this.detail.noise3(x / 2.2, y / 2.2, z / 2.2) * (mat === Mat.Amber ? 0.12 : 0.35);
+    if (best > -2) best += this.detail.noise3(x / 2.2, y / 2.2, z / 2.2) * (mat === Mat.Amber ? 0.12 : mat === Mat.Fossil ? 0.15 : 0.35);
     return { d: best, mat };
   }
 
@@ -658,7 +659,10 @@ export class WorldGenerator {
   }
 
   private caves(x: number, y: number, z: number, h: number): number {
-    if (y < 6) return DENSITY_CLAMP;
+    // A smooth floor under the deepest caverns (a hard cut here left a density
+    // cliff that made the player bounce on the Ember Depths floor).
+    if (y < 4) return DENSITY_CLAMP;
+    const floor = 6 - y;
     const depth = h - y;
     // Spaghetti tunnels: intersection of two noise iso-surfaces.
     const a = this.caveA.noise3(x / 55, y / 30, z / 55);
@@ -683,7 +687,7 @@ export class WorldGenerator {
         cave = Math.min(cave, (0.2 - c2 * mz * k) * 24);
       }
     }
-    return cave;
+    return Math.max(cave, floor);
   }
 
   private islandDensity(x: number, y: number, z: number, isl: Island): number {

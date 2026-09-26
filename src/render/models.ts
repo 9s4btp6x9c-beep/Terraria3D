@@ -96,16 +96,13 @@ function merge(parts: THREE.BufferGeometry[]) {
 // ------------------------------------------------------------------- tools
 
 function pickaxe(head: MetalLayer) {
-  const parts = [box(0.055, 0.78, 0.055, 'planks', { y: 0.32 }, 0xd8b890), box(0.07, 0.12, 0.07, 'cloth', { y: 0.02 }, 0x6a4a3a)];
-  // Curved pick: segments following an arc, tapering to points.
-  const segs = 6;
-  for (let i = 0; i < segs; i++) {
-    const t = (i + 0.5) / segs * 2 - 1; // -1..1
-    const x = t * 0.3, y = 0.7 - Math.abs(t) ** 1.8 * 0.13;
-    const thick = 0.085 * (1 - Math.abs(t) * 0.6);
-    parts.push(box(0.12, thick, thick, head, { x, y, rz: -t * 0.5 }));
+  // A plain haft and a chunky, gently curved head tapering to two points.
+  const parts = [box(0.06, 0.8, 0.06, 'planks', { y: 0.33 }, 0xd8b890), box(0.075, 0.13, 0.075, 'cloth', { y: 0.02 }, 0x6a4a3a)];
+  parts.push(box(0.12, 0.13, 0.11, head, { y: 0.71 }));
+  for (const s of [-1, 1]) {
+    parts.push(box(0.16, 0.1, 0.09, head, { x: s * 0.13, y: 0.7, rz: -s * 0.14 }));
+    parts.push(taper(0.08, 0.14, 0.07, 0.15, 0.4, head, { x: s * 0.265, y: 0.66, rz: -s * (Math.PI / 2 + 0.38) }));
   }
-  parts.push(box(0.1, 0.12, 0.1, head, { y: 0.7 }));
   return merge(parts);
 }
 
@@ -634,8 +631,9 @@ function furniture(id: FurnitureId): THREE.BufferGeometry {
       return merge([
         box(0.06, 0.46, 0.06, 'planks', { y: 0.23 }, 0x9a6a40),
         box(0.1, 0.1, 0.1, 'cloth', { y: 0.46 }, 0x4a3a30),
-        octa(0.075, 'flame', { y: 0.57, sy: 1.7 }),
-        octa(0.04, 'flame', { y: 0.6, sy: 1.6 }, 0xfff0c0),
+        // A small glowing core; the flame itself is licks of fire particles.
+        octa(0.055, 'flame', { y: 0.55, sy: 1.5 }),
+        octa(0.03, 'flame', { y: 0.57, sy: 1.5 }, 0xfff0c0),
       ]);
     case 'chest':
       return merge([

@@ -42,6 +42,19 @@ export const FURNITURE: Record<FurnitureId, FurnitureDef> = {
 
 export const CHEST_SLOTS = 20;
 
+/** Where a placed piece's light (and flame) sits, or null if it has none. */
+export function lightPoint(f: Placed): [number, number, number] | null {
+  const def = FURNITURE[f.type];
+  if (!def.light) return null;
+  const [ox, oy, oz] = def.light.offset;
+  const a = f.rot * Math.PI / 2;
+  return [
+    f.x + ox * Math.cos(a) + oz * Math.sin(a) + (f.wall ? f.wall[0] * 0.25 : 0),
+    f.y + oy,
+    f.z - ox * Math.sin(a) + oz * Math.cos(a) + (f.wall ? f.wall[2] * 0.25 : 0),
+  ];
+}
+
 export interface Placed {
   uid: number;
   type: FurnitureId;
@@ -52,6 +65,8 @@ export interface Placed {
   /** Wall-mounted (torches): outward normal of the surface. */
   wall?: [number, number, number];
   open?: boolean;
+  /** Which way an open door swings (local ±z; away from whoever opened it). */
+  swing?: number;
   chest?: (Stack | null)[];
   hp: number;
 }
@@ -66,7 +81,7 @@ function localBoxes(f: Placed): Box[] {
   if (f.type === 'door') {
     // 2 m wall slot: side panels + lintel + a 1.2 m hinged leaf.
     const leaf: Box = f.open
-      ? { c: [-0.55, 1.15, 0.6], h: [0.05, 1.15, 0.6] }
+      ? { c: [-0.55, 1.15, 0.6 * (f.swing ?? 1)], h: [0.05, 1.15, 0.6] }
       : { c: [0, 1.15, 0], h: [0.6, 1.15, 0.05] };
     return [
       { c: [-0.8, 1.25, 0], h: [0.2, 1.25, 0.1] },

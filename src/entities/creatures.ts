@@ -254,6 +254,8 @@ export class Creature {
   cooldown = 0;
   hitFlash = 0;
   stuck = 0;
+  /** In water this frame (set by the combat system before thinking). */
+  swimming = false;
   wander = Math.random() * Math.PI * 2;
   /** Seconds since the creature last saw/was near the player (despawn). */
   idle = 0;
@@ -291,7 +293,7 @@ export class Creature {
       for (let i = 0; i < offs.length; i++) {
         const d = world.distance(this.x, this.y + offs[i], this.z, n);
         if (d >= r) continue;
-        const push = r - d;
+        const push = Math.min(r - d, 1);
         moved = true;
         if (i === 0 && n[1] > 0.55 && this.def.ai !== 'flyer') {
           this.y += Math.min(push / n[1], 0.5);
@@ -366,8 +368,8 @@ export function think(c: Creature, ctx: AIContext) {
 
   switch (d.ai) {
     case 'hopper': {
-      if (c.grounded) {
-        c.vx *= Math.pow(0.001, dt); c.vz *= Math.pow(0.001, dt);
+      if (c.grounded || c.swimming) {
+        if (c.grounded) { c.vx *= Math.pow(0.001, dt); c.vz *= Math.pow(0.001, dt); }
         if (c.cooldown <= 0) {
           const dir = aggro ? Math.atan2(dx, dz) : (c.wander += (Math.random() - 0.5) * 1.5);
           const big = aggro && Math.random() < 0.35;
@@ -375,7 +377,8 @@ export function think(c: Creature, ctx: AIContext) {
           c.vx = Math.sin(dir) * sp; c.vz = Math.cos(dir) * sp;
           c.vy = big ? 9.5 : 6.5;
           c.yaw = dir;
-          c.cooldown = aggro ? 0.9 + Math.random() * 0.8 : 1.8 + Math.random() * 2;
+          // Paddling hops come quicker, so they make it back to shore.
+          c.cooldown = c.swimming ? 0.6 : aggro ? 0.9 + Math.random() * 0.8 : 1.8 + Math.random() * 2;
         }
       }
       c.physics(dt, ctx.world);
@@ -409,6 +412,10 @@ export function think(c: Creature, ctx: AIContext) {
       if (c.grounded && !(d.ai === 'pouncer' && c.attack > 0.2)) {
         c.vx += (targetVx - c.vx) * Math.min(1, dt * 8);
         c.vz += (targetVz - c.vz) * Math.min(1, dt * 8);
+      } else if (c.swimming) {
+        // Swim toward the goal, a little slower than walking.
+        c.vx += (targetVx * 0.7 - c.vx) * Math.min(1, dt * 3);
+        c.vz += (targetVz * 0.7 - c.vz) * Math.min(1, dt * 3);
       }
       c.yaw = Math.atan2(tx, tz);
       const ox = c.x, oz = c.z;
@@ -416,7 +423,8 @@ export function think(c: Creature, ctx: AIContext) {
       // Blocked while trying to move: hop over it.
       const moved = Math.hypot(c.x - ox, c.z - oz);
       c.stuck = moved < Math.abs(want) * dt * 0.3 && Math.abs(want) > 0.1 ? c.stuck + dt : 0;
-      if (c.grounded && c.stuck > 0.25) { c.vy = d.ai === 'crawler' ? 6 : 7.5; c.stuck = 0; }
+      // (Swimmers pressed against a bank scramble up it the same way.)
+      if ((c.grounded || c.swimming) && c.stuck > 0.25) { c.vy = d.ai === 'crawler' ? 6 : 7.5; c.stuck = 0; }
       break;
     }
     case 'flyer': {

@@ -184,13 +184,20 @@ export class Interaction {
     if (!aim || aim.kind !== 'furniture' || aim.distance > 5) return false;
     const f = aim.hit.f;
     switch (f.type) {
-      case 'door':
+      case 'door': {
         f.open = !f.open;
+        if (f.open) {
+          // Like a real door: it swings away from whoever pushes it open.
+          const a = f.rot * Math.PI / 2;
+          const side = (this.player.x - f.x) * Math.sin(a) + (this.player.z - f.z) * Math.cos(a);
+          f.swing = side > 0 ? -1 : 1;
+        }
         // Don't let a closing door trap the player inside its leaf.
         if (!f.open && FurnitureSet.distance([f], this.player.x, this.player.y + 0.9, this.player.z) < 0.45) { f.open = true; return true; }
         this.furniture.changed();
         this.hooks.interacted?.('door');
         return true;
+      }
       case 'chest': this.hooks.openChest(f); return true;
       case 'bed': this.hooks.setSpawn(f); return true;
       default: return false;

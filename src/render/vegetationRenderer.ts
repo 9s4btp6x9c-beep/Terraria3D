@@ -156,17 +156,25 @@ function buildTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
       }
     }
   } else {
-    parts.push(trunk(0.05, 0.02, H));
-    for (let i = 0; i < 4; i++) {
-      const t = i / 4;
-      const r = 0.34 * (1 - t) + 0.06;
-      const g = new THREE.ConeGeometry(r, 0.3, 7, 1).toNonIndexed();
-      jitter(g, rand, 0.03);
-      g.translate(0, H * (0.3 + t * 0.2) + 0.15, 0);
-      g.rotateY(rand());
+    // Spruce: a straight trunk hidden inside tiers of drooping boughs that
+    // narrow all the way up to a pointed tip.
+    parts.push(trunk(0.05, 0.015, H * 0.92));
+    const tiers = 6;
+    for (let i = 0; i < tiers; i++) {
+      const t = i / (tiers - 1);
+      const r = 0.3 * (1 - t) + 0.075 + (rand() - 0.5) * 0.02;
+      const h = 0.27 - t * 0.09;
+      const g = new THREE.ConeGeometry(r, h, 8, 1).toNonIndexed();
+      jitter(g, rand, 0.02);
+      g.rotateY(rand() * Math.PI);
+      g.translate(0, H * (0.16 + t * 0.66) + h / 2, 0);
       g.computeVertexNormals();
       parts.push(tagLayer(g, layerOf('leaves')));
     }
+    const tip = new THREE.ConeGeometry(0.05, 0.16, 6, 1).toNonIndexed();
+    tip.translate(0, H * 0.92, 0);
+    tip.computeVertexNormals();
+    parts.push(tagLayer(tip, layerOf('leaves')));
   }
   const merged = mergeNonIndexed(parts);
   merged.computeBoundingSphere();
@@ -225,9 +233,9 @@ function buildFarTree(kind: TreeKind, variant: number): THREE.BufferGeometry {
   } else if (kind === 'mushroom') {
     return buildMushroom(rand, 5);
   } else {
-    parts.push(trunk(0.05, 0.02, 1, 0, 0, 0, 0, 0, 4));
-    const g = new THREE.ConeGeometry(0.36, 0.75, 6, 1);
-    g.translate(0, 0.62, 0);
+    parts.push(trunk(0.05, 0.02, 0.5, 0, 0, 0, 0, 0, 4));
+    const g = new THREE.ConeGeometry(0.36, 0.84, 6, 1);
+    g.translate(0, 0.58, 0);
     g.computeVertexNormals();
     parts.push(tagLayer(g, layerOf('leaves')));
   }
@@ -252,16 +260,39 @@ function buildTuft(flower: boolean): THREE.BufferGeometry {
     col.push(dark.r, dark.g, dark.b, dark.r, dark.g, dark.b, light.r, light.g, light.b);
   }
   if (flower) {
-    const stem = new THREE.Color(0x3c8a3c), head = new THREE.Color(0xffc93a);
-    pos.push(-0.02, 0, 0, 0.02, 0, 0, 0, 0.7, 0);
-    col.push(stem.r, stem.g, stem.b, stem.r, stem.g, stem.b, stem.r, stem.g, stem.b);
-    const hs = 0.11;
-    const petals = [[hs, 0], [0, hs], [-hs, 0], [0, -hs]];
+    // A small buttercup: a leaning stem with two leaves, six rounded petals
+    // cupped slightly upward around a raised amber centre.
+    const stem = new THREE.Color(0x3c8a3c), leaf = new THREE.Color(0x4e9e46);
+    const petalIn = new THREE.Color(0xffd23a), petalOut = new THREE.Color(0xfff08a), eye = new THREE.Color(0xc8761a);
+    const tri = (a: number[], b: number[], c: number[], ca: THREE.Color, cb = ca, cc = ca) => {
+      pos.push(...a, ...b, ...c);
+      col.push(ca.r, ca.g, ca.b, cb.r, cb.g, cb.b, cc.r, cc.g, cc.b);
+    };
+    const top = [0.05, 0.62, 0];
+    // Stem as two crossed slivers so it reads from any side.
+    tri([-0.018, 0, 0], [0.018, 0, 0], top, stem);
+    tri([0, 0, -0.018], [0, 0, 0.018], top, stem);
+    for (const [a, y] of [[0.6, 0.2], [3.4, 0.3]] as const) {
+      const lx = Math.cos(a), lz = Math.sin(a);
+      tri([0, y, 0], [lx * 0.14 - lz * 0.04, y + 0.1, lz * 0.14 + lx * 0.04], [lx * 0.2, y + 0.05, lz * 0.2], leaf, stem, stem);
+      tri([0, y, 0], [lx * 0.2, y + 0.05, lz * 0.2], [lx * 0.14 + lz * 0.04, y + 0.1, lz * 0.14 - lx * 0.04], leaf, stem, stem);
+    }
+    const [hx, hy, hz] = top;
+    const petals = 6;
+    for (let i = 0; i < petals; i++) {
+      const a = (i / petals) * Math.PI * 2;
+      const dx = Math.cos(a), dz = Math.sin(a), px = -dz * 0.045, pz = dx * 0.045;
+      const r0 = 0.025, r1 = 0.1, r2 = 0.14;
+      const base = [hx + dx * r0, hy, hz + dz * r0];
+      const l = [hx + dx * r1 + px, hy + 0.03, hz + dz * r1 + pz], r = [hx + dx * r1 - px, hy + 0.03, hz + dz * r1 - pz];
+      const tip = [hx + dx * r2, hy + 0.055, hz + dz * r2];
+      tri(base, l, r, petalIn, petalOut, petalOut);
+      tri(l, tip, r, petalOut);
+    }
+    // Raised centre: a low pyramid.
     for (let i = 0; i < 4; i++) {
-      const [ax, az] = petals[i], [bx, bz] = petals[(i + 1) % 4];
-      pos.push(0, 0.74, 0, ax, 0.68, az, bx, 0.68, bz);
-      pos.push(0, 0.74, 0, bx, 0.68, bz, ax, 0.68, az);
-      for (let k = 0; k < 6; k++) col.push(head.r, head.g, head.b);
+      const a0 = (i / 4) * Math.PI * 2 + 0.4, a1 = ((i + 1) / 4) * Math.PI * 2 + 0.4;
+      tri([hx + Math.cos(a0) * 0.04, hy + 0.01, hz + Math.sin(a0) * 0.04], [hx, hy + 0.05, hz], [hx + Math.cos(a1) * 0.04, hy + 0.01, hz + Math.sin(a1) * 0.04], eye);
     }
   }
   const g = new THREE.BufferGeometry();

@@ -37,9 +37,15 @@ function partGeometry(part: Part): THREE.BufferGeometry {
   return g.index ? g.toNonIndexed() : g;
 }
 
-/** Geometry for a piece in world space. */
-export function pieceGeometry(p: Omit<Piece, 'id' | 'hp'>): THREE.BufferGeometry {
-  const parts = PIECES[p.shape].parts(p).map(part => {
+/**
+ * Geometry for a piece in world space: all of it, or only its glass panes
+ * (`glass: true`), or everything but them (`glass: false`).
+ */
+export function pieceGeometry(p: Omit<Piece, 'id' | 'hp'>, glass?: boolean): THREE.BufferGeometry | null {
+  const all = PIECES[p.shape].parts(p);
+  const keep = glass === undefined ? all : all.filter(part => (part.layer === 'glass') === glass);
+  if (!keep.length) return null;
+  const parts = keep.map(part => {
     const g = partGeometry(part);
     if (g.attributes.uv) g.deleteAttribute('uv');
     g.clearGroups();
@@ -54,12 +60,12 @@ export function pieceGeometry(p: Omit<Piece, 'id' | 'hp'>): THREE.BufferGeometry
 
 export class StructureRenderer {
   readonly group = new THREE.Group();
-  /** One merged mesh per 32 m region; only edited regions are rebuilt. */
-  private meshes = new Map<number, THREE.Mesh>();
+  /** Merged meshes per 32 m region (solid, and see-through glass); only edited regions are rebuilt. */
+  private meshes = new Map<number, THREE.Mesh[]>();
   readonly ghost: THREE.Mesh;
   private ghostMat: THREE.MeshBasicMaterial;
 
-  constructor(private structures: Structures, private material: THREE.Material) {
+  constructor(private structures: Structures, private material: THREE.Material, private glassMaterial: THREE.Material = material) {
     this.ghostMat = new THREE.MeshBasicMaterial({ color: 0x66ff88, transparent: true, opacity: 0.35, depthWrite: false });
     this.ghost = new THREE.Mesh(new THREE.BufferGeometry(), this.ghostMat);
     this.ghost.visible = false;
@@ -69,17 +75,25 @@ export class StructureRenderer {
   update() {
     if (this.structures.dirtyRegions.size === 0) return;
     for (const key of this.structures.dirtyRegions) {
-      const old = this.meshes.get(key);
-      if (old) { this.group.remove(old); old.geometry.dispose(); this.meshes.delete(key); }
+      for (const old of this.meshes.get(key) ?? []) { this.group.remove(old); old.geometry.dispose(); }
+      this.meshes.delete(key);
       const pieces: Piece[] = this.structures.inRegion(key);
       if (pieces.length === 0) continue;
-      const geo = mergeNonIndexed(pieces.map(p => pieceGeometry(p)));
-      geo.computeBoundingSphere();
-      const mesh = new THREE.Mesh(geo, this.material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      this.meshes.set(key, mesh);
-      this.group.add(mesh);
+      const out: THREE.Mesh[] = [];
+      for (const glass of [false, true]) {
+        const geos = pieces.map(p => pieceGeometry(p, glass)).filter((g): g is THREE.BufferGeometry => !!g);
+        if (!geos.length) continue;
+        const geo = mergeNonIndexed(geos);
+        geo.computeBoundingSphere();
+        const mesh = new THREE.Mesh(geo, glass ? this.glassMaterial : this.material);
+        // Light passes through the glass.
+        mesh.castShadow = !glass;
+        mesh.receiveShadow = true;
+        if (glass) mesh.renderOrder = 5;
+        out.push(mesh);
+        this.group.add(mesh);
+      }
+      this.meshes.set(key, out);
     }
     this.structures.dirtyRegions.clear();
   }
@@ -91,7 +105,7 @@ export class StructureRenderer {
       ? new THREE.IcosahedronGeometry(radius, 1).translate(pos.x, pos.y, pos.z)
       : shape === 'level'
         ? new THREE.CylinderGeometry(radius, radius, 0.12, 20).translate(pos.x, pos.y + 0.06, pos.z)
-        : pieceGeometry({ shape, texture, ...pos });
+        : pieceGeometry({ shape, texture, ...pos })!;
     this.ghostMat.color.setHex(valid ? 0x66ff88 : 0xff5544);
     this.ghost.visible = true;
   }

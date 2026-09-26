@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { Audio } from './audio/sfx';
 import { mulberry32 } from './core/noise';
-import { FurnitureSet, type Placed } from './building/furniture';
+import { FurnitureSet, type Placed, lightPoint } from './building/furniture';
 import { Structures } from './building/structures';
 import { Combat } from './entities/combat';
 import type { NpcContext } from './entities/npcs';
@@ -30,7 +30,7 @@ import { StructureRenderer } from './render/structureRenderer';
 import { TerrainSystem } from './render/terrainSystem';
 import { buildTextureArray } from './render/textures';
 import { VegetationRenderer } from './render/vegetationRenderer';
-import { Viewmodel } from './render/viewmodel';
+import { VIEWMODEL_LAYER, Viewmodel } from './render/viewmodel';
 import { type WorldUniforms, createSkyTexture, createWorldMaterial, createWorldUniforms, updateSkyTexture } from './render/worldMaterial';
 import { Hud } from './ui/hud';
 import { BuildMenu } from './ui/buildMenu';
@@ -61,7 +61,7 @@ const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as
 export class Game {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(78, 1, 0.1, 1000);
+  readonly camera = new THREE.PerspectiveCamera(78, 1, 0.05, 1000);
   readonly input: Input;
   readonly quality: Quality;
   readonly audio = new Audio();
@@ -123,6 +123,10 @@ export class Game {
   buildMenu!: BuildMenu;
   private furnitureRenderer!: FurnitureRenderer;
   private particles!: Particles;
+  /** Rising flame licks over torches and fires (always bright). */
+  private flames!: Particles;
+  private fires: [number, number, number, number][] = [];
+  private fireScan = 0;
   private viewmodel!: Viewmodel;
   private post!: PostFX;
   private hud!: Hud;
@@ -145,6 +149,8 @@ export class Game {
   private wobble = new Map<number, number>();
   private dir = new THREE.Vector3();
   private shake = 0;
+  private collision!: WorldCollision;
+  private camN: [number, number, number] = [0, 0, 0];
   private potionCooldown = 0;
   private flapTimer = 0;
   private invertY = false;
@@ -271,18 +277,24 @@ export class Game {
     });
     if (save?.extra?.water) this.water.load(save.extra.water as never);
     else this.fillInitialWater();
-    this.waterRenderer = new WaterRenderer(this.water, createWaterMaterial(u), (x, y, z) => this.sky.visibility(x, y, z) < 0.3);
+    const shore = (i: number, j: number, k: number) => this.field.sample(i + 0.5, j + 0.5, k + 0.5) > 0;
+    this.waterRenderer = new WaterRenderer(this.water, createWaterMaterial(u), (x, y, z) => this.sky.visibility(x, y, z) < 0.3, shore);
     this.lava = new WaterSim({ sx: this.field.sx, sy: this.field.sy, sz: this.field.sz, seaLevel: -1, solid: liquidSolid, oceanFloor: () => null, spreadMin: 0.3 });
     this.lavaSources = this.findLavaSources();
     if (save?.extra?.lava) { this.lava.load(save.extra.lava as never); this.lava.wakeAll(); }
     else this.fillInitialLava();
-    this.lavaRenderer = new WaterRenderer(this.lava, createLavaMaterial(u), (x, y, z) => this.sky.visibility(x, y, z) < 0.3);
+    this.lavaRenderer = new WaterRenderer(this.lava, createLavaMaterial(u), (x, y, z) => this.sky.visibility(x, y, z) < 0.3, shore);
     this.scene.add(this.lavaRenderer.group);
     this.scene.add(this.waterRenderer.group);
 
     this.vegRenderer = new VegetationRenderer(this.veg, worldMat, plantMat, this.quality.grass, this.quality.trees);
     this.scene.add(this.vegRenderer.group);
-    this.structureRenderer = new StructureRenderer(this.structures, worldMat);
+    // Window panes: the world material, but see-through.
+    const glassMat = createWorldMaterial(u, { side: THREE.DoubleSide });
+    glassMat.transparent = true;
+    glassMat.opacity = 0.32;
+    glassMat.depthWrite = false;
+    this.structureRenderer = new StructureRenderer(this.structures, worldMat, glassMat);
     this.scene.add(this.structureRenderer.group);
 
     const center = new THREE.Vector3(this.field.sx / 2, 0, this.field.sz / 2);
@@ -293,12 +305,15 @@ export class Game {
     this.scene.add(this.furnitureRenderer.group);
 
     this.particles = new Particles((x, y, z) => this.field.sample(x, y, z) > 0);
+    this.flames = new Particles(() => false);
+    this.scene.add(this.flames.mesh);
     this.scene.add(this.particles.mesh);
     this.viewmodel = new Viewmodel(this.camera, viewMat, viewVis);
     this.post = new PostFX(this.renderer, this.camera, this.quality.msaa);
 
     // Player.
     const collision = new WorldCollision(this.field, this.structures, this.veg, this.furniture);
+    this.collision = collision;
     this.player = new PlayerController(collision);
     this.player.bounds = { x: this.field.sx, z: this.field.sz };
     if (save) {
@@ -396,7 +411,7 @@ export class Game {
     const u = this.uniforms;
     const projMat = createWorldMaterial(u, { vertexColors: true, objectSpace: { scale: 3, visibility: { value: 1 } } });
     this.combat = new Combat(this.field, collision, {
-      creatureMaterial: () => createWorldMaterial(u, { vertexColors: true, objectSpace: { scale: 3, visibility: null } }),
+      creatureMaterial: () => createWorldMaterial(u, { vertexColors: true, objectSpace: { scale: 3, visibility: null }, flatten: 1.8 }),
       projectileMaterial: projMat,
       particles: (x, y, z, nx, ny, nz, c, n, speed) => this.particles.burst(x, y, z, nx, ny, nz, c, n, { speed }),
       damageNumber: (x, y, z, t, c) => this.labels.add(x, y, z, t, c),
@@ -445,7 +460,8 @@ export class Game {
       surfaceTop: (x, z) => this.sky.raw[Math.floor(x) + Math.floor(z) * this.sky.w],
       seaLevel: this.field.cfg.seaLevel,
       isLoaded: (x, z) => this.terrain.isLoaded(x, z),
-      safeZone: (x, y, z) => this.furniture.near(x, y, z, 18).some(f => f.type === 'bed' || f.type === 'door'),
+      // Nothing spawns by a bed or door, or within the glow of a Hearth's fire.
+      safeZone: (x, y, z) => this.furniture.near(x, y, z, 24).some(f => f.type === 'hearth' || ((f.type === 'bed' || f.type === 'door') && Math.hypot(f.x - x, f.y - y, f.z - z) < 18)),
       mushroomAt: (x, y, z) => this.gen.mushroomAt(x, y, z),
       inWater: (x, y, z) => this.waterLevelAt(x, y, z) !== null,
       inLava: (x, y, z) => this.lava.surfaceAt(x, y, z) !== null,
@@ -1394,6 +1410,7 @@ export class Game {
     const sh = this.shake * this.shake * 0.25;
     const eyeY = this.vitals.dead ? 0.3 : this.player.eyeHeight;
     this.camera.position.set(this.player.x + (Math.random() - 0.5) * sh, this.player.y + eyeY + (Math.random() - 0.5) * sh, this.player.z + (Math.random() - 0.5) * sh);
+    this.guardCamera();
     this.camera.rotation.set(this.player.pitch, this.player.yaw, this.vitals.dead ? 0.6 : 0, 'YXZ');
     this.camera.updateMatrixWorld();
     const dir = this.dir.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
@@ -1491,6 +1508,7 @@ export class Game {
     const ambient = this.atmosphere.ambientAt(vis);
     this.viewmodel.update(dt, moving, Math.max(ambient, 0.25 + this.atmosphere.underground * 0.25));
     this.particles.update(dt, ambient);
+    this.updateFlames(dt);
 
     // HUD.
     this.hud.update(dt);
@@ -1543,9 +1561,46 @@ export class Game {
     this.hud.setPrompt(text);
   }
 
+  /** Flickering tongues of fire rising from nearby torches, hearths and furnaces. */
+  private updateFlames(dt: number) {
+    const p = this.player;
+    this.fireScan -= dt;
+    if (this.fireScan <= 0) {
+      this.fireScan = 0.25;
+      this.fires = [];
+      for (const f of this.furniture.near(p.x, p.y, p.z, 28)) {
+        const size = f.type === 'torch' ? 1 : f.type === 'hearth' ? 2.6 : f.type === 'furnace' ? 1.8 : 0;
+        const lp = size ? lightPoint(f) : null;
+        if (lp) this.fires.push([lp[0], lp[1] - (f.type === 'torch' ? 0.1 : 0), lp[2], size]);
+      }
+    }
+    for (const [x, y, z, size] of this.fires) {
+      if (Math.random() > dt * 14 * size) continue;
+      const c = Math.random();
+      this.flames.burst(x + (Math.random() - 0.5) * 0.06 * size, y, z + (Math.random() - 0.5) * 0.06 * size, 0, 1, 0,
+        c < 0.4 ? 0xffd25a : c < 0.8 ? 0xff8a2a : 0xff5418, 1, { speed: 0.55, size: 0.045 * Math.sqrt(size), gravity: -1.2, life: 0.42 });
+    }
+    this.flames.update(dt, 1);
+  }
+
+  /**
+   * Keep the eye out of solid ground: it sits above the body's top sphere, so
+   * a wall leaning in at head height could otherwise slip inside the near
+   * plane and show the caves behind it. Nudges the view only, not the body.
+   */
+  private guardCamera() {
+    const c = this.camera.position, n = this.camN, CLEAR = 0.24;
+    for (let k = 0; k < 2; k++) {
+      const d = this.collision.distance(c.x, c.y, c.z, n);
+      if (d >= CLEAR) break;
+      const m = Math.min(CLEAR - d, 0.45);
+      c.x += n[0] * m; c.y += n[1] * m; c.z += n[2] * m;
+    }
+  }
+
   render() {
     this.renderer.info.reset();
-    this.post.render(this.scene);
+    this.post.render(this.scene, VIEWMODEL_LAYER);
   }
 }
 

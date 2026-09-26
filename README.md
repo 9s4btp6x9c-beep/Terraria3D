@@ -78,8 +78,10 @@ Touch devices start on the low quality preset.
   - **Foundations** stay level on a hillside: their footing reaches down into
     the ground automatically.
   - **Support:** a piece must touch the ground or another piece.
-  - **Doors** drop straight into doorways. Aim the hammer at a piece and
-    press RMB to take it down for a full refund.
+  - **Doors** (a Wooden Door from the workbench) drop straight into
+    doorways, open and close with RMB, swing away from you, and keep
+    creatures out while shut. Window panes are see-through. Aim the hammer
+    at a piece and press RMB to take it down for a full refund.
   - **Resting:** stand under a roof near a lit Hearth to become **Rested**
     (faster health and mana regeneration). Beds, chairs, tables, chests and
     lamps nearby raise the room's comfort, and higher comfort makes the rest
@@ -89,7 +91,10 @@ Touch devices start on the low quality preset.
   **Red Elixirs** (health) and **Blue Elixirs** (mana) are brewed over a
   Hearth.
 - **No settlers, no housing checks:** your base is wherever your Hearth is.
-  Doors, torches, chairs, beds, chests and lamps make it comfortable.
+  Doors, torches, chairs, beds, chests and lamps make it comfortable, and
+  nothing spawns within the glow of a lit Hearth (or by a bed or door).
+- **Nights** bring more and fiercer creatures than the day, but at a steady
+  trickle rather than a flood, so there is still time to dig and build.
 - **The wandering merchant:** every two or three days, at dawn, Pell the
   Wandering Merchant arrives with a pack cart and camps near your spawn
   point (your bed). He always carries torches and Red Elixirs, plus a
@@ -156,9 +161,11 @@ Touch devices start on the low quality preset.
   Swifts and Cloud Blobs. Aerite makes the Skyforged armor set (extra jump,
   speed, no fall damage and longer wing flight) and the two-arrow Gale Bow.
 - **Water:** lakes sit in carved bowls with sandy shores, and pools lie in
-  the caves. Water falls and spreads, and levels out in whatever you dig.
+  the caves. Water falls and spreads, and levels out in whatever you dig;
+  its surface meets the shore along the ground's own contour.
   Tunnels dug from the coast below sea level flood. You can swim anywhere
   (watch the breath bubbles), and buckets scoop water up and pour it out.
+  Creatures swim too, and scramble up the bank to get out.
 - **Lava:** fills volcano craters, magma chambers and pools in the Ember
   Depths. It flows like water but slower and thicker, stopping in lumpy
   tongues, glows, and burns you (and most creatures) badly while slowing you

@@ -95,7 +95,10 @@ export class SkyMap {
           if (zz < 0 || zz >= d) continue;
           s += this.tmp[x + zz * w]; n++;
         }
-        this.blurred[x + z * w] = s / n;
+        // Blur only ever lowers a column's cover: it softens the edges of
+        // overhangs, but a tall neighbour must not bury open ground at the
+        // foot of a cliff or around a hole in the mountain (that went black).
+        this.blurred[x + z * w] = Math.min(this.raw[x + z * w], s / n);
       }
     this.version++;
   }

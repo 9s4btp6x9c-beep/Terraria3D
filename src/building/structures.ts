@@ -90,7 +90,7 @@ export const PIECES: Record<PieceShape, PieceDef> = {
   },
   doorway: {
     shape: 'doorway', name: 'Doorway', category: 'structure', slot: 'edge', cost: 3, hp: 4, top: WALL_H,
-    description: 'A wall with an opening. Doors snap into it.',
+    description: 'A wall with an opening. A Wooden Door (made at a Workbench) snaps into it.',
     parts: () => [
       { c: [-0.8, WALL_H / 2, 0], h: [0.2, WALL_H / 2, 0.12] },
       { c: [0.8, WALL_H / 2, 0], h: [0.2, WALL_H / 2, 0.12] },
