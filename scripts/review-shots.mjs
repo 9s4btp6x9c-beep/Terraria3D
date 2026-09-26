@@ -67,11 +67,13 @@ try {
       const g = __game, s = g.gen.spawn;
       const m = g.gen.mouths.filter(m => m.kind === kind).sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))[0];
       if (!m) return false;
-      const a = 0.7, d = kind === 'mouth' ? 13 : 9, x = m.x + Math.cos(a) * d, z = m.z + Math.sin(a) * d;
-      for (const t of g.veg.treesNear(m.x, m.z, 18)) t.alive = false;
+      const a = 0.7, d = kind === 'mouth' ? 16 : 10, x = m.x + Math.cos(a) * d, z = m.z + Math.sin(a) * d;
+      for (const t of g.veg.treesNear(m.x, m.z, 22)) t.alive = false;
       g.vegRenderer.treesDirty = true;
-      g.player.teleport(x, g.gen.height(x, z) + (kind === 'mouth' ? 2 : 3), z);
-      g.player.yaw = Math.atan2(x - m.x, z - m.z); g.player.pitch = kind === 'mouth' ? -0.3 : -0.75;
+      const y = g.gen.height(x, z) + (kind === 'mouth' ? 5 : 4);
+      g.player.teleport(x, y, z);
+      g.player.yaw = Math.atan2(x - m.x, z - m.z);
+      g.player.pitch = Math.atan2(g.gen.height(m.x, m.z) - 3 - (y + 1.6), d);
       g.vitals.hp = g.vitals.maxHp;
       return true;
     }, kind);
