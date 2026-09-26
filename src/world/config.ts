@@ -18,7 +18,16 @@ export interface WorldConfig {
    * caverns, halls and many cave mouths and sinkholes. Missing = 1.
    */
   caves?: number;
+  /**
+   * Surface shape version: 1 = the original (hard terrace bands and lumpy
+   * ground; older saves keep it), 2 = soft terraces and smoother open ground
+   * that is easy to walk, with the same hills and mountains. Missing = 1.
+   */
+  terrain?: number;
 }
+
+/** Surface shape version for new worlds. */
+export const TERRAIN_VERSION = 2;
 
 /** Cave generation version for new worlds. */
 export const CAVES_VERSION = 2;
@@ -28,7 +37,7 @@ export const WORLD_CHUNKS = 24;
 export const LEGACY_CHUNKS = 16;
 
 export function defaultConfig(seed = 1337, chunks = WORLD_CHUNKS): WorldConfig {
-  return { seed, chunksX: chunks, chunksY: 5, chunksZ: chunks, seaLevel: 62, caves: CAVES_VERSION };
+  return { seed, chunksX: chunks, chunksY: 5, chunksZ: chunks, seaLevel: 62, caves: CAVES_VERSION, terrain: TERRAIN_VERSION };
 }
 
 export function worldSize(cfg: WorldConfig) {

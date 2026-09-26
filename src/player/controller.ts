@@ -16,7 +16,12 @@ export interface MoveInput {
 export const PLAYER_RADIUS = 0.4;
 const STAND_SPHERES = [0.4, 0.95, 1.45];
 const CROUCH_SPHERES = [0.4, 0.8];
-const WALKABLE = 0.55;
+// Normal y above which ground can be walked up (about 63 degrees).
+const WALKABLE = 0.45;
+/** Tallest ledge walked straight up onto (m). */
+const STEP = 0.6;
+/** While pushing into it, ground up to this steep (about 72 degrees) can be scrambled up, slowly. */
+const SCRAMBLE = 0.3;
 /** Wing climb speed and glide sink rate (m/s). */
 const FLIGHT_RISE = 7.5;
 const GLIDE_FALL = 2.6;
@@ -51,6 +56,10 @@ export class PlayerController {
   private jumpHeld = false;
   /** The head pressed into a low ceiling while standing (crouch next frame). */
   private headBumped = false;
+  /** Pushing forward this frame (steep ground can then be scrambled up). */
+  private pushing = false;
+  /** Scrambling up ground steeper than WALKABLE this frame (slower). */
+  private scrambling = false;
   private n: [number, number, number] = [0, 0, 0];
   private n2: [number, number, number] = [0, 0, 0];
 
@@ -64,7 +73,9 @@ export class PlayerController {
 
   /** Eye height above the feet, eased so crouching and standing never pop the view. */
   private eye = 1.62;
-  get eyeHeight() { return this.eye; }
+  /** Extra eye offset while easing up a stepped ledge (negative, decays to 0). */
+  private stepEase = 0;
+  get eyeHeight() { return this.eye + this.stepEase; }
 
   get position() { return { x: this.x, y: this.y, z: this.z }; }
 
@@ -98,7 +109,9 @@ export class PlayerController {
     let wz = -cos * input.forward - sin * input.strafe;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
-    const speed = (this.crouching ? this.crouchSpeed : input.sprint ? this.sprintSpeed : this.walkSpeed) * this.speedMul;
+    this.pushing = wl > 0.1;
+    const speed = (this.crouching ? this.crouchSpeed : input.sprint ? this.sprintSpeed : this.walkSpeed) * this.speedMul * (this.scrambling ? 0.6 : 1);
+    this.scrambling = false;
     const accel = this.grounded ? 60 : this.inWater ? 10 : 14;
     const tx = wx * speed * (this.inWater ? 0.6 : 1), tz = wz * speed * (this.inWater ? 0.6 : 1);
     this.vx += clampStep(tx - this.vx, accel * dt);
@@ -145,6 +158,7 @@ export class PlayerController {
     // Integrate in substeps so we never tunnel through thin geometry.
     const wasGrounded = this.grounded;
     const fallSpeed = -this.vy;
+    const preX = this.x, preZ = this.z;
     this.landingImpact = 0;
     this.grounded = false;
     const dist = Math.hypot(this.vx, this.vy, this.vz) * dt;
@@ -154,6 +168,11 @@ export class PlayerController {
       this.x += this.vx * h; this.y += this.vy * h; this.z += this.vz * h;
       this.resolve();
     }
+
+    // Step up small ledges, lips and the far side of little dips instead of
+    // stalling against them.
+    if ((wasGrounded || this.grounded) && !this.inWater && this.vy <= 0.5) this.tryStep(tx * dt, tz * dt, preX, preZ);
+    this.stepEase = Math.min(0, this.stepEase + dt * 5);
 
     if (this.grounded && !wasGrounded && !this.inWater) this.landingImpact = Math.max(0, fallSpeed);
 
@@ -203,7 +222,8 @@ export class PlayerController {
           continue;
         }
         moved = true;
-        if (i === 0 && n[1] > WALKABLE) {
+        if (i === 0 && n[1] > (this.pushing ? SCRAMBLE : WALKABLE)) {
+          if (n[1] <= WALKABLE) this.scrambling = true;
           // Standing on walkable ground: lift straight up, no sideways slide,
           // by exactly as much as clears the ground (an estimate overshoots
           // in creases and the body bobs).
@@ -219,6 +239,35 @@ export class PlayerController {
       }
       if (!moved) break;
     }
+  }
+
+  /**
+   * Blocked while walking on the ground: try the same move from up to
+   * STEP higher and settle back down onto whatever is there. Accepted only
+   * if it gets further without leaving the body in anything solid.
+   */
+  private tryStep(dx: number, dz: number, preX: number, preZ: number) {
+    const want = Math.hypot(dx, dz);
+    if (want < 0.02) return;
+    const moved = (this.x - preX) * dx / want + (this.z - preZ) * dz / want;
+    if (moved > want * 0.6) return;
+    const x0 = this.x, y0 = this.y, z0 = this.z;
+    const clear = (x: number, y: number, z: number) => this.spheres().every(off => this.world.distance(x, y + off, z, this.n) >= PLAYER_RADIUS - 0.02);
+    const up = y0 + STEP;
+    if (!clear(x0, up, z0)) return;
+    const nx = x0 + dx, nz = z0 + dz;
+    if (!clear(nx, up, nz)) return;
+    // Settle down onto the ledge.
+    this.x = nx; this.z = nz; this.y = up;
+    const drop = this.clearLift(this.y + PLAYER_RADIUS - STEP - 0.05, STEP + 0.05);
+    this.y = this.y - STEP - 0.05 + drop;
+    // Only onto something to stand on: a ledge or lip, never a steep face
+    // (stepping every frame would otherwise walk straight up cliffs).
+    const footing = this.world.distance(this.x, this.y + PLAYER_RADIUS - 0.04, this.z, this.n) < PLAYER_RADIUS + 0.02 && this.n[1] > WALKABLE * 0.85;
+    if (this.y < y0 + 0.02 || !footing || !clear(this.x, this.y, this.z)) { this.x = x0; this.y = y0; this.z = z0; return; }
+    this.stepEase = Math.max(-0.35, this.stepEase - (this.y - y0));
+    this.grounded = true;
+    if (this.vy < 0) this.vy = 0;
   }
 
   /** Smallest upward shift (up to `max`) that lifts the foot sphere at height `cy` clear of the ground. */

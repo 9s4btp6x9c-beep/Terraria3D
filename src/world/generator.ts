@@ -92,6 +92,8 @@ export class WorldGenerator {
   private carveGrid: Capsule[][] = [];
   /** Cave generation version (see WorldConfig.caves). */
   readonly caveVersion: number;
+  /** Surface shape version (see WorldConfig.terrain). */
+  readonly terrainVersion: number;
   /** AABB (min xyz, max xyz) around the entrance tunnel, padded. */
   private entranceBounds = [0, 0, 0, 0, 0, 0];
   spawn = { x: 0, y: 0, z: 0 };
@@ -104,6 +106,7 @@ export class WorldGenerator {
     const s = cfg.seed;
     this.size = worldSize(cfg);
     this.caveVersion = cfg.caves ?? 1;
+    this.terrainVersion = cfg.terrain ?? 1;
     this.hills = new SimplexNoise(s + 1);
     this.ridges = new SimplexNoise(s + 2);
     this.mask = new SimplexNoise(s + 3);
@@ -192,11 +195,14 @@ export class WorldGenerator {
     // Amberwood: soft, rolling rises.
     h += amber * (1.5 + this.hills.noise2(x / 60 + 2, z / 60) * 2);
     // Soft terracing gives cliff bands on hillsides (not on dunes or flats).
+    // (Terrain v2: much softer bands with wide risers, so hillsides stay
+    // walkable instead of turning into short, steep steps.)
+    const soft = this.terrainVersion >= 2;
     const step = 7;
     const t = Math.floor(h / step) * step;
     const frac = (h - t) / step;
-    const terr = 0.4 * (1 - desert) * (1 - ossuary);
-    h = h * (1 - terr) + (t + smoothstep(0.35, 0.65, frac) * step) * terr;
+    const terr = (soft ? 0.12 : 0.4) * (1 - desert) * (1 - ossuary);
+    h = h * (1 - terr) + (t + (soft ? smoothstep(0.15, 0.85, frac) : smoothstep(0.35, 0.65, frac)) * step) * terr;
     // Ossuary Flats: a dead, level salt pan with the faintest swell.
     h += (67.5 + this.hills.noise2(x / 70, z / 70) * 0.8 - h) * ossuary * 0.94;
     // Ocean ring around the island-shaped world.
@@ -614,8 +620,10 @@ export class WorldGenerator {
       const mi = Math.floor(x) + Math.floor(z) * (W + 1);
       // Keep d(y) monotone-ish (vertical warp slope < 1) so the noise makes
       // overhangs and spires but never loose floating rocks. Lake shores stay calm.
-      const amp = (2.5 + this.mountainMask[mi] * 6) * (1 - lakeFlat * 0.85);
-      d += this.warp.noise3(x / 22, y / 26, z / 22) * amp + this.warp.noise3(x / 7, y / 9, z / 7) * 0.5;
+      // (Terrain v2: open ground is only gently rumpled; mountains keep their overhangs.)
+      const soft = this.terrainVersion >= 2;
+      const amp = ((soft ? 1.1 : 2.5) + this.mountainMask[mi] * 6) * (1 - lakeFlat * 0.85);
+      d += this.warp.noise3(x / 22, y / 26, z / 22) * amp + this.warp.noise3(x / 7, y / 9, z / 7) * (soft ? 0.18 : 0.5);
     }
     if (lake && y > lake.level - lake.depth - 1) {
       const hd = Math.hypot(x - lake.x, z - lake.z);
@@ -628,23 +636,22 @@ export class WorldGenerator {
       const width = 0.035 + this.detail.noise2(x / 20, z / 20) * 0.012;
       if (n < width + 0.06) d = Math.min(d, (n - width) * 55 + Math.max(0, 30 - y) * 0.3);
     }
-    if (d > -2) {
-      let cave = this.caves(x, y, z, h);
-      // (Caves v2 are roomy enough to breach a lake bed and drain it: keep
-      // them at least 8 m under every lake.)
-      if (lake && this.caveVersion >= 2) {
-        const hd = Math.hypot(x - lake.x, z - lake.z);
-        if (hd < lake.r * 1.8 + 6) cave = Math.max(cave, (y - (lake.level - lake.depth - 8)) * 0.6);
-      }
-      d = Math.min(d, cave);
-    }
+    // (Caves v2 and their cave-mouth tunnels are roomy enough to breach a
+    // lake bed and drain it: keep them at least 8 m under every lake.)
+    let lakeGuard = -Infinity;
+    if (lake && this.caveVersion >= 2 && Math.hypot(x - lake.x, z - lake.z) < lake.r * 1.8 + 6) lakeGuard = (y - (lake.level - lake.depth - 8)) * 0.6;
+    if (d > -2) d = Math.min(d, Math.max(this.caves(x, y, z, h), lakeGuard));
     let tunnel = Infinity;
     const eb = this.entranceBounds;
     if (x > eb[0] && x < eb[3] && y > eb[1] && y < eb[4] && z > eb[2] && z < eb[5])
       for (const c of this.entrance) tunnel = Math.min(tunnel, capsuleDist(x, y, z, c) - c.r);
     if (this.carveGrid.length) {
       const list = this.carveGrid[Math.floor(x / FEATURE_CELL) + Math.floor(z / FEATURE_CELL) * this.featureGw];
-      if (list) for (const c of list) tunnel = Math.min(tunnel, capsuleDist(x, y, z, c) - c.r);
+      if (list) {
+        let carve = Infinity;
+        for (const c of list) carve = Math.min(carve, capsuleDist(x, y, z, c) - c.r);
+        tunnel = Math.min(tunnel, Math.max(carve, lakeGuard));
+      }
     }
     if (tunnel < 3) d = Math.min(d, tunnel - this.detail.noise3(x / 5, y / 5, z / 5) * 0.8);
     const tb = this.tubeBounds;

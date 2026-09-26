@@ -172,7 +172,7 @@ float whash(vec3 p) {
 float skyVisibility(vec3 p) {
   if (uVisOverride >= 0.0) return uVisOverride;
   float top = texture2D(uSky, (p.xz + 0.5) / uSkySize).r;
-  return smoothstep(0.0, 1.0, clamp((p.y - top + 6.0) / 5.0, 0.0, 1.0));
+  return smoothstep(0.0, 1.0, clamp((p.y - top + 10.0) / 10.0, 0.0, 1.0));
 }`)
       .replace('#include <map_fragment>', `
   // Pixel-snapped dither value, stable in world space.

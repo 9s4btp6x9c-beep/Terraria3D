@@ -79,6 +79,25 @@ try {
     }, kind);
     if (ok) await shot(`cave-${kind}`);
   }
+  // Just inside a cave mouth, looking deeper in: the light should fade gradually, not drop to black.
+  const inMouth = await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    for (const m of g.gen.mouths.filter(m => m.kind === 'mouth').sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))) {
+      for (let r = 4; r < 26; r += 1) for (let a = 0; a < 6.28; a += 0.25) {
+        const x = m.x + Math.cos(a) * r, z = m.z + Math.sin(a) * r, h = g.gen.height(x, z);
+        for (let y = h - 9; y < h - 4; y += 0.5) {
+          if (g.gen.densityAt(x, y + 0.9, z) < -0.8 && g.gen.densityAt(x, y + 2, z) < -0.5 && g.gen.densityAt(x, y - 0.6, z) > 0) {
+            g.player.teleport(x, y, z);
+            g.player.yaw = Math.atan2(x - m.x, z - m.z) + Math.PI; g.player.pitch = -0.15;
+            g.vitals.hp = g.vitals.maxHp;
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  });
+  if (inMouth) await shot('cave-inside-mouth');
   await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;
     // The roomiest air pocket near spawn: most open space around a point.

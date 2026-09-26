@@ -6,7 +6,7 @@
 
 import type { TerrainField } from './terrain';
 
-const BLUR = 3;
+const BLUR = 5;
 const ISLAND_MIN_Y = 118;
 
 export class SkyMap {
@@ -107,7 +107,9 @@ export class SkyMap {
   visibility(x: number, y: number, z: number): number {
     const ix = Math.max(0, Math.min(this.w - 1, Math.round(x))), iz = Math.max(0, Math.min(this.d - 1, Math.round(z)));
     const top = this.blurred[ix + iz * this.w];
-    const t = Math.max(0, Math.min(1, (y - top + 6) / 5));
+    // Sky light fades over the 20 m under the ground surface, so cave mouths
+    // and overhangs stay lit a good way in before the dark takes over.
+    const t = Math.max(0, Math.min(1, (y - top + 10) / 10));
     return t * t * (3 - 2 * t);
   }
 }

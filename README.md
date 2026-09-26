@@ -179,6 +179,12 @@ Touch devices start on the low quality preset.
   tongues, glows, and burns you (and most creatures) badly while slowing you
   down; a full set of Ember armor makes you immune. Where lava meets water,
   both turn into **obsidian**.
+- **Getting around:** you step straight up small ledges and lips, walk up
+  any ordinary hill, and can scramble (slowly) up steeper slopes by pushing
+  into them; only real cliffs need a jump or a pickaxe. New worlds have
+  softer terraces and smoother open ground than before, with the same hills
+  and mountains. Caves are dim rather than pitch black, and light reaches
+  well into cave mouths.
 - **World:** 768 m across (saves from older versions keep their 512 m
   world) with sky islands, a day/night cycle, and distant terrain drawn at
   lower detail so the whole map is visible from a high point.

@@ -41,7 +41,7 @@ import { Minimap } from './ui/minimap';
 import { type Quality, detectQuality } from './ui/quality';
 import { WorldLabels } from './ui/worldLabels';
 import { WorldCollision } from './world/collision';
-import { CAVES_VERSION, LEGACY_CHUNKS, WORLD_CHUNKS, defaultConfig } from './world/config';
+import { CAVES_VERSION, LEGACY_CHUNKS, TERRAIN_VERSION, WORLD_CHUNKS, defaultConfig } from './world/config';
 import { BIOME_NAMES, EMBER_Y, WorldGenerator } from './world/generator';
 import { Mat, material } from './world/materials';
 import { EditLog, type SaveData, readSave, writeSave } from './world/persistence';
@@ -188,7 +188,8 @@ export class Game {
   async load(seed: number, save: SaveData | null, cb: LoadCallbacks) {
     const chunks = save ? (typeof save.extra?.chunks === 'number' ? save.extra.chunks : LEGACY_CHUNKS) : WORLD_CHUNKS;
     // Saves keep the cave generation they were made with (older ones: 1).
-    const cfg = { ...defaultConfig(save?.seed ?? seed, chunks), caves: save ? (typeof save.extra?.caves === 'number' ? save.extra.caves : 1) : CAVES_VERSION };
+    const version = (key: string, current: number) => (save ? (typeof save.extra?.[key] === 'number' ? save.extra[key] as number : 1) : current);
+    const cfg = { ...defaultConfig(save?.seed ?? seed, chunks), caves: version('caves', CAVES_VERSION), terrain: version('terrain', TERRAIN_VERSION) };
     cb.progress(0.02, 'Shaping the land');
     await tick();
     this.gen = new WorldGenerator(cfg);
@@ -1139,6 +1140,7 @@ export class Game {
       extra: {
         chunks: this.field.cfg.chunksX,
         caves: this.field.cfg.caves ?? 1,
+        terrain: this.field.cfg.terrain ?? 1,
         build: this.interaction.build,
         rested: this.rested,
         timeOfDay: this.atmosphere.timeOfDay,

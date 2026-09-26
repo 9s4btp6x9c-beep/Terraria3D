@@ -70,7 +70,7 @@ void main() {
   col = mix(col, col * vec3(0.55, 0.85, 1.1) + vec3(0.0, 0.03, 0.07), uWater * 0.8);
   // Vignette.
   vec2 v = vUv - 0.5;
-  col *= 1.0 - dot(v, v) * (0.35 + uUnderground * 0.5);
+  col *= 1.0 - dot(v, v) * (0.35 + uUnderground * 0.25);
 
   // Ordered dither before 8-bit output hides banding and adds retro grain.
   col += bayer4(gl_FragCoord.xy) / 64.0;

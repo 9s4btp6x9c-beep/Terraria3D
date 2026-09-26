@@ -50,7 +50,7 @@ varying vec3 vWN;`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
   {
     float top = texture2D(uSky, (vWW.xz + 0.5) / uSkySize).r;
-    float vis = smoothstep(0.0, 1.0, clamp((vWW.y - top + 6.0) / 5.0, 0.0, 1.0));
+    float vis = smoothstep(0.0, 1.0, clamp((vWW.y - top + 10.0) / 10.0, 0.0, 1.0));
     vec3 wn = normalize(vWN);
     reflectedLight.directDiffuse *= vis;
     reflectedLight.indirectDiffuse += diffuseColor.rgb * (mix(uHemiGround, uHemiSky, abs(wn.y) * 0.5 + 0.5) * vis + uCaveAmbient * 1.5);

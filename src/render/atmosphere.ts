@@ -19,7 +19,8 @@ const SPORE_TOP = C(0x05241f);
 const SPORE_HORIZON = C(0x1e6a52);
 const CAVE_FOG = C(0x0b0a12);
 const EMBER_FOG = C(0x2a0c08);
-const CAVE_AMBIENT = C(0x1a1726);
+// Caves are dim, never pitch black: you can always make out the rock.
+const CAVE_AMBIENT = C(0x4a4c64);
 const SHROOM_FOG = C(0x061a0c);
 const SHROOM_AMBIENT = C(0x164a26);
 const EMBER_AMBIENT = C(0x3a140c);
@@ -290,7 +291,7 @@ export class Atmosphere {
 
     // Lantern (slot 0): brighter underground and at night.
     const lp = this.u.uLightPos.value[0];
-    lp.set(cam.x + lanternDir.x * 0.5, cam.y + 0.2, cam.z + lanternDir.z * 0.5, 13 + lanternBoost * 5);
+    lp.set(cam.x + lanternDir.x * 0.5, cam.y + 0.2, cam.z + lanternDir.z * 0.5, 13 + ug * 4 + lanternBoost * 5);
     this.u.uLightColor.value[0].setRGB(1.0, 0.72, 0.42).multiplyScalar(0.3 + Math.max(ug, (1 - d) * 0.6) * 0.9 + lanternBoost * 0.3);
     this.u.uTime.value = time;
     this.lights.update(dt, cam, this.u, time);

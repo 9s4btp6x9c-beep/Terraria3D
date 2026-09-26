@@ -60,6 +60,38 @@ describe('player collision', () => {
   });
 });
 
+describe('getting around', () => {
+  const walk = { forward: 1, strafe: 0, jump: false, sprint: false, crouch: false };
+  const go = (player: PlayerController, seconds: number) => { for (let i = 0; i < seconds * 60; i++) player.update(1 / 60, walk, null); };
+
+  it('steps straight up onto a low ledge', () => {
+    // Flat ground at y = 5 with a 0.45 m ledge (a true vertical face) from z < 15 onward (walking toward -z).
+    const { player } = world((_x, y, z) => Math.max(5 - y, Math.min(5.45 - y, 15.5 - z)));
+    player.teleport(20, 5.05, 18);
+    go(player, 1.5);
+    expect(player.z).toBeLessThan(14);
+    expect(player.y).toBeGreaterThan(5.35);
+  });
+
+  it('does not walk up a wall', () => {
+    // (Faces of about 1.5 m or less can be walked over: the 1 m sampling puts a
+    // ramp at the foot of every wall, and the step takes the rest.)
+    const { player } = world((_x, y, z) => Math.max(5 - y, Math.min(7.5 - y, 15.5 - z)));
+    player.teleport(20, 5.05, 18);
+    go(player, 1.5);
+    expect(player.z).toBeGreaterThan(15);
+  });
+
+  it('scrambles up a steep (60 degree) hillside while pushing into it', () => {
+    // Ground rising 1.7 m per metre toward -z.
+    const slope = 1.7, n = Math.hypot(1, slope);
+    const { player } = world((_x, y, z) => (5 + Math.max(0, 16 - z) * slope - y) / n);
+    player.teleport(20, 5.05, 17);
+    go(player, 3);
+    expect(player.y).toBeGreaterThan(8);
+  });
+});
+
 describe('light pool', () => {
   it('fades lights in and out instead of strobing, and flashes never evict them', () => {
     const tex = new THREE.DataArrayTexture(new Uint8Array(4), 1, 1, 1);
