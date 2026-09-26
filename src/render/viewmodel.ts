@@ -42,7 +42,7 @@ function armGeometry() {
 const ease = (t: number) => t * t * (3 - 2 * t);
 
 /** Shoulder rest position (camera space), just off the bottom-right of the view. */
-const SHOULDER = new THREE.Vector3(0.44, -0.5, -0.06);
+const SHOULDER = new THREE.Vector3(0.42, -0.47, -0.06);
 
 export class Viewmodel {
   readonly root = new THREE.Group();
@@ -104,7 +104,7 @@ export class Viewmodel {
       // The fist closes round the handle: the sprite's grip is its origin.
       // Tools lean away from you, head up and toward the crosshair, turned so
       // you see them half in profile; bows are held upright.
-      if (this.pose === 'bow') this.grip.rotation.set(0.05, -1.25, 0.12);
+      if (this.pose === 'bow') this.grip.rotation.set(-0.1, -0.35, 0.3);
       else this.grip.rotation.set(-0.62, -0.72, 0.18);
       return;
     }
@@ -149,16 +149,17 @@ export class Viewmodel {
       case 'swing':
         // Arm reaching forward and a little up; the stroke sweeps the whole
         // arm down and in toward the crosshair and back.
-        sh.position.x -= arc * 0.1;
-        sh.position.y += Math.sin(Math.sqrt(k) * Math.PI * 2) * 0.05;
-        sh.position.z -= snap * 0.08;
-        sh.rotation.set(0.2 - arc * 0.95, 0.12 + arc * 0.5, -snap * 0.3);
+        sh.position.x -= arc * 0.16;
+        sh.position.y += arc * 0.1 + Math.sin(Math.sqrt(k) * Math.PI * 2) * 0.03;
+        sh.position.z -= snap * 0.1;
+        sh.rotation.set(0.28 - arc * 0.4 - snap * 0.25, 0.12 + arc * 0.5, -snap * 0.3);
         break;
       case 'bow':
         // Held out in front, pulled back toward the eye as it draws.
-        sh.position.x -= 0.08;
+        sh.position.x -= 0.06;
+        sh.position.y += 0.1;
         sh.position.z += this.draw * 0.1;
-        sh.rotation.set(0.3 + this.draw * 0.05, 0.3, 0);
+        sh.rotation.set(0.32 + this.draw * 0.05, 0.28, 0);
         break;
       case 'staff':
         // Pointed ahead; casting thrusts the arm forward.

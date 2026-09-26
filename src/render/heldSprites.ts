@@ -128,7 +128,7 @@ function spriteFor(def: ItemDef): { rows: string[]; colours: Record<string, numb
 }
 
 /** Size of one sprite pixel, in metres. */
-export const SPRITE_PIXEL = 0.034;
+export const SPRITE_PIXEL = 0.028;
 
 /**
  * Extruded sprite geometry for a held tool, with its grip (the middle of the
