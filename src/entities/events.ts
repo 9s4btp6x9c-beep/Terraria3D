@@ -94,9 +94,11 @@ export class WorldEvents {
       if (!this.kind && this.nights > 1 && this.rand() < SPOREFALL_CHANCE) out.push(...this.start('sporefall', w));
     }
     if (dawn) {
-      if (this.kind === 'sporefall') out.push(...this.end(true));
+      // A siege never follows straight on from a Sporefall: the morning after is a breather.
+      const rested = this.kind === 'sporefall';
+      if (rested) out.push(...this.end(true));
       const t = w.base;
-      if (!this.kind && w.bossDefeated && t && t.size >= 1 && Math.hypot(w.px - t.x, w.pz - t.z) < 80 && this.rand() < RAID_CHANCE) {
+      if (!this.kind && !rested && w.bossDefeated && t && t.size >= 1 && Math.hypot(w.px - t.x, w.pz - t.z) < 80 && this.rand() < RAID_CHANCE) {
         out.push(...this.start('raid', w));
       }
     }

@@ -51,6 +51,17 @@ describe('world events', () => {
     expect(ev.goal).toBe(38);
   });
 
+  it('no siege comes the morning a Sporefall ends', () => {
+    const ev = new WorldEvents(() => 0); // every roll succeeds
+    cycle(ev, 1, { bossDefeated: true });
+    ev.kind = null; // forget the siege from that first dawn
+    ev.update(1, world(0, { bossDefeated: true }));
+    expect(ev.kind).toBe('sporefall');
+    const dawn = ev.update(1, world(1, { bossDefeated: true }));
+    expect(dawn).toEqual([{ type: 'end', kind: 'sporefall', won: true }]);
+    expect(ev.kind).toBeNull();
+  });
+
   it('killing enough raiders wins the raid', () => {
     const ev = new WorldEvents();
     ev.start('raid', { base: { x: 0, z: 0, size: 0 }, px: 0, pz: 0 });
