@@ -86,6 +86,28 @@ const SWORD = [
   '......pppp......',
 ];
 
+/** A torch: a stick with a charred tip under a pixel flame (Y/O/R glow). */
+const TORCH = [
+  '................',
+  '........Y.......',
+  '.......YYO......',
+  '.......YOO......',
+  '......OYRO......',
+  '.......RRO......',
+  '.......cc.......',
+  '.......sd.......',
+  '.......sd.......',
+  '.......sd.......',
+  '.......sd.......',
+  '.......sd.......',
+  '.......sd.......',
+  '.......sd.......',
+  '.......dd.......',
+  '................',
+];
+/** Sprite characters drawn with the glowing layer. */
+const GLOWING = new Set(['Y', 'O', 'R']);
+
 /** A bow: a curved limb on the left, the string straight down the right. */
 function bowRows(): string[] {
   const rows: string[][] = Array.from({ length: 16 }, () => Array(16).fill('.'));
@@ -119,6 +141,7 @@ function spriteFor(def: ItemDef): { rows: string[]; colours: Record<string, numb
     const rows = m.type === 'pickaxe' ? PICKAXE : m.type === 'axe' ? AXE : SWORD;
     return { rows, colours: wood({ H, h, L, p: m.type === 'sword' ? (m.head === 'planks' ? 0x6a4428 : 0x8a6a34) : h }) };
   }
+  if (m.type === 'furniture' && m.id === 'torch') return { rows: TORCH, colours: { ...WOOD, Y: 0xfff0a0, O: 0xffa030, R: 0xe8501a, c: 0x3a2418 } };
   if (m.type === 'hammer') return { rows: HAMMER, colours: wood({ H: 0x9a98a6, h: 0x4e4c5a, L: 0xd0ced8 }) };
   if (m.type === 'bow') {
     const [H, h] = headColours(m.head);
@@ -134,7 +157,14 @@ export const SPRITE_PIXEL = 0.028;
  * Extruded sprite geometry for a held tool, with its grip (the middle of the
  * handle wrap) at the origin, the handle along +y and the flat faces along ±z.
  */
+const cache = new Map<string, THREE.BufferGeometry | null>();
+
 export function heldSprite(def: ItemDef): THREE.BufferGeometry | null {
+  if (!cache.has(def.id)) cache.set(def.id, buildSprite(def));
+  return cache.get(def.id)!;
+}
+
+function buildSprite(def: ItemDef): THREE.BufferGeometry | null {
   const s = spriteFor(def);
   if (!s) return null;
   const { rows, colours } = s;
@@ -144,17 +174,22 @@ export function heldSprite(def: ItemDef): THREE.BufferGeometry | null {
   rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === 'g') { gr += y; gc += x; gn++; } }));
   const cy = gn ? gr / gn + 0.5 : 12, cx = gn ? gc / gn + 0.5 : 8;
   const filled = (x: number, y: number) => y >= 0 && y < rows.length && x >= 0 && x < rows[y].length && rows[y][x] !== '.';
-  const pos: number[] = [], nor: number[] = [], col: number[] = [];
+  const pos: number[] = [], nor: number[] = [], col: number[] = [], lay: number[] = [];
+  const plain = layerOf('plain'), glow = layerOf('glow');
+  let layer = plain, fx = 0, fy = 0, fn = 0;
   const c = new THREE.Color();
   const quad = (a: number[], b: number[], cc: number[], d: number[], n: number[], shade: number) => {
     pos.push(...a, ...b, ...cc, ...a, ...cc, ...d);
-    for (let i = 0; i < 6; i++) { nor.push(...n); col.push(c.r * shade, c.g * shade, c.b * shade); }
+    const k = layer === glow ? 1 : shade;
+    for (let i = 0; i < 6; i++) { nor.push(...n); col.push(c.r * k, c.g * k, c.b * k); lay.push(layer, layer, layer); }
   };
   for (let y = 0; y < rows.length; y++)
     for (let x = 0; x < rows[y].length; x++) {
       const ch = rows[y][x];
       if (ch === '.') continue;
       c.setHex(colours[ch] ?? 0xff00ff);
+      layer = GLOWING.has(ch) ? glow : plain;
+      if (layer === glow) { fx += x + 0.5 - cx; fy += cy - y - 0.5; fn++; }
       const x0 = (x - cx) * P, x1 = x0 + P, y1 = (cy - y) * P, y0 = y1 - P;
       quad([x0, y0, T], [x1, y0, T], [x1, y1, T], [x0, y1, T], [0, 0, 1], 1);
       quad([x1, y0, -T], [x0, y0, -T], [x0, y1, -T], [x1, y1, -T], [0, 0, -1], 0.9);
@@ -167,8 +202,9 @@ export function heldSprite(def: ItemDef): THREE.BufferGeometry | null {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  const n = pos.length / 3;
-  g.setAttribute('mats', new THREE.BufferAttribute(new Uint8Array(n * 3).fill(layerOf('plain')), 3));
+  g.setAttribute('mats', new THREE.BufferAttribute(new Uint8Array(lay), 3));
+  // Where the flame is (sprite-local), for the fire particles it gives off.
+  if (fn) g.userData.flame = [fx / fn * P, fy / fn * P, 0];
   g.computeBoundingSphere();
   return g;
 }

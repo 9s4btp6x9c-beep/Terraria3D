@@ -61,6 +61,38 @@ try {
     await lookAt([x, y, z], r + 5, 0.3, 2.5); await shot('lake-shore');
     await lookAt([x, y, z], r + 3, 2.2, 1.5); await shot('lake-shore2');
   }
+  // Cave mouths and sinkholes (caves v2), seen from outside; then a big cavern from inside.
+  for (const kind of ['mouth', 'sinkhole']) {
+    const ok = await page.evaluate(kind => {
+      const g = __game, s = g.gen.spawn;
+      const m = g.gen.mouths.filter(m => m.kind === kind).sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))[0];
+      if (!m) return false;
+      const a = 0.7, d = kind === 'mouth' ? 13 : 9, x = m.x + Math.cos(a) * d, z = m.z + Math.sin(a) * d;
+      for (const t of g.veg.treesNear(m.x, m.z, 18)) t.alive = false;
+      g.vegRenderer.treesDirty = true;
+      g.player.teleport(x, g.gen.height(x, z) + (kind === 'mouth' ? 2 : 3), z);
+      g.player.yaw = Math.atan2(x - m.x, z - m.z); g.player.pitch = kind === 'mouth' ? -0.3 : -0.75;
+      g.vitals.hp = g.vitals.maxHp;
+      return true;
+    }, kind);
+    if (ok) await shot(`cave-${kind}`);
+  }
+  await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    // The roomiest air pocket near spawn: most open space around a point.
+    let best = null;
+    for (let i = 0; i < 3000; i++) {
+      const x = s.x + (Math.random() - 0.5) * 200, z = s.z + (Math.random() - 0.5) * 200, y = 20 + Math.random() * 40;
+      if (g.gen.height(x, z) < y + 14 || g.gen.densityAt(x, y, z) > -1 || g.gen.densityAt(x, y - 1.6, z) < 0) continue;
+      let open = 0;
+      for (let k = 0; k < 16; k++) { const a = k / 16 * 6.28; for (let r = 2; r < 24; r += 2) { if (g.gen.densityAt(x + Math.cos(a) * r, y + 1.5, z + Math.sin(a) * r) > 0) break; open++; } }
+      if (!best || open > best.open) best = { x, y, z, open };
+    }
+    g.player.teleport(best.x, best.y - 1, best.z); g.player.pitch = 0.05;
+    g.vitals.hp = g.vitals.maxHp;
+    g.inventory.select(4);
+  });
+  await shot('cavern');
   // A cliff base: the steepest slope near spawn, seen from its foot.
   const cliff = await page.evaluate(() => {
     const g = __game.gen, s = g.spawn;

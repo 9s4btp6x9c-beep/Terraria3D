@@ -5,7 +5,7 @@
 import type { WorldCollision } from '../world/collision';
 import type { EventKind } from './events';
 
-export type AIKind = 'hopper' | 'walker' | 'flyer' | 'thrower' | 'crawler' | 'pouncer';
+export type AIKind = 'hopper' | 'walker' | 'flyer' | 'thrower' | 'crawler' | 'pouncer' | 'burrower';
 export type SpawnEnv = 'surface' | 'cave' | 'deep' | 'depths' | 'sky';
 
 export interface Drop { item: string; min: number; max: number; chance: number }
@@ -74,6 +74,11 @@ export const CREATURES: Record<string, CreatureDef> = {
     drops: [{ item: 'sandstone', min: 2, max: 5, chance: 1 }, { item: 'coin', min: 2, max: 4, chance: 1 }, { item: 'swift_boots', min: 1, max: 1, chance: 0.02 }],
     spawn: { env: 'surface', time: 'any', weight: 3, biomes: [1] }, color: 0xd8b880,
   },
+  dune_worm: {
+    id: 'dune_worm', name: 'Dune Worm', hp: 170, damage: 24, defense: 6, speed: 11, ai: 'burrower', radius: 0.85, height: 1.7, kbResist: 1,
+    drops: [{ item: 'coin', min: 10, max: 18, chance: 1 }, { item: 'sand', min: 4, max: 9, chance: 1 }, { item: 'sandstone', min: 2, max: 5, chance: 0.6 }, { item: 'swift_boots', min: 1, max: 1, chance: 0.05 }],
+    spawn: { env: 'surface', time: 'any', weight: 1.2, biomes: [1] }, aggro: 42, fireproof: true, color: 0xd8b070,
+  },
   rift_drifter: {
     id: 'rift_drifter', name: 'Riftdrifter', hp: 38, damage: 18, defense: 4, speed: 6, ai: 'flyer', radius: 0.5, height: 1, kbResist: 0.2, model: 'drifter', tint: 0x7af0ff,
     drops: [{ item: 'coin', min: 2, max: 5, chance: 1 }, { item: 'bat_wing', min: 1, max: 1, chance: 0.3 }],
@@ -141,12 +146,12 @@ Object.assign(CREATURES, {
   sporeling: {
     id: 'sporeling', name: 'Sporeling', hp: 48, damage: 15, defense: 5, speed: 3.4, ai: 'walker', radius: 0.38, height: 1.0, kbResist: 0.2,
     drops: [{ item: 'glowcap', min: 1, max: 3, chance: 0.9 }, { item: 'coin', min: 2, max: 4, chance: 1 }],
-    spawn: { env: 'cave', time: 'any', weight: 5, zone: 'mushroom' }, color: 0x5ad0ff,
+    spawn: { env: 'cave', time: 'any', weight: 5, zone: 'mushroom' }, color: 0x5ad07a,
   },
   glowmoth: {
     id: 'glowmoth', name: 'Glowmoth', hp: 30, damage: 13, defense: 2, speed: 5.5, ai: 'flyer', radius: 0.45, height: 0.8, kbResist: 0.1,
     drops: [{ item: 'coin', min: 1, max: 3, chance: 1 }, { item: 'glowcap', min: 1, max: 1, chance: 0.4 }, { item: 'glow_charm', min: 1, max: 1, chance: 0.03 }],
-    spawn: { env: 'cave', time: 'any', weight: 3, zone: 'mushroom' }, color: 0x8ae0ff,
+    spawn: { env: 'cave', time: 'any', weight: 3, zone: 'mushroom' }, color: 0x9af0a8,
   },
 } satisfies Record<string, CreatureDef>);
 
@@ -269,6 +274,12 @@ export class Creature {
   provoked = false;
   /** Seconds spent burning in lava since the last burn tick. */
   burn = 0;
+  /** Burrowers: body segment centres behind the head (x, y, z = head). */
+  body: { x: number; y: number; z: number; r: number }[] | null = null;
+  /** Burrowers: lunge target, whether the head has broken the surface this lunge, and 1 / -1 when it bursts out / dives in this frame. */
+  aim = { x: 0, y: 0, z: 0 };
+  surfaced = false;
+  breach = 0;
   readonly uid: number;
   private static next = 1;
   private n: [number, number, number] = [0, 0, 0];
@@ -277,10 +288,24 @@ export class Creature {
     this.uid = Creature.next++;
     this.x = x; this.y = y; this.z = z;
     this.hp = def.hp;
+    if (def.ai === 'burrower') {
+      this.aim = { x, y, z };
+      this.body = [];
+      for (let i = 1; i < WORM_SEGMENTS; i++) this.body.push({ x, y: y - i * WORM_SPACING, z, r: def.radius * (1 - 0.5 * i / WORM_SEGMENTS) });
+    }
+  }
+
+  /**
+   * The spheres that can be struck: the body centre, or for a burrower its
+   * head and every segment. `r` is the reach radius, `rr` the ray radius.
+   */
+  parts(): { x: number; y: number; z: number; r: number; rr: number }[] {
+    if (!this.body) return [{ x: this.cx, y: this.cy, z: this.cz, r: this.def.radius, rr: Math.max(this.def.radius, this.def.height / 2) }];
+    return [{ x: this.x, y: this.y, z: this.z, r: this.def.radius, rr: this.def.radius }, ...this.body.map(b => ({ x: b.x, y: b.y, z: b.z, r: b.r, rr: b.r }))];
   }
 
   get cx() { return this.x; }
-  get cy() { return this.y + this.def.height / 2; }
+  get cy() { return this.body ? this.y : this.y + this.def.height / 2; }
   get cz() { return this.z; }
 
   /** Push the body out of solid space; spheres at feet and head. */
@@ -336,6 +361,10 @@ export class Creature {
   }
 }
 
+/** Dune worm body: segments and their spacing. */
+export const WORM_SEGMENTS = 12;
+export const WORM_SPACING = 1.15;
+
 export interface AIContext {
   px: number; py: number; pz: number;
   dt: number;
@@ -345,6 +374,8 @@ export interface AIContext {
   throwAt(c: Creature, tx: number, ty: number, tz: number): void;
   /** Daytime with no event running: docile creatures leave the player alone. */
   calm: boolean;
+  /** Height of the ground surface (burrowers swim below it). */
+  surfaceTop(x: number, z: number): number;
 }
 
 /** True while a creature is ignoring the player (docile, unprovoked, calm). */
@@ -425,6 +456,55 @@ export function think(c: Creature, ctx: AIContext) {
       c.stuck = moved < Math.abs(want) * dt * 0.3 && Math.abs(want) > 0.1 ? c.stuck + dt : 0;
       // (Swimmers pressed against a bank scramble up it the same way.)
       if ((c.grounded || c.swimming) && c.stuck > 0.25) { c.vy = d.ai === 'crawler' ? 6 : 7.5; c.stuck = 0; }
+      break;
+    }
+    case 'burrower': {
+      // Swims through the ground below the player, then bursts up through the
+      // surface at them in a long arc and dives back in.
+      const surf = ctx.surfaceTop(c.x, c.z);
+      const inside = c.y < surf - 0.4;
+      c.breach = 0;
+      let tx: number, ty: number, tz: number, sp = d.speed, turn = 2.4;
+      if (c.phase === 0) {
+        const a = c.t * 0.7 + c.uid;
+        const r = aggro ? 10 : 16;
+        const cxp = aggro ? ctx.px : c.aim.x, czp = aggro ? ctx.pz : c.aim.z;
+        tx = cxp + Math.cos(a) * r; tz = czp + Math.sin(a) * r;
+        ty = Math.min(ctx.surfaceTop(tx, tz), aggro ? ctx.py : 1e9) - 5;
+        if (!aggro) sp *= 0.5;
+        if (aggro && inside && c.cooldown <= 0 && dist < 22 && Math.abs(dy) < 12) {
+          c.phase = 1; c.surfaced = false; c.t = 0;
+          // Aim high above the player so it bursts out steeply and arcs over.
+          c.aim = { x: ctx.px, y: ctx.py + 12, z: ctx.pz };
+        }
+      } else {
+        tx = c.aim.x; ty = c.aim.y; tz = c.aim.z;
+        sp *= 1.5; turn = 3.5;
+        if (c.surfaced && inside) { c.phase = 0; c.cooldown = 2.5 + Math.random() * 1.5; }
+        if (c.t > 6) { c.phase = 0; c.cooldown = 2; }
+      }
+      if (inside) {
+        const ex = tx - c.x, ey = ty - c.y, ez = tz - c.z, l = Math.hypot(ex, ey, ez) || 1;
+        const k = Math.min(1, dt * turn);
+        c.vx += (ex / l * sp - c.vx) * k; c.vy += (ey / l * sp - c.vy) * k; c.vz += (ez / l * sp - c.vz) * k;
+      } else {
+        // Airborne: a ballistic arc, steering only a little.
+        c.vy -= 16 * dt;
+        c.vx *= Math.pow(0.9, dt); c.vz *= Math.pow(0.9, dt);
+      }
+      c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt;
+      if (c.y < 6) { c.y = 6; c.vy = Math.abs(c.vy); }
+      const nowInside = c.y < ctx.surfaceTop(c.x, c.z) - 0.4;
+      if (inside && !nowInside) { c.breach = 1; if (c.phase === 1) c.surfaced = true; }
+      if (!inside && nowInside) c.breach = -1;
+      c.yaw = Math.atan2(c.vx, c.vz);
+      // The body follows as a chain.
+      let px = c.x, py = c.y, pz = c.z;
+      for (const b of c.body!) {
+        const ex = b.x - px, ey = b.y - py, ez = b.z - pz, l = Math.hypot(ex, ey, ez);
+        if (l > WORM_SPACING) { const k = WORM_SPACING / l; b.x = px + ex * k; b.y = py + ey * k; b.z = pz + ez * k; }
+        px = b.x; py = b.y; pz = b.z;
+      }
       break;
     }
     case 'flyer': {

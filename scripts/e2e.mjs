@@ -489,6 +489,45 @@ try {
     return out;
   });
   check('Rootwold, Ossuary and Amberwood have their own creatures', [4, 5, 6].every(b => natives[b].length >= 2), JSON.stringify(natives));
+  // Caves: open mouths and sinkholes lead down from the surface.
+  const mouths = await page.evaluate(() => {
+    const g = __game.gen;
+    const sinks = g.mouths.filter(m => m.kind === 'sinkhole');
+    const open = sinks.filter(m => { const h = g.height(m.x, m.z); for (let y = h; y > h - 15; y -= 1) if (g.densityAt(m.x, y, m.z) > 0) return false; return true; }).length;
+    return { mouths: g.mouths.length, sinkholes: sinks.length, open, version: g.caveVersion };
+  });
+  check('the world has cave mouths and open sinkholes', mouths.version === 2 && mouths.mouths >= 30 && mouths.open >= 5, JSON.stringify(mouths));
+  // The Dune Worm: spawns only in the desert, swims under the sand, bursts out and can be slain.
+  const worm = await page.evaluate(() => {
+    const g = __game, s = g.gen.spawn;
+    let spot = null;
+    for (let r = 20; r < 400 && !spot; r += 6) for (let a = 0; a < 6.28 && !spot; a += 0.3) {
+      const x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r;
+      if ([[0, 0], [15, 0], [-15, 0], [0, 15], [0, -15]].every(([dx, dz]) => g.gen.biomeAt(x + dx, z + dz) === 1) && g.gen.height(x, z) > g.gen.cfg.seaLevel + 3) spot = [x, z];
+    }
+    if (!spot) return null;
+    const [x, z] = spot;
+    g.player.teleport(x, g.gen.height(x, z) + 1, z);
+    g.combat.clear(); g.combat.spawning = false;
+    g.vitals.hp = g.vitals.maxHp;
+    const inDesert = g.combat.spawnTable('surface', 1).some(d => d.id === 'dune_worm');
+    const elsewhere = [0, 2, 3, 4, 5, 6, 7].some(b => g.combat.spawnTable('surface', b).some(d => d.id === 'dune_worm'));
+    const c = g.spawnCreature('dune_worm', x, g.gen.height(x, z - 14) - 6, z - 14);
+    let maxUp = -99, hurt = false;
+    const hp0 = g.vitals.hp;
+    for (let i = 0; i < 160; i++) {
+      g.simulate(1 / 20);
+      maxUp = Math.max(maxUp, c.y - g.gen.height(c.x, c.z));
+      if (g.vitals.hp < hp0) hurt = true;
+      g.vitals.hp = g.vitals.maxHp;
+    }
+    // Strike it (anywhere on its body) until it falls.
+    let hits = 0;
+    while (c.alive && hits < 60) { g.combat.applyHit(c, 40, 0, g.player.x, g.player.z); hits++; }
+    g.simulate(0.1);
+    return { inDesert, elsewhere, segs: c.body.length, maxUp: +maxUp.toFixed(1), hurt, dead: !c.alive, gone: !g.combat.creatures.includes(c) };
+  });
+  check('Dune Worms live only in the desert, burst out of the sand and can be slain', !!worm && worm.inDesert && !worm.elsewhere && worm.maxUp > 1.5 && worm.dead, JSON.stringify(worm));
   const depths = await page.evaluate(() => {
     const g = __game, s = g.gen.spawn;
     for (let r = 0; r < 120; r += 4) for (let a = 0; a < 6.28; a += 0.5) {

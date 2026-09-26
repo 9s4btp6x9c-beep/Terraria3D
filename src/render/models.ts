@@ -441,7 +441,7 @@ function maul() {
 }
 
 
-/** A glowing blue mushroom (item icon). */
+/** A glowing green mushroom (item icon). */
 function glowcapItem() {
   return merge([
     cyl(0.03, 0.045, 0.16, 6, 'mushstem', { y: 0.08 }),
@@ -627,14 +627,18 @@ function furniture(id: FurnitureId): THREE.BufferGeometry {
         box(0.06, 0.16, 0.16, 'gold', { x: 1.02, y: 1.08 }),
         box(0.14, 0.24, 0.06, 'metal', { x: 0.6, y: 1.5, z: 0.06 }, 0x2a2830),
       ]);
-    case 'torch':
+    case 'torch': {
+      // Block-style torch: a two-pixel-square stick with a charred tip and a
+      // glowing cube of flame (the fire itself is licks of particles above).
+      const P = 0.056;
       return merge([
-        box(0.06, 0.46, 0.06, 'planks', { y: 0.23 }, 0x9a6a40),
-        box(0.1, 0.1, 0.1, 'cloth', { y: 0.46 }, 0x4a3a30),
-        // A small glowing core; the flame itself is licks of fire particles.
-        octa(0.055, 'flame', { y: 0.55, sy: 1.5 }),
-        octa(0.03, 'flame', { y: 0.57, sy: 1.5 }, 0xfff0c0),
+        box(P * 2, P * 6, P * 2, 'plain', { y: P * 3 }, 0x9a6a3e),
+        box(P * 2, P * 2, P * 2, 'plain', { y: P * 7 }, 0x6a4428),
+        box(P * 2, P * 1, P * 2, 'plain', { y: P * 8.5 }, 0x3a2418),
+        box(P * 2, P * 2, P * 2, 'glow', { y: P * 10 }, 0xffa034),
+        box(P, P, P, 'glow', { y: P * 11.5 }, 0xfff0a0),
       ]);
+    }
     case 'chest':
       return merge([
         box(1.0, 0.5, 0.7, 'planks', { y: 0.25 }),

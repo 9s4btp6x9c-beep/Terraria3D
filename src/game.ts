@@ -41,7 +41,7 @@ import { Minimap } from './ui/minimap';
 import { type Quality, detectQuality } from './ui/quality';
 import { WorldLabels } from './ui/worldLabels';
 import { WorldCollision } from './world/collision';
-import { LEGACY_CHUNKS, WORLD_CHUNKS, defaultConfig } from './world/config';
+import { CAVES_VERSION, LEGACY_CHUNKS, WORLD_CHUNKS, defaultConfig } from './world/config';
 import { BIOME_NAMES, EMBER_Y, WorldGenerator } from './world/generator';
 import { Mat, material } from './world/materials';
 import { EditLog, type SaveData, readSave, writeSave } from './world/persistence';
@@ -126,6 +126,10 @@ export class Game {
   /** Rising flame licks over torches and fires (always bright). */
   private flames!: Particles;
   private fires: [number, number, number, number][] = [];
+  private flameAt = new THREE.Vector3();
+  /** Lava surface points near the player (embers rise from them). */
+  private lavaTop: [number, number, number][] = [];
+  private lavaScan = 0;
   private fireScan = 0;
   private viewmodel!: Viewmodel;
   private post!: PostFX;
@@ -183,7 +187,8 @@ export class Game {
 
   async load(seed: number, save: SaveData | null, cb: LoadCallbacks) {
     const chunks = save ? (typeof save.extra?.chunks === 'number' ? save.extra.chunks : LEGACY_CHUNKS) : WORLD_CHUNKS;
-    const cfg = defaultConfig(save?.seed ?? seed, chunks);
+    // Saves keep the cave generation they were made with (older ones: 1).
+    const cfg = { ...defaultConfig(save?.seed ?? seed, chunks), caves: save ? (typeof save.extra?.caves === 'number' ? save.extra.caves : 1) : CAVES_VERSION };
     cb.progress(0.02, 'Shaping the land');
     await tick();
     this.gen = new WorldGenerator(cfg);
@@ -943,7 +948,7 @@ export class Game {
     for (const [id, light] of this.mushLights) if (!keep.has(id)) { this.atmosphere.lights.remove(light); this.mushLights.delete(id); }
     for (const t of near) {
       if (this.mushLights.has(t.id)) continue;
-      this.mushLights.set(t.id, this.atmosphere.lights.add({ x: t.x, y: t.y + t.height * 0.8, z: t.z, color: new THREE.Color(0x3a9cff), range: 10 + t.height, flicker: 0.1 }));
+      this.mushLights.set(t.id, this.atmosphere.lights.add({ x: t.x, y: t.y + t.height * 0.8, z: t.z, color: new THREE.Color(0x4af07a), range: 10 + t.height, flicker: 0.1 }));
     }
   }
 
@@ -1133,6 +1138,7 @@ export class Game {
       savedAt: Date.now(),
       extra: {
         chunks: this.field.cfg.chunksX,
+        caves: this.field.cfg.caves ?? 1,
         build: this.interaction.build,
         rested: this.rested,
         timeOfDay: this.atmosphere.timeOfDay,
@@ -1197,7 +1203,8 @@ export class Game {
   toggleBuildMenu(open = !this.buildMenu.open) {
     if (open && this.invUI.open) this.toggleInventory(false);
     this.buildMenu.setOpen(open);
-    if (open) this.input.unlock(); else if (!this.menuOpen) this.input.lock();
+    // (Closing re-locks the pointer through the menu's onClose.)
+    if (open) this.input.unlock();
   }
 
   /** Enter or leave the title screen (the world keeps drawing behind it). */
@@ -1494,7 +1501,9 @@ export class Game {
     const shroom = this.gen.mushroomAt(cam.x, cam.y, cam.z) ? 1 : 0;
     const camWater = this.waterLevelAt(cam.x, cam.y, cam.z);
     this.atmosphere.underwater = camWater !== null && cam.y < camWater ? 1 : 0;
-    this.atmosphere.update(dt, cam, vis, this.time, this.player.position, dir, st.lightBoost, ember, shroom);
+    // A torch in hand throws a brighter, wider light than the bare lantern glow.
+    const torchLight = this.inventory.held?.id === 'torch' ? 1.2 : 0;
+    this.atmosphere.update(dt, cam, vis, this.time, this.player.position, dir, st.lightBoost + torchLight, ember, shroom);
     // Drifting embers in the depths.
     if (ember > 0.3 && Math.random() < ember * 0.6) {
       const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 10;
@@ -1572,6 +1581,34 @@ export class Game {
         const size = f.type === 'torch' ? 1 : f.type === 'hearth' ? 2.6 : f.type === 'furnace' ? 1.8 : 0;
         const lp = size ? lightPoint(f) : null;
         if (lp) this.fires.push([lp[0], lp[1] - (f.type === 'torch' ? 0.1 : 0), lp[2], size]);
+      }
+    }
+    // The torch in your hand burns too.
+    if (this.viewmodel.flamePoint(this.flameAt)) {
+      const f = this.flameAt;
+      if (Math.random() < dt * 12) this.flames.burst(f.x, f.y, f.z, 0, 1, 0, Math.random() < 0.5 ? 0xffd25a : 0xff8a2a, 1, { speed: 0.35, size: 0.022, gravity: -1, life: 0.3 });
+    }
+    // Lava spits embers and now and then a molten pop.
+    this.lavaScan -= dt;
+    if (this.lavaScan <= 0) {
+      this.lavaScan = 1;
+      this.lavaTop = [];
+      for (const key of this.lava.cells.keys()) {
+        const [i, j, k] = this.lava.unkey(key);
+        if (Math.abs(i - p.x) > 32 || Math.abs(k - p.z) > 32 || Math.abs(j - p.y) > 24) continue;
+        const l = this.lava.level(i, j, k);
+        if (l < 0.2 || this.lava.level(i, j + 1, k) > 0.05) continue;
+        this.lavaTop.push([i, j + l, k]);
+      }
+    }
+    const tops = this.lavaTop;
+    if (tops.length) {
+      for (let n = Math.min(40, tops.length * 0.25) * dt; n > 0; n--) {
+        if (n < 1 && Math.random() > n) break;
+        const [i, y, k] = tops[Math.floor(Math.random() * tops.length)];
+        const pop = Math.random() < 0.08;
+        this.flames.burst(i + Math.random(), y + 0.05, k + Math.random(), 0, 1, 0, pop ? 0xff5418 : Math.random() < 0.5 ? 0xffc050 : 0xff8a30, pop ? 5 : 1,
+          pop ? { speed: 2.2, size: 0.07, gravity: 9, life: 0.7 } : { speed: 0.9, size: 0.035, gravity: -0.7, life: 1.4 });
       }
     }
     for (const [x, y, z, size] of this.fires) {

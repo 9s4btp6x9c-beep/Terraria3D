@@ -20,8 +20,8 @@ const SPORE_HORIZON = C(0x1e6a52);
 const CAVE_FOG = C(0x0b0a12);
 const EMBER_FOG = C(0x2a0c08);
 const CAVE_AMBIENT = C(0x1a1726);
-const SHROOM_FOG = C(0x061420);
-const SHROOM_AMBIENT = C(0x12304a);
+const SHROOM_FOG = C(0x061a0c);
+const SHROOM_AMBIENT = C(0x164a26);
 const EMBER_AMBIENT = C(0x3a140c);
 
 function sampleKeys(keys: readonly (readonly [number, THREE.Color])[], t: number, out: THREE.Color) {

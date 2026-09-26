@@ -113,7 +113,10 @@ Touch devices start on the low quality preset.
   Amberwood's glowing resin.
 - **Biomes:** crossing into a new land shows its name.
   - **Greenhollow:** the temperate forest around spawn.
-  - **Sunscar Dunes** and **Frostmere:** sand seas and frozen peaks.
+  - **Sunscar Dunes** and **Frostmere:** sand seas and frozen peaks. In the
+    dunes, watch for trails of stirring sand: **Dune Worms** swim beneath
+    it, circle under you, then burst out in a long arc with their mandibles
+    wide and dive back in. Strike any part of the body.
   - **The Riftlands:** slate-blue ground split by deep chasms, lit by cyan
     crystal growing on dead trees.
   - **The Rootwold:** deep olive moss under colossal **petrified root arches**
@@ -132,9 +135,14 @@ Touch devices start on the low quality preset.
     trees. Climb to the crater rim to look down on a lava lake; a lava tube
     runs from the flank to a glowing magma chamber inside. Basalt, obsidian
     and magma rock, Ash Blobs, and Cinder Scouts who throw burning rocks.
-  - Underground are caves, cabins with loot chests, glowing lumite crystals,
+  - **Caves:** wide, winding tunnels that swell into big caverns a dozen
+    metres down and into long, flat-floored halls deeper still. Dozens of
+    **cave mouths** (sloping tunnels from a broad opening) and **sinkholes**
+    (open shafts) lead down into them from the surface. Worlds made before
+    this keep their original caves.
+  - Underground are also cabins with loot chests, glowing lumite crystals,
     the molten Ember Depths and the **glowing mushroom caverns**. These are
-    wide mud halls with luminous floors and giant blue mushrooms, home to
+    wide mud halls with luminous green floors and giant glowing mushrooms, home to
     Sporelings and Glowmoths. Fell the mushrooms for glowcaps, which brew
     Blue Elixirs and make Glowcap Lamps.
 - **Bosses:**

@@ -252,7 +252,7 @@ export class Interaction {
     tree.alive = false;
     if (tree.kind === 'mushroom') {
       this.hooks.give('glowcap', Math.round(tree.height / 2) + 1, tree.x, tree.y + 1.2, tree.z);
-      this.hooks.particles(tree.x, tree.y + tree.height * 0.85, tree.z, 0, 1, 0, 0x5ad0ff, 30);
+      this.hooks.particles(tree.x, tree.y + tree.height * 0.85, tree.z, 0, 1, 0, 0x5ad07a, 30);
     } else {
       this.hooks.give('wood', Math.round(tree.height / 2) + 2, tree.x, tree.y + 1.2, tree.z);
       this.hooks.particles(tree.x, tree.y + tree.height * 0.8, tree.z, 0, 1, 0, 0x3f9a55, 30);

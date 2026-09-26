@@ -105,6 +105,7 @@ export class Viewmodel {
       // Tools lean away from you, head up and toward the crosshair, turned so
       // you see them half in profile; bows are held upright.
       if (this.pose === 'bow') this.grip.rotation.set(-0.1, -0.35, 0.3);
+      else if (this.pose === 'hold') this.grip.rotation.set(-0.2, -0.5, 0.12);
       else this.grip.rotation.set(-0.62, -0.72, 0.18);
       return;
     }
@@ -119,6 +120,15 @@ export class Viewmodel {
       this.itemMesh.position.set(0, -0.1, 0);
       this.grip.rotation.set(-0.4, 0, 0.15);
     }
+  }
+
+  /** World position of the held item's flame (a torch), or false if it has none. */
+  flamePoint(out: THREE.Vector3): boolean {
+    const f = this.itemMesh.visible ? this.itemMesh.geometry.userData.flame as number[] | undefined : undefined;
+    if (!f || !this.root.visible) return false;
+    this.itemMesh.updateWorldMatrix(true, false);
+    out.set(f[0], f[1], f[2]).applyMatrix4(this.itemMesh.matrixWorld);
+    return true;
   }
 
   /** Trigger a use animation lasting `duration` seconds. */

@@ -87,6 +87,11 @@ export class WorldGenerator {
   /** Lava tube capsules (carved like the entrance tunnel) and their padded bounds. */
   readonly tubes: Capsule[] = [];
   private tubeBounds = [0, 0, 0, -1, -1, -1];
+  /** Cave mouths and sinkholes (caves v2): carved capsules bucketed by column cell. */
+  readonly mouths: { x: number; z: number; kind: 'mouth' | 'sinkhole' }[] = [];
+  private carveGrid: Capsule[][] = [];
+  /** Cave generation version (see WorldConfig.caves). */
+  readonly caveVersion: number;
   /** AABB (min xyz, max xyz) around the entrance tunnel, padded. */
   private entranceBounds = [0, 0, 0, 0, 0, 0];
   spawn = { x: 0, y: 0, z: 0 };
@@ -98,6 +103,7 @@ export class WorldGenerator {
   constructor(readonly cfg: WorldConfig, pre?: GeneratorColumns) {
     const s = cfg.seed;
     this.size = worldSize(cfg);
+    this.caveVersion = cfg.caves ?? 1;
     this.hills = new SimplexNoise(s + 1);
     this.ridges = new SimplexNoise(s + 2);
     this.mask = new SimplexNoise(s + 3);
@@ -133,6 +139,7 @@ export class WorldGenerator {
     this.placeIslands();
     this.placeCabins();
     this.placeFeatures();
+    if (this.caveVersion >= 2) this.placeCaveMouths();
   }
 
   /** Per-column data, shareable with workers (see constructor). */
@@ -626,6 +633,10 @@ export class WorldGenerator {
     const eb = this.entranceBounds;
     if (x > eb[0] && x < eb[3] && y > eb[1] && y < eb[4] && z > eb[2] && z < eb[5])
       for (const c of this.entrance) tunnel = Math.min(tunnel, capsuleDist(x, y, z, c) - c.r);
+    if (this.carveGrid.length) {
+      const list = this.carveGrid[Math.floor(x / FEATURE_CELL) + Math.floor(z / FEATURE_CELL) * this.featureGw];
+      if (list) for (const c of list) tunnel = Math.min(tunnel, capsuleDist(x, y, z, c) - c.r);
+    }
     if (tunnel < 3) d = Math.min(d, tunnel - this.detail.noise3(x / 5, y / 5, z / 5) * 0.8);
     const tb = this.tubeBounds;
     if (x > tb[0] && x < tb[3] && y > tb[1] && y < tb[4] && z > tb[2] && z < tb[5]) {
@@ -671,6 +682,7 @@ export class WorldGenerator {
     // Tunnels only break the surface where the entrance mask allows it.
     const surfaceOpen = this.mask.noise2(x / 45 + 70, z / 45) > 0.45;
     const fade = surfaceOpen ? 1 : smoothstep(2, 10, depth);
+    if (this.caveVersion >= 2) return Math.max(this.cavesV2(x, y, z, depth, t, fade), floor);
     let cave = (t - 0.075 * fade) * 36;
     // Large caverns at depth.
     if (depth > 18) {
@@ -688,6 +700,102 @@ export class WorldGenerator {
       }
     }
     return Math.max(cave, floor);
+  }
+
+  /**
+   * Caves v2: explorable cave systems. Tunnels swell and narrow (up to about
+   * three times the old width), big caverns start closer to the surface, and
+   * long, flat-floored halls open out lower down, with the tunnels threading
+   * between them.
+   */
+  private cavesV2(x: number, y: number, z: number, depth: number, t: number, fade: number): number {
+    const width = 0.08 + 0.07 * smoothstep(-0.3, 0.6, this.caveB.noise3(x / 90 + 40, y / 50, z / 90));
+    let cave = (t - width * fade) * 30;
+    // Caverns: large chambers from about 12 m down.
+    if (depth > 10) {
+      const c = this.cavern.noise3(x / 70, y / 34, z / 70) + this.cavern.noise3(x / 21, y / 21, z / 21) * 0.14;
+      cave = Math.min(cave, (0.42 - c * smoothstep(10, 24, depth)) * 26);
+    }
+    // Halls: wide, low, flat-floored galleries deeper down (above the Ember Depths).
+    if (depth > 22 && y > EMBER_Y + 4) {
+      const hall = this.cavern.noise3(x / 120 + 300, y / 16, z / 120 - 200) + this.detail.noise3(x / 13, y / 9, z / 13) * 0.1;
+      const k = smoothstep(22, 34, depth) * smoothstep(EMBER_Y + 4, EMBER_Y + 12, y);
+      cave = Math.min(cave, (0.46 - hall * k) * 20);
+    }
+    // Mushroom zones: wide, flattened halls for the giant mushrooms.
+    if (depth > 16 && y > SHROOM_MIN_Y - 4) {
+      const mz = this.mushroomStrength(x, z);
+      if (mz > 0) {
+        const c2 = this.cavern.noise3(x / 34 + 50, y / 13, z / 34) + this.detail.noise3(x / 9, y / 9, z / 9) * 0.08;
+        const k = smoothstep(16, 26, depth) * smoothstep(SHROOM_MIN_Y - 4, SHROOM_MIN_Y + 4, y);
+        cave = Math.min(cave, (0.2 - c2 * mz * k) * 24);
+      }
+    }
+    return cave;
+  }
+
+  /**
+   * Caves v2: ways in from the surface. Cave mouths are wide, sloping,
+   * winding tunnels that end in a chamber; sinkholes are open shafts that
+   * drop into one. Kept clear of spawn, lakes, cabins and volcanoes.
+   */
+  private placeCaveMouths() {
+    const rand = mulberry32(this.cfg.seed ^ 0xca7e);
+    const area = (this.size.x * this.size.z) / (512 * 512);
+    const all: Capsule[] = [];
+    const want = Math.round(area * 26);
+    for (let tries = 0; this.mouths.length < want && tries < 4000; tries++) {
+      const x = 30 + rand() * (this.size.x - 60), z = 30 + rand() * (this.size.z - 60);
+      const h = this.height(x, z);
+      if (h < this.cfg.seaLevel + 4 || h > 150) continue;
+      if (Math.hypot(x - this.spawn.x, z - this.spawn.z) < 45) continue;
+      if (this.lakes.some(l => Math.hypot(l.x - x, l.z - z) < l.r * 1.8 + 12)) continue;
+      if (this.volcanoAt(x, z)) continue;
+      if (this.cabins.some(c => Math.hypot(c.x - x, c.z - z) < 24)) continue;
+      if (this.mouths.some(m => Math.hypot(m.x - x, m.z - z) < 38)) continue;
+      const sink = rand() < 0.3;
+      const caps: Capsule[] = [];
+      if (sink) {
+        // A roughly round shaft, wandering a little as it drops.
+        const r0 = 3.5 + rand() * 2.5, drop = 22 + rand() * 16;
+        let px = x, py = h + 3, pz = z;
+        const steps = 4;
+        for (let i = 0; i < steps; i++) {
+          const nx = px + (rand() - 0.5) * 3, nz = pz + (rand() - 0.5) * 3, ny = py - (drop + 3) / steps;
+          caps.push({ ax: px, ay: py, az: pz, bx: nx, by: Math.max(EMBER_Y + 6, ny), bz: nz, r: r0 * (1 - i * 0.06) });
+          px = nx; py = Math.max(EMBER_Y + 6, ny); pz = nz;
+        }
+        const a = rand() * Math.PI * 2, rc = 6 + rand() * 3;
+        caps.push({ ax: px, ay: py, az: pz, bx: px + Math.cos(a) * 8, by: py - 1, bz: pz + Math.sin(a) * 8, r: rc });
+      } else {
+        // A cave mouth: a broad opening leading into a winding, sloping tunnel.
+        let yaw = rand() * Math.PI * 2, pitch = -0.35 - rand() * 0.2;
+        let px = x, py = h + 2, pz = z;
+        const segs = 7 + Math.floor(rand() * 4);
+        for (let i = 0; i < segs; i++) {
+          const len = 5 + rand() * 3;
+          const nx = px + Math.cos(yaw) * Math.cos(pitch) * len, nz = pz + Math.sin(yaw) * Math.cos(pitch) * len;
+          const ny = Math.max(EMBER_Y + 8, py + Math.sin(pitch) * len);
+          caps.push({ ax: px, ay: py, az: pz, bx: nx, by: ny, bz: nz, r: i < 2 ? 4.2 + rand() * 1.2 : 2.8 + rand() * 1.4 });
+          px = nx; py = ny; pz = nz;
+          yaw += (rand() - 0.5) * 0.8;
+          pitch = Math.max(-0.75, Math.min(-0.15, pitch + (rand() - 0.5) * 0.4));
+        }
+        caps.push({ ax: px, ay: py, az: pz, bx: px + Math.cos(yaw) * 6, by: py + 1, bz: pz + Math.sin(yaw) * 6, r: 6 + rand() * 3 });
+      }
+      // Keep carved space off the world edges.
+      if (caps.some(c => Math.min(c.ax, c.bx, c.az, c.bz) - c.r < 8 || Math.max(c.ax, c.bx) + c.r > this.size.x - 8 || Math.max(c.az, c.bz) + c.r > this.size.z - 8)) continue;
+      this.mouths.push({ x, z, kind: sink ? 'sinkhole' : 'mouth' });
+      all.push(...caps);
+    }
+    const gw = this.featureGw, gd = Math.ceil(this.size.z / FEATURE_CELL) + 1;
+    this.carveGrid = Array.from({ length: gw * gd }, () => []);
+    for (const c of all) {
+      const r = c.r + 4;
+      const x0 = Math.max(0, Math.floor((Math.min(c.ax, c.bx) - r) / FEATURE_CELL)), x1 = Math.min(gw - 1, Math.floor((Math.max(c.ax, c.bx) + r) / FEATURE_CELL));
+      const z0 = Math.max(0, Math.floor((Math.min(c.az, c.bz) - r) / FEATURE_CELL)), z1 = Math.min(gd - 1, Math.floor((Math.max(c.az, c.bz) + r) / FEATURE_CELL));
+      for (let gz = z0; gz <= z1; gz++) for (let gx = x0; gx <= x1; gx++) this.carveGrid[gx + gz * gw].push(c);
+    }
   }
 
   private islandDensity(x: number, y: number, z: number, isl: Island): number {

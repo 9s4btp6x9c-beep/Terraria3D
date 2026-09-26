@@ -79,7 +79,7 @@ const defs: MaterialDef[] = [
   { id: Mat.Emberstone, name: 'Emberstone', texture: 'cobble', palette: [0x5a2a22, 0x1a0a08, 0x7a3426, 0xe05a24], hardness: 2, tier: 2, drop: 'emberstone', volumePerItem: 2, emissive: 0.14, particle: 0xff6a2a },
   { id: Mat.Emberite, name: 'Emberite Ore', texture: 'ore', palette: [0x4a1e16, 0x1a0806, 0xff8a30, 0xffe070], hardness: 2.4, tier: 2, drop: 'emberite', volumePerItem: 1.5, emissive: 0.7, particle: 0xffa040 },
   { id: Mat.Aerite, name: 'Aerite Ore', texture: 'ore', palette: [0x8e98ae, 0x3e4458, 0xa8e4ff, 0xfff4c0], hardness: 1.6, tier: 1, drop: 'aerite_ore', volumePerItem: 1.5, emissive: 0.3, particle: 0xbfeaff },
-  { id: Mat.Mushgrass, name: 'Mushroom Grass', texture: 'blotch', palette: [0x2a6a9a, 0x163e66, 0x3aa0d0, 0x7ae8ff], hardness: 0.4, tier: 0, drop: 'mud', volumePerItem: 2, emissive: 0.32, particle: 0x3aa0d0 },
+  { id: Mat.Mushgrass, name: 'Mushroom Grass', texture: 'blotch', palette: [0x2a7a48, 0x16482a, 0x3ab868, 0x8af0a0], hardness: 0.4, tier: 0, drop: 'mud', volumePerItem: 2, emissive: 0.32, particle: 0x3ab868 },
   { id: Mat.Mud, name: 'Mud', texture: 'speckle', palette: [0x4e4038, 0x2e2420, 0x64544a, 0x3a3a52], hardness: 0.4, tier: 0, drop: 'mud', volumePerItem: 2, emissive: 0, particle: 0x4e4038 },
   // ---- Rootwold: deep moss over the petrified roots of something vast.
   { id: Mat.Moss, name: 'Deep Moss', texture: 'blotch', palette: [0x5e7a36, 0x3e5626, 0x7a9442, 0xc8c868], hardness: 0.4, tier: 0, drop: 'dirt', volumePerItem: 2, emissive: 0, particle: 0x6a8a3e },

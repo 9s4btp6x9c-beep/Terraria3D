@@ -25,7 +25,8 @@ export class Input {
   constructor(private canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', e => {
       if (['Tab', 'F3', 'F5', 'F9', 'Space'].includes(e.code)) e.preventDefault();
-      if (!this.keys.has(e.code)) this.pressed.add(e.code);
+      // (A fresh press even if its key-up was lost, e.g. while the pointer lock changed.)
+      if (!e.repeat || !this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
       if (this.freeLook && e.code === 'Escape') this.setFreeLookActive(false);
     });
@@ -49,6 +50,7 @@ export class Input {
     });
     window.addEventListener('wheel', e => { if (this.locked) this.wheel += Math.sign(e.deltaY); }, { passive: true });
     document.addEventListener('pointerlockchange', () => {
+      this.lockPending = false;
       if (this.freeLook || this.touchMode) return;
       this.locked = document.pointerLockElement === this.canvas;
       if (!this.locked) { this.lmb = this.rmb = false; }
@@ -69,12 +71,21 @@ export class Input {
     this.freeLookListener?.(on);
   }
 
+  /** A pointer-lock request is in flight (a second one would bounce the lock). */
+  private lockPending = false;
+
   lock() {
     if (this.touchMode) { this.locked = true; return; }
     if (this.freeLook) { this.setFreeLookActive(true); return; }
+    // Already locked, or about to be: asking again makes the browser drop and
+    // retake the lock, and that brief unlock reads as the player pausing.
+    if (document.pointerLockElement === this.canvas || this.lockPending) return;
     try {
       const r = this.canvas.requestPointerLock?.() as unknown;
-      if (r && typeof (r as Promise<void>).catch === 'function') (r as Promise<void>).catch(() => { this.freeLook = true; this.setFreeLookActive(true); });
+      if (r && typeof (r as Promise<void>).then === 'function') {
+        this.lockPending = true;
+        (r as Promise<void>).then(() => { this.lockPending = false; }, () => { this.lockPending = false; this.freeLook = true; this.setFreeLookActive(true); });
+      }
     } catch {
       this.freeLook = true;
       this.setFreeLookActive(true);

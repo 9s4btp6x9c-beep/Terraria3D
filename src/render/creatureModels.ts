@@ -361,7 +361,7 @@ function sporeling(mat: THREE.Material): CreatureVisual {
 function glowmoth(mat: THREE.Material, skin = 'glowcap'): CreatureVisual {
   const root = new THREE.Group();
   const body = pivot(root, 0, 0.5, 0);
-  const leaf = skin !== 'glowcap', fur = leaf ? 0x8a5a3a : 0xd8d0e8, eye = leaf ? 0xffd060 : 0x9af0ff;
+  const leaf = skin !== 'glowcap', fur = leaf ? 0x8a5a3a : 0xd8d0e8, eye = leaf ? 0xffd060 : 0xb0ffb8;
   mesh(merge([
     ico(0.13, 'fur', { sz: 1.9, detail: 1 }, fur),
     ico(0.1, 'fur', { z: 0.22 }, leaf ? 0xa06a40 : 0xe8e4f4),
@@ -602,6 +602,85 @@ function mulTint(a: number, b: number) {
   return ca.multiply(cb).getHex();
 }
 
+/**
+ * Dune Worm: a great sand-armoured worm. A plated head with a round, toothed
+ * maw ringed by four hinged mandibles and a cluster of amber eyes; ringed
+ * chitin segments with overlapping plate lips, pale bellies and dorsal
+ * spines; a tapering tail spike. Segments are placed along the body chain in
+ * world space each frame (the head leads, each ring faces the one before it).
+ */
+function duneWorm(mat: THREE.Material): CreatureVisual {
+  const root = new THREE.Group();
+  const sand = 0xffffff, plate = 0xc49a64, belly = 0xfff4dc, bone = 0xf0e4c8;
+  const head = new THREE.Group();
+  root.add(head);
+  mesh(merge([
+    ico(0.8, 'sandstone', { sz: 1.15, sy: 0.92, jitter: 0.06, seed: 21 }, sand),
+    // Crown plates overlapping back over the head.
+    taper(0.9, 0.18, 0.7, 0.7, 0.8, 'sandstone', { y: 0.66, z: 0.15, rx: -0.25 }, plate),
+    taper(1.0, 0.18, 0.7, 0.7, 0.8, 'sandstone', { y: 0.62, z: -0.38, rx: -0.45 }, plate),
+    // The maw: a dark throat ringed by teeth.
+    cyl(0.36, 0.3, 0.14, 12, 'plain', { z: 0.9, rx: Math.PI / 2 }, 0x6a2a1c),
+    ...[0, 1, 2, 3, 4, 5, 6, 7].map(k => {
+      const a = k / 8 * Math.PI * 2;
+      return cone(0.05, 0.2, 4, 'bone', { x: Math.cos(a) * 0.3, y: Math.sin(a) * 0.3, z: 0.95, rx: Math.PI / 2 + Math.sin(a) * 0.6, rz: -Math.cos(a) * 0.6 }, bone);
+    }),
+    // Amber eyes, three a side.
+    ...[-1, 1].flatMap(sd => [[0.46, 0.34, 0.55, 0.075], [0.36, 0.5, 0.42, 0.06], [0.56, 0.18, 0.36, 0.05]].map(([x, y, z, r]) => octa(r, 'flame', { x: sd * x, y, z }, 0xffc040))),
+  ]), mat, head);
+  // Mandibles on hinges round the maw.
+  const jaws = [0, 1, 2, 3].map(k => {
+    const a = k / 4 * Math.PI * 2 + Math.PI / 4;
+    const p = pivot(head, Math.cos(a) * 0.55, Math.sin(a) * 0.55, 0.78);
+    p.rotation.z = a - Math.PI / 2;
+    mesh(merge([
+      taper(0.16, 0.5, 0.12, 0.5, 0.6, 'sandstone', { y: 0.2, z: 0.12, rx: 0.9 }, plate),
+      cone(0.07, 0.34, 4, 'bone', { y: 0.2, z: 0.46, rx: Math.PI / 2 + 0.5 }, bone),
+    ]), mat, p);
+    return p;
+  });
+  const segGeo = merge([
+    cyl(0.8, 0.8, 1.0, 12, 'sandstone', { rx: Math.PI / 2 }, sand),
+    cyl(0.86, 0.8, 0.26, 12, 'sandstone', { z: 0.4, rx: Math.PI / 2 }, plate),
+    box(1.0, 0.18, 0.9, 'sand', { y: -0.7 }, belly),
+    cone(0.16, 0.55, 4, 'bone', { y: 0.95, z: -0.1, rx: -0.35 }, bone),
+    cone(0.1, 0.32, 4, 'bone', { x: 0.78, y: 0.35, rz: -1.2 }, bone),
+    cone(0.1, 0.32, 4, 'bone', { x: -0.78, y: 0.35, rz: 1.2 }, bone),
+  ]);
+  const tailGeo = merge([
+    cone(0.78, 1.7, 12, 'sandstone', { z: -0.55, rx: -Math.PI / 2 }, sand),
+    cyl(0.84, 0.78, 0.24, 12, 'sandstone', { z: 0.3, rx: Math.PI / 2 }, plate),
+    cone(0.12, 0.6, 4, 'bone', { z: -1.55, rx: -Math.PI / 2 }, bone),
+  ]);
+  const segs: THREE.Mesh[] = [];
+  const look = new THREE.Vector3();
+  return {
+    root,
+    animate(c) {
+      // Placed in world space: undo the per-creature root transform.
+      root.position.set(0, 0, 0);
+      root.rotation.set(0, 0, 0);
+      const body = c.body!;
+      if (!segs.length) body.forEach((_, i) => segs.push(mesh(i === body.length - 1 ? tailGeo : segGeo, mat, root)));
+      head.position.set(c.x, c.y, c.z);
+      head.scale.setScalar(c.def.radius / 0.85);
+      look.set(c.x + c.vx, c.y + c.vy, c.z + c.vz);
+      if (Math.abs(c.vx) + Math.abs(c.vy) + Math.abs(c.vz) > 1e-3) head.lookAt(look);
+      let prev = head.position;
+      body.forEach((b, i) => {
+        const m = segs[i];
+        m.position.set(b.x, b.y, b.z);
+        m.scale.setScalar(b.r / 0.8);
+        m.lookAt(prev);
+        prev = m.position;
+      });
+      // Jaws gnash, wide open while it lunges.
+      const open = (c.phase === 1 ? 0.55 : 0.2) + Math.sin(c.t * (c.phase === 1 ? 16 : 5)) * 0.15;
+      for (const j of jaws) j.rotation.x = -open;
+    },
+  };
+}
+
 export function buildCreatureVisual(id: string, mat: THREE.Material, tint = 0xffffff, skin?: string): CreatureVisual {
   switch (id) {
     case 'blob': return blob(mat, tint, skin);
@@ -617,6 +696,7 @@ export function buildCreatureVisual(id: string, mat: THREE.Material, tint = 0xff
     case 'sporeling': return sporeling(mat);
     case 'glowmoth': return glowmoth(mat, skin);
     case 'mossback': return mossback(mat);
+    case 'dune_worm': return duneWorm(mat);
     default: return blob(mat, tint, skin);
   }
 }

@@ -228,7 +228,9 @@ export class Combat {
       if (!options.length) return;
       const def = pick(options, c => c.spawn!.weight);
       const flyer = def.ai === 'flyer';
-      this.spawn(def, x, y + (flyer ? 2.5 : 0), z);
+      // Burrowers start under the sand, and one at a time is plenty.
+      if (def.ai === 'burrower' && this.creatures.some(c => c.def.ai === 'burrower')) return;
+      this.spawn(def, x, y + (flyer ? 2.5 : def.ai === 'burrower' ? -7 : 0), z);
       return;
     }
   }
@@ -292,6 +294,7 @@ export class Combat {
     c.alive = false;
     this.kills++;
     this.hooks.particles(c.cx, c.cy, c.cz, 0, 1, 0, c.def.color, 24, 5);
+    if (c.body) for (const b of c.body.filter((_, i) => i % 2 === 0)) this.hooks.particles(b.x, b.y, b.z, 0, 1, 0, c.def.color, 10, 4);
     this.hooks.sound('die', c.cx, c.cy, c.cz);
     for (const d of c.def.drops) {
       if (Math.random() > d.chance) continue;
@@ -323,13 +326,16 @@ export class Combat {
   melee(eye: THREE.Vector3, dir: THREE.Vector3, reach: number, damage: number, knockback: number, arcCos = 0.55): number {
     let dealt = 0;
     for (const c of [...this.creatures]) {
-      const tx = c.cx - eye.x, ty = c.cy - eye.y, tz = c.cz - eye.z;
-      const d = Math.hypot(tx, ty, tz);
-      if (d > reach + c.def.radius + 0.3) continue;
-      const cos = (tx * dir.x + ty * dir.y + tz * dir.z) / (d || 1);
-      if (cos < arcCos && d > c.def.radius + 0.6) continue;
-      if (!this.visible(eye.x, eye.y, eye.z, c.cx, c.cy, c.cz)) continue;
-      dealt += this.applyHit(c, damage, knockback, eye.x, eye.z);
+      for (const q of c.parts()) {
+        const tx = q.x - eye.x, ty = q.y - eye.y, tz = q.z - eye.z;
+        const d = Math.hypot(tx, ty, tz);
+        if (d > reach + q.r + 0.3) continue;
+        const cos = (tx * dir.x + ty * dir.y + tz * dir.z) / (d || 1);
+        if (cos < arcCos && d > q.r + 0.6) continue;
+        if (!this.visible(eye.x, eye.y, eye.z, q.x, q.y, q.z)) continue;
+        dealt += this.applyHit(c, damage, knockback, eye.x, eye.z);
+        break;
+      }
     }
     if (this.boss) {
       const t = this.boss.rayHit(eye, dir, reach + 1);
@@ -341,12 +347,12 @@ export class Combat {
   /** Distance to the first creature along a ray, or null. */
   rayHit(o: THREE.Vector3, d: THREE.Vector3, reach: number): number | null {
     let best: number | null = null;
-    for (const c of this.creatures) {
-      const tx = c.cx - o.x, ty = c.cy - o.y, tz = c.cz - o.z;
+    for (const c of this.creatures) for (const q of c.parts()) {
+      const tx = q.x - o.x, ty = q.y - o.y, tz = q.z - o.z;
       const t = tx * d.x + ty * d.y + tz * d.z;
-      if (t < 0 || t > reach + c.def.radius) continue;
+      if (t < 0 || t > reach + q.r) continue;
       const px = tx - d.x * t, py = ty - d.y * t, pz = tz - d.z * t;
-      const r = Math.max(c.def.radius, c.def.height / 2) + 0.15;
+      const r = q.rr + 0.15;
       if (px * px + py * py + pz * pz < r * r && (best === null || t < best)) best = t;
     }
     const bt = this.boss?.rayHit(o, d, reach);
@@ -405,6 +411,7 @@ export class Combat {
     const calm = !this.hooks.isNight() && !this.hooks.activeEvent();
     const ctx = {
       px, py, pz, dt, world: this.world, calm,
+      surfaceTop: (x: number, z: number) => this.hooks.surfaceTop(x, z),
       distance: (x: number, y: number, z: number, n: [number, number, number]) => this.world.distance(x, y, z, n),
       throwAt: (c: Creature, tx: number, ty: number, tz: number) => {
         const r = c.def.ranged!;
@@ -422,7 +429,7 @@ export class Combat {
     for (const c of [...this.creatures]) {
       // Keep creatures inside loaded terrain; freeze them otherwise.
       if (!this.hooks.isLoaded(c.x, c.z)) { c.idle += dt; if (c.idle > 5) this.remove(c); continue; }
-      c.swimming = c.def.ai !== 'flyer' && this.hooks.inWater(c.x, c.y + c.def.height * 0.5, c.z);
+      c.swimming = c.def.ai !== 'flyer' && c.def.ai !== 'burrower' && this.hooks.inWater(c.x, c.y + c.def.height * 0.5, c.z);
       think(c, ctx);
       // Walkers and hoppers float up and swim (steering in think) through water.
       if (c.swimming) {
@@ -441,7 +448,16 @@ export class Combat {
       const dx = px - c.x, dz = pz - c.z;
       const horiz = Math.hypot(dx, dz);
       const overlapY = py < c.y + c.def.height && py + 1.8 > c.y;
-      if (horiz < c.def.radius + 0.45 && overlapY && !peaceful(c, calm)) {
+      // (A burrower's whole body hurts, not just its head.)
+      const touching = c.body ? c.parts().some(q => Math.hypot(px - q.x, pz - q.z) < q.r + 0.45 && py < q.y + q.r && py + 1.8 > q.y - q.r) : horiz < c.def.radius + 0.45 && overlapY;
+      if (c.body) {
+        // Sand bursts where it breaks the surface or dives back in, and a
+        // trail of sand while it swims just under the ground.
+        if (c.breach) { this.hooks.particles(c.x, c.y + 0.5, c.z, 0, 1, 0, 0xd8c08a, 30, 7); this.hooks.particles(c.x, c.y, c.z, 0, 1, 0, 0xb09460, 14, 4); this.hooks.shake(Math.max(0, 1 - Math.hypot(dx, dz) / 25) * 0.5); }
+        const surf = this.hooks.surfaceTop(c.x, c.z);
+        if (c.y < surf && c.y > surf - 3 && Math.random() < dt * 14) this.hooks.particles(c.x, surf + 0.1, c.z, 0, 1, 0, 0xd8c08a, 2, 2.5);
+      }
+      if (touching && !peaceful(c, calm)) {
         const heavy = c.def.kbResist > 0.8;
         if (this.hooks.hurtPlayer(c.def.damage, c.x, c.z, heavy ? 14 : 7) > 0) c.attack = Math.max(c.attack, 0.6);
       }
@@ -565,8 +581,7 @@ export class Combat {
             }
             for (const c of this.creatures) {
               if (p.hit.has(c.uid)) continue;
-              const r = Math.max(c.def.radius, c.def.height / 2) + reach;
-              if ((c.cx - p.x) ** 2 + (c.cy - p.y) ** 2 + (c.cz - p.z) ** 2 < r * r) {
+              if (c.parts().some(q => (q.x - p.x) ** 2 + (q.y - p.y) ** 2 + (q.z - p.z) ** 2 < (q.rr + reach) ** 2)) {
                 p.hit.add(c.uid);
                 this.applyHit(c, p.damage, p.knockback, p.x - p.vx, p.z - p.vz);
                 if (p.kind === 'bolt') this.hooks.particles(p.x, p.y, p.z, 0, 1, 0, 0x7af0ff, 12, 4);

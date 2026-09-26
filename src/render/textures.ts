@@ -41,7 +41,7 @@ export const EXTRA_LAYERS = {
   bloodMetal: { style: 'metal', palette: [0xb0222e, 0x4a0812, 0xe8444c, 0xffb0a0] },
   aeriteMetal: { style: 'metal', palette: [0x8ac8ec, 0x2e5a8a, 0xd0f0ff, 0xfff2b8] },
   feather: { style: 'fur', palette: [0xdce4ee, 0x7a8aa4, 0xf6f8fc, 0xa8b8d0] },
-  glowcap: { style: 'blotch', palette: [0x2a8ad0, 0x1a4a8a, 0x5ad0ff, 0xc8f4ff] },
+  glowcap: { style: 'blotch', palette: [0x3ac86a, 0x1a6a3a, 0x7af09a, 0xd8ffd0] },
   mushstem: { style: 'bark', palette: [0xd8d0c0, 0x9a8e7c, 0xece6da, 0xb8ae9a] },
   heart: { style: 'gel', palette: [0xf0304a, 0x8a0a22, 0xff7a8a, 0xffe0e6] },
   manaGem: { style: 'gel', palette: [0x3a6aff, 0x142a8a, 0x7aa8ff, 0xe0ecff] },
@@ -62,12 +62,14 @@ export const EXTRA_LAYERS = {
   spore: { style: 'blotch', palette: [0x3ac8a0, 0x1a6a5a, 0x7af0c8, 0xe0fff0] },
   ember: { style: 'flame', palette: [0xff8a30, 0xd0401a, 0xffd060, 0xfff4c0] },
   glim: { style: 'gel', palette: [0x4ab8ff, 0x1a5ab0, 0x9ae0ff, 0xf0ffff] },
+  /** Flat white that glows: pixel flames (the colour comes from vertex colours). */
+  glow: { style: 'plain', palette: [0xffffff, 0xffffff, 0xffffff, 0xffffff] },
 } as const satisfies Record<string, { style: Style; palette: readonly number[] }>;
 
 /** Self-illumination per extra layer (flames glow, crystals shimmer). */
 export const EXTRA_EMISSIVE: Partial<Record<keyof typeof EXTRA_LAYERS, number>> = {
   flame: 1.2, lumiteMetal: 0.35, gel: 0.08, emberMetal: 0.4, bloodMetal: 0.18, bloodgel: 0.1, aeriteMetal: 0.22, heart: 0.45, manaGem: 0.4, glowcap: 0.6,
-  riftleaves: 0.22, amber: 0.55, spore: 0.5, jelly: 0.3, ember: 1.0, glim: 0.5, sporeMetal: 0.2,
+  riftleaves: 0.22, amber: 0.55, spore: 0.5, jelly: 0.3, ember: 1.0, glim: 0.5, sporeMetal: 0.2, glow: 0.65,
 };
 
 export type ExtraLayer = keyof typeof EXTRA_LAYERS;
