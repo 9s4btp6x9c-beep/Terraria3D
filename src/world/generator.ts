@@ -628,7 +628,16 @@ export class WorldGenerator {
       const width = 0.035 + this.detail.noise2(x / 20, z / 20) * 0.012;
       if (n < width + 0.06) d = Math.min(d, (n - width) * 55 + Math.max(0, 30 - y) * 0.3);
     }
-    if (d > -2) d = Math.min(d, this.caves(x, y, z, h));
+    if (d > -2) {
+      let cave = this.caves(x, y, z, h);
+      // (Caves v2 are roomy enough to breach a lake bed and drain it: keep
+      // them at least 8 m under every lake.)
+      if (lake && this.caveVersion >= 2) {
+        const hd = Math.hypot(x - lake.x, z - lake.z);
+        if (hd < lake.r * 1.8 + 6) cave = Math.max(cave, (y - (lake.level - lake.depth - 8)) * 0.6);
+      }
+      d = Math.min(d, cave);
+    }
     let tunnel = Infinity;
     const eb = this.entranceBounds;
     if (x > eb[0] && x < eb[3] && y > eb[1] && y < eb[4] && z > eb[2] && z < eb[5])

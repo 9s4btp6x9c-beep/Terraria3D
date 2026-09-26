@@ -43,4 +43,13 @@ describe('cave systems', () => {
       for (const l of modern.lakes) expect(Math.hypot(m.x - l.x, m.z - l.z)).toBeGreaterThan(l.r * 1.8);
     }
   });
+
+  it('never breach a lake bed (the water would drain away)', () => {
+    for (const l of modern.lakes) {
+      let air = 0;
+      for (let a = 0; a < 6.28; a += 0.4) for (let r = 0; r < l.r; r += 2) for (let y = l.level - l.depth - 6; y < l.level - l.depth - 1; y += 1)
+        if (modern.densityAt(l.x + Math.cos(a) * r, y, l.z + Math.sin(a) * r) < 0) air++;
+      expect(air).toBe(0);
+    }
+  });
 });
